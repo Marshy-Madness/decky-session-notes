@@ -1,0 +1,13 @@
+{
+  "name": "Session Notes",
+  "author": "MarshyMadness",
+  "flags": [
+    "debug"
+  ],
+  "api_version": 1,
+  "publish": {
+    "tags": ["utility"],
+    "description": "Per-game session notes, run tracking, and stats.",
+    "image": ""
+  }
+}
