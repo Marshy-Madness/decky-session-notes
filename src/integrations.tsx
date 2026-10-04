@@ -5,6 +5,7 @@ import { FaRegStickyNote } from "react-icons/fa";
 import { isNotesPageOpen, NotesPage } from "./components/NotesPage";
 import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { getSettings } from "./state/notesStore";
+import { dictationChordEnabled, stopAnywhereDictation, toggleAnywhereDictation } from "./dictation";
 import { OpenChord } from "./types";
 
 export const NOTES_ROUTE = "/session-notes";
@@ -23,15 +24,32 @@ const CHORDS: Record<OpenChord, { lo: number; hi: number } | null> = {
   l3r3: { lo: 0x400000 | 0x4000000, hi: 0 },
   off: null,
 };
+const STEAM = 0x2000;
+const DICTATE = STEAM | 0x8000 | 0x10000; // STEAM + L5 + R5
 
-/** Opens the full-screen page when the chosen combo is pressed (and closes it on a second press). */
+/**
+ * Opens the full-screen page when the chosen combo is pressed (and closes it on a second press), and runs
+ * speech to text on STEAM + L5 + R5 if that's turned on.
+ */
 function startChordWatch(): () => void {
   const held = new Set<number>();
+  const dictateHeld = new Set<number>();
   const registration = (window as any).SteamClient?.Input?.RegisterForControllerStateChanges?.(
     (changes: { unControllerIndex: number; ulButtons: number; ulUpperButtons: number }[]) => {
+      const dictate = dictationChordEnabled();
       const chord = CHORDS[getSettings().openChord ?? "l4r4"];
-      if (!chord) return;
       for (const c of changes) {
+        if (dictate) {
+          if ((c.ulButtons & DICTATE) !== DICTATE) {
+            dictateHeld.delete(c.unControllerIndex);
+          } else if (!dictateHeld.has(c.unControllerIndex)) {
+            dictateHeld.add(c.unControllerIndex);
+            held.add(c.unControllerIndex); // L5 + R5 with STEAM held is for speaking, not the notes page
+            toggleAnywhereDictation();
+          }
+          if (c.ulButtons & STEAM) continue;
+        }
+        if (!chord) continue;
         const down = (c.ulButtons & chord.lo) === chord.lo && (c.ulUpperButtons & chord.hi) === chord.hi;
         if (!down) {
           held.delete(c.unControllerIndex);
@@ -43,7 +61,10 @@ function startChordWatch(): () => void {
       }
     }
   );
-  return () => registration?.unregister();
+  return () => {
+    registration?.unregister();
+    stopAnywhereDictation();
+  };
 }
 
 // ---- main Steam menu ----

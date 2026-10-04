@@ -38,6 +38,13 @@ export const backend = {
   startRecording: (appId: string) => call<[string], Recording>("start_recording", appId),
   stopRecording: () => call<[], Recording | null>("stop_recording"),
 
+  speechStatus: (refresh = false) => call<[boolean], { allowed: boolean }>("speech_status", refresh),
+  startDictation: () => call<[], boolean>("start_dictation"),
+  /** Stops listening and returns the words ("" if nothing was heard). */
+  stopDictation: (appId = "", game = "") => call<[string, string], string>("stop_dictation", appId, game),
+  cancelDictation: () => call<[], void>("cancel_dictation"),
+  transcribeRecording: (appId: string, file: string) => call<[string, string], string>("transcribe_recording", appId, file),
+
   syncNow: () => call<[], { pushed: number; pulled: number }>("sync_now"),
   pairDevice: (code: string) => call<[string], ServerUser>("pair_device", code),
   serverUsers: () => call<[], ServerUser[]>("server_users"),

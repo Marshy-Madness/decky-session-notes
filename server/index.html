@@ -62,6 +62,9 @@
   .version:hover { background: #2e3440; } .version .text { flex: 1; min-width: 0; }
   .preview { background: #171a20; border-radius: 8px; padding: 12px; white-space: pre-wrap; max-height: 45vh; overflow-y: auto; margin: 10px 0; }
   button.recording { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .labelrow { display: flex; align-items: flex-end; gap: 8px; } .labelrow label { flex: 1; } .labelrow button { margin-bottom: 4px; }
+  .said { font-size: 13px; background: #171a20; border-radius: 6px; padding: 6px 10px; margin: 0 0 8px; white-space: pre-wrap; }
+  .said .meta { margin-right: 6px; }
   .saving { position: fixed; bottom: 16px; right: 16px; background: var(--panel); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); }
   #gamePicker, .mobile-only { display: none; }
   /* ---- phones ---- */
@@ -159,7 +162,7 @@ if (importParam?.startsWith("bookstore:")) { sessionStorage.setItem("sn-import",
 
 // ---------- state ----------
 let games = [], game = null, folderFilter = "all", kindFilter = "all", sortMode = localStorage.getItem("sn-sort") || "edited";
-let me = null, sharedWithMe = [];
+let me = null, sharedWithMe = [], speechOn = false;
 const KINDS = [["note", "📝", "Note"], ["guide", "📘", "Guide"], ["tip", "💡", "Tip"], ["walkthrough", "🧭", "Walkthrough"],
   ["boss", "⚔️", "Boss strategy"], ["build", "🛡️", "Build / loadout"], ["collectibles", "🗺️", "Collectibles / map"],
   ["secret", "🔮", "Secret / easter egg"], ["settings", "⚙️", "Deck settings"], ["achievement", "🏆", "Achievement guide"]];
@@ -170,6 +173,7 @@ async function start() {
   const info = await (await fetch("/api/me")).json();
   if (!info.loggedIn) return showLogin();
   me = info.user;
+  speechOn = !!info.speech;
   $("#account").innerHTML = `${me.avatar ? `<img src="${esc(me.avatar)}">` : "👤"}<span class="hide-sm">${esc(me.name)}</span>`;
   $("#account").onclick = accountDialog;
   if (info.androidApp && !window.SessionNotesApp && /Android/i.test(navigator.userAgent)) $("#getApp").classList.remove("hidden");
@@ -228,6 +232,7 @@ async function save() {
 
 const tombstone = (id) => ((game.deleted ??= {})[id] = Date.now());
 const folderPath = (id) => { const p = []; let f = game.folders.find((x) => x.id === id); while (f) { p.unshift(f.name); f = game.folders.find((x) => x.id === f.parentId); } return p.join(" / "); };
+const transcriptsOf = (n) => (n.recordings || []).map((r) => r.transcript).filter(Boolean).join(" ");
 const firstLine = (body) => (body || "").split("\n").map((l) => l.replace(/\[img:\d+\]/g, "").trim()).find(Boolean) || "";
 
 // ---------- game view ----------
@@ -240,7 +245,7 @@ function render() {
   const notes = (folderFilter === "shared" ? [] : game.notes)
     .filter((n) => folderFilter === "all" || (folderFilter === "guides" ? GUIDE_KINDS.includes(n.kind) : folderFilter === "none" ? !n.folderId : n.folderId === folderFilter))
     .filter((n) => kindFilter === "all" || (n.kind || "note") === kindFilter)
-    .filter((n) => !q || (n.title + "\n" + n.body + "\n" + (n.tags || []).join(" ")).toLowerCase().includes(q))
+    .filter((n) => !q || (n.title + "\n" + n.body + "\n" + (n.tags || []).join(" ") + "\n" + transcriptsOf(n)).toLowerCase().includes(q))
     .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (sorters[sortMode] || sorters.edited)(a, b));
   const lo = game.leftOff?.text ? game.leftOff : null;
   const counters = [...game.counters].sort((a, b) => (a.defeated ? 1 : 0) - (b.defeated ? 1 : 0) || a.createdAt - b.createdAt);
@@ -253,7 +258,7 @@ function render() {
     <div class="box" style="margin-top:14px">
       <b>📍 Where I left off</b> ${lo ? `<span class="meta">· ${date(lo.updatedAt)}</span>` : ""}
       <textarea id="leftOff" rows="2" placeholder="Shown on the Deck every time you launch this game">${esc(lo?.text ?? "")}</textarea>
-      <div class="toolbar" style="margin:6px 0 0"><button id="saveLeftOff" class="primary">Save pin</button>${lo ? '<button id="clearLeftOff">Clear</button>' : ""}</div>
+      <div class="toolbar" style="margin:6px 0 0"><button id="saveLeftOff" class="primary">Save pin</button>${lo ? '<button id="clearLeftOff">Clear</button>' : ""}${micButton("leftOff")}</div>
     </div>
 
     <div class="box">
@@ -290,7 +295,7 @@ function render() {
         n.checklist?.length ? `☑ ${done}/${n.checklist.length}` : "", n.recordings?.length ? `🎙 ${n.recordings.length}` : "", ...(n.tags || []).map((t) => "#" + t)].filter(Boolean);
       return `<div class="card" data-id="${esc(n.id)}"><div class="text">
           <h3>${n.pinned ? "📌 " : ""}${n.spoiler ? "🙈 " : ""}${esc(n.title)}</h3>
-          <div class="first ${n.spoiler ? "spoiler" : ""}">${esc(firstLine(n.body)) || "&nbsp;"}</div>
+          <div class="first ${n.spoiler ? "spoiler" : ""}">${esc(firstLine(n.body) || (transcriptsOf(n) ? "🎙 " + transcriptsOf(n) : "")) || "&nbsp;"}</div>
           ${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>
           ${shot ? `<img class="${n.spoiler ? "spoiler" : ""}" loading="lazy" src="${mediaUrl(game.appId, shot.thumb || shot.file)}">` : ""}</div>`;
     }).join("")}
@@ -306,6 +311,7 @@ function render() {
   $("#sort").value = sortMode;
   $("#folderFilter").onchange = (e) => { folderFilter = e.target.value; render(); };
   $("#sort").onchange = (e) => { sortMode = e.target.value; localStorage.setItem("sn-sort", sortMode); render(); };
+  wireDictation($("#content"));
   $("#saveLeftOff").onclick = () => { game.leftOff = { text: $("#leftOff").value.trim(), updatedAt: Date.now(), launchNumber: null }; save(); };
   if ($("#clearLeftOff")) $("#clearLeftOff").onclick = () => { game.leftOff = { text: "", updatedAt: Date.now(), launchNumber: null }; save(); };
   $("#addCounter").onclick = () => {
@@ -444,14 +450,14 @@ function editNote(original, draft = {}) {
       const b = $("#eRecord", dlg); if (b) b.textContent = `⏹ Stop recording (${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")})`;
     }, 500);
   };
-  dlg.onclose = () => { if (recorder) { discardRecording = true; recorder.stop(); } };
+  dlg.onclose = () => { if (recorder) { discardRecording = true; recorder.stop(); } cancelDictation(); };
 
   const draw = () => {
     dlg.innerHTML = `
       <h2 style="margin-top:0">${original ? "Edit note" : "New note"}</h2>
       <div class="row"><div style="flex:2"><label>Title</label><input id="eTitle" style="width:100%" value="${esc(n.title)}"></div>
         <div><label>Type</label><select id="eKind" style="width:100%">${KINDS.map((k) => `<option value="${k[0]}">${k[1]} ${k[2]}</option>`).join("")}</select></div></div>
-      <label>Information <span class="meta">— put [img:1] on its own line to show screenshot 1 there</span></label>
+      <div class="labelrow"><label>Information <span class="meta">— put [img:1] on its own line to show screenshot 1 there</span></label>${micButton("eBody")}</div>
       <textarea id="eBody" rows="9">${esc(n.body)}</textarea>
       <div class="row">
         <div><label>Tags (comma separated)</label><input id="eTags" style="width:100%" value="${esc((n.tags || []).join(", "))}"></div>
@@ -460,13 +466,15 @@ function editNote(original, draft = {}) {
       <div class="toolbar"><label style="margin:0"><input type="checkbox" id="ePinned"> Pin to top</label><label style="margin:0"><input type="checkbox" id="eSpoiler"> Spoiler (hidden until revealed)</label></div>
       <label>Checklist</label>
       <div id="eChecklist">${n.checklist.map((c, i) => `<div class="check"><input type="checkbox" data-i="${i}" ${c.done ? "checked" : ""}><input type="text" data-i="${i}" value="${esc(c.text)}"><button class="icon danger" data-del="${i}">✕</button></div>`).join("")}</div>
-      <div class="check"><input type="text" id="eNewItem" placeholder="Add an item and press Enter"><button class="icon" id="eAddItem">Add</button></div>
+      <div class="check"><input type="text" id="eNewItem" placeholder="Add an item and press Enter">${micButton("eNewItem")}<button class="icon" id="eAddItem">Add</button></div>
       <label>Screenshots</label>
       <div class="shots">${n.screenshots.map((s, i) => `<div class="shot"><img src="${mediaUrl(game.appId, s.thumb || s.file)}">Screenshot ${i + 1}
           <div class="toolbar" style="margin:4px 0"><button class="icon" data-crop="${i}">Crop</button><button class="icon" data-insert="${i}">In text</button><button class="icon danger" data-rmshot="${i}">Remove</button></div></div>`).join("")}</div>
       <div class="toolbar"><input type="file" id="eUpload" accept="image/*" multiple></div>
       <label>Voice notes</label>
-      ${(n.recordings || []).map((r, i) => `<div class="toolbar" style="margin:4px 0"><audio controls preload="none" src="${mediaUrl(game.appId, r.file)}"></audio><span class="meta">${r.durationSec ? Math.round(r.durationSec) + "s · " : ""}${date(r.createdAt)}</span><button class="icon danger" data-rmrec="${i}">Remove</button></div>`).join("")}
+      ${(n.recordings || []).map((r, i) => `<div class="toolbar" style="margin:4px 0"><audio controls preload="none" src="${mediaUrl(game.appId, r.file)}"></audio><span class="meta">${r.durationSec ? Math.round(r.durationSec) + "s · " : ""}${date(r.createdAt)}</span>
+          ${!r.transcript && speechOn ? `<button class="icon" data-transcribe="${i}">📝 Transcribe</button>` : ""}<button class="icon danger" data-rmrec="${i}">Remove</button></div>
+          ${r.transcript ? `<div class="said"><span class="meta">🎙 said:</span>${esc(r.transcript)} <button class="icon" data-said="${i}">Add to text</button></div>` : ""}`).join("")}
       <div class="toolbar"><button id="eRecord" class="${recorder ? "recording" : ""}">${recorder ? "⏹ Stop recording" : "🎙 Record voice note"}</button>
         <span class="meta">or upload:</span><input type="file" id="eAudio" accept="audio/*"></div>
       <div class="toolbar" style="margin-top:18px">
@@ -519,6 +527,20 @@ function editNote(original, draft = {}) {
       collect();
       const i = +b.dataset.crop;
       cropDialog(n.screenshots[i], (shot) => { n.screenshots[i] = shot; draw(); });
+    }));
+    wireDictation(dlg);
+    dlg.querySelectorAll("[data-said]").forEach((b) => (b.onclick = () => {
+      collect(); const t = n.recordings[+b.dataset.said].transcript;
+      n.body += `${n.body && !n.body.endsWith("\n") ? "\n" : ""}${t}\n`; draw();
+    }));
+    dlg.querySelectorAll("[data-transcribe]").forEach((b) => (b.onclick = async () => {
+      collect(); const r = n.recordings[+b.dataset.transcribe];
+      b.disabled = true; b.textContent = "Transcribing…";
+      try {
+        r.transcript = (await api(`/api/transcribe/${encodeURIComponent(game.appId)}/${encodeURIComponent(r.file)}`, { method: "POST", json: {} })).text || "";
+        if (!r.transcript) alert("No speech found in that recording.");
+      } catch (err) { alert("Couldn't transcribe: " + err.message); }
+      draw();
     }));
     dlg.querySelectorAll("[data-rmrec]").forEach((b) => (b.onclick = () => { collect(); n.recordings.splice(+b.dataset.rmrec, 1); draw(); }));
     $("#eUpload", dlg).onchange = async (e) => {
@@ -583,7 +605,7 @@ function viewShared(s) {
   dlg.innerHTML = `<h2 style="margin-top:0">${esc(s.note.title)}</h2><span class="chip" style="background:#1f5c45">👥 Shared by ${esc(s.fromName)}</span><span class="chip">Edited ${date(s.note.updatedAt)}</span>
     <div class="preview ${s.note.spoiler ? "spoiler" : ""}" onclick="this.classList.remove('spoiler')">${body || '<span class="meta">(no information)</span>'}${(s.note.checklist || []).map((c) => `\n${c.done ? "☑" : "☐"} ${esc(c.text)}`).join("")}</div>
     <div class="shots">${s.note.screenshots.map((sh) => `<div class="shot"><img src="${m(sh.thumb || sh.file)}"></div>`).join("")}</div>
-    ${(s.note.recordings || []).map((r) => `<audio controls preload="none" src="${m(r.file)}"></audio>`).join(" ")}
+    ${(s.note.recordings || []).map((r) => `<audio controls preload="none" src="${m(r.file)}"></audio>${r.transcript ? `<div class="said"><span class="meta">🎙 said:</span>${esc(r.transcript)}</div>` : ""}`).join(" ")}
     <div class="toolbar"><button class="primary" id="pCopy">Copy to my notes</button><button id="pClose">Close</button></div>`;
   $("#pClose", dlg).onclick = () => dlg.close();
   $("#pCopy", dlg).onclick = async () => {
@@ -622,15 +644,25 @@ async function accountDialog() {
       const st = await api("/api/settings");
       html = `<p class="meta">Get notified when your notes change. One URL per line: an n8n/Home Assistant webhook, or <code>ntfy+https://ntfy.example.com/topic</code> for phone notifications.</p>
         <textarea id="aHooks" rows="4">${esc(st.webhooks.join("\n"))}</textarea><div class="toolbar"><button class="primary" id="aSaveHooks">Save</button></div>`;
+    } else if (tab === "speech") {
+      const engine = speechEngine(), lang = localStorage.getItem("sn-speech-lang") || "";
+      html = `<p class="meta">Press 🎤 next to a text box, talk, then press it again. Voice notes are written out automatically too.</p>
+        ${nativeSpeech() ? `<label>Speech engine</label><select id="aEngine"><option value="phone">This phone (live, works offline)</option><option value="server">Server (Whisper, best with game names)</option></select>` : ""}
+        <label>Language</label><select id="aLang"><option value="">Detect automatically</option>${[["en", "English"], ["fr", "French"], ["es", "Spanish"], ["de", "German"], ["it", "Italian"], ["pt", "Portuguese"], ["nl", "Dutch"], ["pl", "Polish"], ["ru", "Russian"], ["ja", "Japanese"], ["ko", "Korean"], ["zh", "Chinese"]].map(([c, l]) => `<option value="${c}">${l}</option>`).join("")}</select>`;
+      setTimeout(() => {
+        if ($("#aEngine", dlg)) { $("#aEngine", dlg).value = engine; $("#aEngine", dlg).onchange = (e) => localStorage.setItem("sn-speech-engine", e.target.value); }
+        $("#aLang", dlg).value = lang; $("#aLang", dlg).onchange = (e) => localStorage.setItem("sn-speech-lang", e.target.value);
+      });
     } else if (tab === "users") {
       const a = await api("/api/admin");
       html = `<label style="margin:0"><input type="checkbox" id="aSignups" ${a.allowSignups ? "checked" : ""}> Anyone with a Steam account can sign up</label>
         <h3>Invite</h3><div class="toolbar"><input id="aInvite" placeholder="Steam ID or steamcommunity.com/profiles/… link" style="flex:1"><button id="aInviteBtn" class="primary">Invite</button></div>
         ${a.invites.map((i) => `<div class="person"><div class="who">${esc(i)} <span class="meta">invited, hasn't signed in yet</span></div><button data-uninvite="${esc(i)}">Cancel</button></div>`).join("")}
-        <h3>Users</h3>${a.users.map((u) => personRow(u, u.role === "owner" ? '<span class="chip">owner</span>' : `<button class="danger" data-remove="${esc(u.id)}">Remove</button>`)).join("")}`;
+        <h3>Users</h3>${a.speechAvailable ? '<p class="meta">🎤 Speech to text runs on this server\'s GPU. Tick who may use it.</p>' : '<p class="meta">🎤 Speech to text is off: set WHISPER_URL on the server to turn it on.</p>'}
+        ${a.users.map((u) => personRow(u, u.role === "owner" ? '<span class="chip">owner</span>' : `<label style="margin:0;opacity:1"><input type="checkbox" data-speech="${esc(u.id)}" ${u.speech ? "checked" : ""}> 🎤 Speech</label><button class="danger" data-remove="${esc(u.id)}">Remove</button>`)).join("")}`;
     }
     dlg.innerHTML = `<div class="person" style="border:0">${me.avatar ? `<img src="${esc(me.avatar)}">` : '<div class="ph"></div>'}<div class="who"><b>${esc(me.name)}</b><div class="meta">${me.steamId ? "Steam " + esc(me.steamId) : "Not linked to Steam"}</div></div></div>
-      <div class="toolbar"><button data-tab="devices">Devices</button><button data-tab="notify">Notifications</button>${me.role === "owner" ? '<button data-tab="users">Users</button>' : ""}
+      <div class="toolbar"><button data-tab="devices">Devices</button><button data-tab="notify">Notifications</button>${speechOn ? '<button data-tab="speech">Speech</button>' : ""}${me.role === "owner" ? '<button data-tab="users">Users</button>' : ""}
         ${!me.steamId ? '<a href="/auth/steam?link=1"><button>Link Steam account</button></a>' : ""}<span style="flex:1"></span><button id="aLogout">Log out</button><button id="pClose">Close</button></div>${html}`;
     dlg.querySelectorAll("[data-tab]").forEach((b) => { b.classList.toggle("primary", b.dataset.tab === tab); b.onclick = () => draw(b.dataset.tab); });
     $("#pClose", dlg).onclick = () => dlg.close();
@@ -645,6 +677,10 @@ async function accountDialog() {
     if ($("#aInviteBtn", dlg)) $("#aInviteBtn", dlg).onclick = async () => {
       try { await api("/api/admin/invites", { method: "POST", json: { steamId: $("#aInvite", dlg).value } }); draw("users"); } catch (err) { alert(err.message); }
     };
+    dlg.querySelectorAll("[data-speech]").forEach((b) => (b.onchange = async () => {
+      try { await api(`/api/admin/users/${encodeURIComponent(b.dataset.speech)}/speech`, { method: "POST", json: { allowed: b.checked } }); }
+      catch (err) { alert(err.message); b.checked = !b.checked; }
+    }));
     dlg.querySelectorAll("[data-uninvite]").forEach((b) => (b.onclick = async () => { await api(`/api/admin/invites/${b.dataset.uninvite}`, { method: "DELETE" }); draw("users"); }));
     dlg.querySelectorAll("[data-remove]").forEach((b) => (b.onclick = async () => {
       if (confirm("Remove this user? Their notes are moved to a removed-users folder on the server.")) { await api(`/api/admin/users/${b.dataset.remove}`, { method: "DELETE" }); draw("users"); }
@@ -653,6 +689,95 @@ async function accountDialog() {
   await draw();
   dlg.showModal();
 }
+
+// ---------- speech to text ----------
+// 🎤 buttons fill a text box by voice. In the Android app the phone's own recognizer can do it (live words,
+// works offline); everywhere else the clip goes to the server's Whisper. Only shown if the owner allowed it.
+const nativeSpeech = () => !!window.SessionNotesApp?.hasNativeSpeech?.();
+const speechEngine = () => (nativeSpeech() ? localStorage.getItem("sn-speech-engine") || "phone" : "server");
+const micButton = (target) => (speechOn ? `<button type="button" class="icon" data-dictate="${target}" title="Speak instead of typing">🎤</button>` : "");
+let dictation = null; // { el, btn, start, end, stop(), cancel() }
+
+function wireDictation(root) {
+  root.querySelectorAll("[data-dictate]").forEach((b) => (b.onclick = () => {
+    if (dictation?.btn === b) return dictation.stop();
+    cancelDictation();
+    const el = root.querySelector("#" + b.dataset.dictate);
+    if (el) (speechEngine() === "phone" ? dictateNative : dictateServer)(el, b);
+  }));
+}
+
+function cancelDictation() { dictation?.cancel(); dictation = null; }
+
+/** Put `text` where the cursor was when dictation started, with a space before it if needed. */
+function placeText(d, text) {
+  const v = d.original, before = v.slice(0, d.start), after = v.slice(d.end);
+  const pad = text && before && !/\s$/.test(before) ? " " : "";
+  d.el.value = before + pad + text + (text && after && !/^\s/.test(after) ? " " : "") + after;
+  const caret = before.length + pad.length + text.length;
+  d.el.setSelectionRange?.(caret, caret);
+}
+
+function beginDictation(el, btn, extra) {
+  const d = { el, btn, original: el.value, start: el.selectionStart ?? el.value.length, end: el.selectionEnd ?? el.value.length, label: btn.textContent, ...extra };
+  btn.classList.add("recording");
+  btn.textContent = "⏹";
+  dictation = d;
+  return d;
+}
+
+function endDictation(d) {
+  d.btn.classList.remove("recording");
+  d.btn.disabled = false;
+  d.btn.textContent = d.label;
+  if (dictation === d) dictation = null;
+}
+
+async function dictateServer(el, btn) {
+  if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) return alert("Speaking needs the secure (https) address of this site.");
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (err) { return alert("Microphone not available: " + err.message); }
+  const mime = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported(m)) || "";
+  const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+  const chunks = [];
+  let cancelled = false;
+  const started = Date.now();
+  const d = beginDictation(el, btn, { stop: () => mr.state !== "inactive" && mr.stop(), cancel: () => { cancelled = true; d.stop(); } });
+  const tick = setInterval(() => { const s = Math.floor((Date.now() - started) / 1000); btn.textContent = `⏹ ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; if (s >= 120) d.stop(); }, 500);
+  mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+  mr.onstop = async () => {
+    clearInterval(tick);
+    stream.getTracks().forEach((t) => t.stop());
+    if (cancelled) return endDictation(d);
+    btn.disabled = true; btn.textContent = "…";
+    try {
+      const type = (mr.mimeType || mime || "audio/webm").split(";")[0];
+      const q = new URLSearchParams({ appId: game?.appId || "", lang: localStorage.getItem("sn-speech-lang") || "" });
+      const r = await api(`/api/transcribe?${q}`, { method: "POST", body: new Blob(chunks, { type }), headers: { "Content-Type": type } });
+      if (r.text) placeText(d, r.text); else alert("Didn't catch anything. Try again a little closer to the mic.");
+    } catch (err) { alert("Couldn't turn that into text: " + err.message); }
+    endDictation(d);
+  };
+  mr.start();
+}
+
+function dictateNative(el, btn) {
+  const d = beginDictation(el, btn, {
+    stop: () => window.SessionNotesApp.stopDictation(),
+    cancel: () => { window.SessionNotesApp.cancelDictation(); endDictation(d); },
+  });
+  window.SessionNotesApp.startDictation(localStorage.getItem("sn-speech-lang") || "");
+}
+
+/** Events from the Android app's recognizer: {type: "partial"|"final"|"error"|"end", text}. */
+window.snDictation = (e) => {
+  const d = dictation;
+  if (!d || d.stop === undefined) return;
+  if (e.type === "partial" || e.type === "final") placeText(d, e.text || "");
+  if (e.type === "error") { placeText(d, ""); if (e.text) alert(e.text); }
+  if (e.type === "final" || e.type === "error" || e.type === "end") endDictation(d);
+};
 
 // ---------- crop ----------
 function cropDialog(shot, done) {
@@ -766,6 +891,7 @@ window.snReceiveShareNative = (payload) => {
 
 /** Android back button (native app): close the top dialog if one is open. */
 window.snBack = () => {
+  if (dictation) { cancelDictation(); return true; }
   for (const d of [$("#panel"), $("#editor")]) if (d.open) { d.close(); return true; }
   return false;
 };

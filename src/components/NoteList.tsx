@@ -80,7 +80,8 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
                 : n.folderId === folderId
       )
       .filter((n) => activeKinds.length === 0 || activeKinds.includes(n.kind ?? "note"))
-      .filter((n) => !q || n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q))
+      .filter((n) => !q || n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q) ||
+        n.recordings.some((r) => r.transcript?.toLowerCase().includes(q)))
       .filter((n) => activeTags.every((t) => n.tags.includes(t))),
     sort
   );
@@ -99,6 +100,7 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
         folderId={inGuides || inShared ? null : folderId}
         defaultKind={inGuides ? "guide" : undefined}
         folders={folders}
+        gameName={game.name}
         onSaved={emitDataChanged}
       />
     );

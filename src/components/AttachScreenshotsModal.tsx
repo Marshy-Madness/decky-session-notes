@@ -42,6 +42,7 @@ export const AttachScreenshotsModal: FC<{ pending: PendingShots; closeModal?: ()
         note={null}
         folderId={null}
         folders={game?.folders ?? []}
+        gameName={game?.name}
         initialScreenshots={shots}
         onSaved={emitDataChanged}
       />

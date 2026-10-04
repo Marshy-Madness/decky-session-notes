@@ -2,7 +2,8 @@ import { FC, useEffect, useState } from "react";
 import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
-import { BackupStatus, OpenChord, OverlayPosition, PanelWidth } from "../types";
+import { BackupStatus, DictateTarget, OpenChord, OverlayPosition, PanelWidth } from "../types";
+import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Bookstore";
 import { formatDateTime } from "../utils/format";
 import { errText } from "../utils/errors";
@@ -29,6 +30,18 @@ const POSITION_OPTIONS: { label: string; data: OverlayPosition }[] = [
   { label: "Bottom left", data: "bottom-left" },
   { label: "Bottom center", data: "bottom-center" },
   { label: "Bottom right", data: "bottom-right" },
+];
+
+const DICTATE_TARGETS: { label: string; data: DictateTarget }[] = [
+  { label: "Type it where I am", data: "type" },
+  { label: "Save it as a note for this game", data: "note" },
+];
+
+const SPEECH_LANGUAGES = [
+  { label: "Detect automatically", data: "" },
+  ...([["en", "English"], ["fr", "French"], ["es", "Spanish"], ["de", "German"], ["it", "Italian"], ["pt", "Portuguese"],
+    ["nl", "Dutch"], ["pl", "Polish"], ["ru", "Russian"], ["ja", "Japanese"], ["ko", "Korean"], ["zh", "Chinese"]] as const)
+    .map(([data, label]) => ({ label, data: data as string })),
 ];
 
 const PAIR_CODE = /^[A-Z0-9]{3}-?[A-Z0-9]{3}$/i;
@@ -58,9 +71,11 @@ export const SettingsView: FC = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  const canSpeak = useSpeechAllowed();
   const refreshStatus = () => backend.backupStatus().then(setStatus);
   useEffect(() => {
     refreshStatus();
+    refreshSpeech();
   }, []);
   useEffect(() => {
     setUrl(settings.syncUrl ?? "");
@@ -76,6 +91,7 @@ export const SettingsView: FC = () => {
         // A pairing code from the website: swap it for a device token.
         const user = await backend.pairDevice(token.trim());
         await loadSettings();
+        refreshSpeech();
         setMessage(`🔗 Linked to ${user.name}'s account`);
       }
       setMessage(await fn());
@@ -163,6 +179,38 @@ export const SettingsView: FC = () => {
           onChange={(v) => updateSettings({ sessionRecap: v })}
         />
       </PanelSectionRow>
+
+      {canSpeak && (
+        <>
+          <Heading>Speech to text</Heading>
+          <PanelSectionRow>
+            <ToggleField
+              label="STEAM + L5 + R5 to speak"
+              description="Hold STEAM and press both lower back buttons, talk, then press them again. Works anywhere, even in a game. Uses your sync server."
+              checked={settings.dictateChord ?? false}
+              onChange={(v) => updateSettings({ dictateChord: v })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <DropdownItem
+              label="What happens to the words"
+              description="Typing works like Steam's on-screen keyboard. If no game is running, the words are always typed."
+              rgOptions={DICTATE_TARGETS}
+              selectedOption={settings.dictateTarget ?? "type"}
+              disabled={!settings.dictateChord}
+              onChange={(o) => updateSettings({ dictateTarget: o.data })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <DropdownItem
+              label="Language"
+              rgOptions={SPEECH_LANGUAGES}
+              selectedOption={settings.speechLanguage ?? ""}
+              onChange={(o) => updateSettings({ speechLanguage: o.data || undefined })}
+            />
+          </PanelSectionRow>
+        </>
+      )}
 
       <Heading>Pin to screen</Heading>
       <PanelSectionRow>

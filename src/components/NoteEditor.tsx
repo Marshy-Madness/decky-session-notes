@@ -1,6 +1,6 @@
 import { FC, useRef, useState } from "react";
 import { ModalRoot, DialogButton, Dropdown, Focusable, TextField, ToggleField, showModal, ConfirmModal } from "@decky/ui";
-import { FaCrop, FaCamera, FaMicrophone, FaStop, FaTrash, FaParagraph, FaPlus, FaCheckSquare, FaRegSquare } from "react-icons/fa";
+import { FaCrop, FaCamera, FaMicrophone, FaMicrophoneAlt, FaStop, FaTrash, FaParagraph, FaPlus, FaCheckSquare, FaRegSquare, FaFileAlt } from "react-icons/fa";
 import { toaster } from "@decky/api";
 import { backend } from "../api/backend";
 import { ChecklistItem, Folder, Note, NoteKind, Recording, Screenshot } from "../types";
@@ -9,6 +9,8 @@ import { formatClock, newId } from "../utils/format";
 import { useSessionTimer } from "../hooks/useSessionTimer";
 import { MediaImage } from "./MediaImage";
 import { AudioButton } from "./AudioButton";
+import { Transcripts } from "./Transcripts";
+import { insertWords, useSpeechAllowed } from "../state/speech";
 import { ScreenshotPicker } from "./ScreenshotPicker";
 import { CropModal } from "./CropModal";
 import * as s from "./styles";
@@ -36,12 +38,14 @@ export const NoteEditor: FC<{
   note: Note | null;
   folderId: string | null;
   folders: Folder[];
+  /** Shown to the speech to text so it spells game-specific words right. */
+  gameName?: string;
   /** Already-attached screenshots to start a new note with (e.g. from the screenshot prompt). */
   initialScreenshots?: Screenshot[];
   defaultKind?: NoteKind;
   onSaved: (note: Note) => void;
   closeModal?: () => void;
-}> = ({ appId, note, folderId: initialFolder, folders, initialScreenshots = [], defaultKind, onSaved, closeModal }) => {
+}> = ({ appId, note, folderId: initialFolder, folders, gameName, initialScreenshots = [], defaultKind, onSaved, closeModal }) => {
   const [title, setTitle] = useState(note?.title ?? "");
   const [body, setBody] = useState(note?.body ?? "");
   const [tags, setTags] = useState(note?.tags.join(", ") ?? "");
@@ -56,6 +60,12 @@ export const NoteEditor: FC<{
   const [saving, setSaving] = useState(false);
   const elapsed = useSessionTimer(recordStart);
   const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const canSpeak = useSpeechAllowed();
+  const [dictating, setDictating] = useState<"off" | "listening" | "writing">("off");
+  const [dictateStart, setDictateStart] = useState<number | null>(null);
+  const cursor = useRef<[number, number]>([0, 0]);
+  const dictateElapsed = useSessionTimer(dictateStart);
+  const [transcribing, setTranscribing] = useState<string | null>(null);
 
   // Media added in this editor session is deleted again on cancel. Media removed from the note is
   // kept on disk so older versions of the note can still be restored with it.
@@ -80,6 +90,44 @@ export const NoteEditor: FC<{
     } catch (e) {
       toaster.toast({ title: "Couldn't start recording", body: errText(e) });
     }
+  };
+
+  const toggleDictation = async () => {
+    if (dictating === "writing") return;
+    if (dictating === "listening") {
+      setDictating("writing");
+      setDictateStart(null);
+      try {
+        const words = await backend.stopDictation(appId, gameName ?? "");
+        if (words) setBody((b) => insertWords(b, words, ...cursor.current));
+        else toaster.toast({ title: "Session Notes", body: "Didn't catch anything. Try again a little louder." });
+      } catch (e) {
+        toaster.toast({ title: "Speech to text failed", body: errText(e) });
+      }
+      setDictating("off");
+      return;
+    }
+    const el = bodyRef.current;
+    cursor.current = el && document.activeElement === el ? [el.selectionStart, el.selectionEnd] : [body.length, body.length];
+    try {
+      await backend.startDictation();
+      setDictateStart(Date.now());
+      setDictating("listening");
+    } catch (e) {
+      toaster.toast({ title: "Couldn't start listening", body: errText(e) });
+    }
+  };
+
+  const transcribe = async (rec: Recording) => {
+    setTranscribing(rec.id);
+    try {
+      const text = await backend.transcribeRecording(appId, rec.file);
+      if (text) setRecordings((list) => list.map((r) => (r.id === rec.id ? { ...r, transcript: text } : r)));
+      else toaster.toast({ title: "Session Notes", body: "No speech found in that recording." });
+    } catch (e) {
+      toaster.toast({ title: "Couldn't transcribe", body: errText(e) });
+    }
+    setTranscribing(null);
   };
 
   const dropMedia = (item: Screenshot | Recording) => {
@@ -112,12 +160,14 @@ export const NoteEditor: FC<{
 
   const cancel = async () => {
     if (recordStart) await stopRecording();
+    if (dictating !== "off") backend.cancelDictation();
     added.current.forEach((item) => backend.deleteMedia(appId, item));
     closeModal?.();
   };
 
   const save = async () => {
     if (recordStart) await stopRecording();
+    if (dictating === "listening") backend.cancelDictation();
     setSaving(true);
     const payload: Note = {
       id: note?.id ?? newId(),
@@ -185,7 +235,28 @@ export const NoteEditor: FC<{
         </div>
       </div>
 
-      <div style={{ margin: "10px 0 4px", fontSize: "13px", opacity: 0.8 }}>Information</div>
+      <Focusable style={{ display: "flex", alignItems: "flex-end", gap: "8px", margin: "10px 0 4px" }}>
+        <div style={{ flex: 1, fontSize: "13px", opacity: 0.8 }}>Information</div>
+        {canSpeak && (
+          <DialogButton
+            style={{ ...s.smallButton, color: dictating === "listening" ? "#ff5a5a" : undefined }}
+            onClick={toggleDictation}
+            disabled={dictating === "writing"}
+          >
+            {dictating === "listening" ? (
+              <>
+                <FaStop /> Done {formatClock(dictateElapsed / 1000)}
+              </>
+            ) : dictating === "writing" ? (
+              "Writing it down…"
+            ) : (
+              <>
+                <FaMicrophoneAlt /> Speak
+              </>
+            )}
+          </DialogButton>
+        )}
+      </Focusable>
       <Focusable
         onActivate={() => bodyRef.current?.focus()}
         onOKActionDescription="Type"
@@ -302,6 +373,11 @@ export const NoteEditor: FC<{
           {recordings.map((rec, i) => (
             <Focusable key={rec.id} style={{ display: "flex", gap: "4px" }}>
               <AudioButton appId={appId} recording={rec} label={`Voice ${i + 1}`} />
+              {canSpeak && !rec.transcript && (
+                <DialogButton style={s.smallButton} onClick={() => transcribe(rec)} disabled={transcribing !== null}>
+                  <FaFileAlt size={11} /> {transcribing === rec.id ? "Transcribing…" : "Transcribe"}
+                </DialogButton>
+              )}
               <DialogButton style={s.smallButton} onClick={() => removeRecording(rec)}>
                 <FaTrash size={11} />
               </DialogButton>
@@ -309,6 +385,8 @@ export const NoteEditor: FC<{
           ))}
         </Focusable>
       )}
+
+      <Transcripts recordings={recordings} onUse={(t) => setBody((b) => `${b}${b && !b.endsWith("\n") ? "\n" : ""}${t}\n`)} />
 
       {screenshots.length > 0 && (
         <Focusable flow-children="row" style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>

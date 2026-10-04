@@ -8,6 +8,9 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import android.util.Base64
 import android.util.TypedValue
 import android.view.Gravity
@@ -30,7 +33,8 @@ import org.json.JSONObject
 /**
  * Thin native shell around the Session Notes website (served by your own server), with a second tab for the
  * public Bookstore. Native extras: remembers the server, microphone access for voice notes, the file/photo picker,
- * the Android back button, "Share to Session Notes" from other apps, and "Save to my notes" from the Bookstore.
+ * the Android back button, "Share to Session Notes" from other apps, "Save to my notes" from the Bookstore, and
+ * speech to text with the phone's own recognizer (live words, works offline).
  */
 class MainActivity : Activity() {
     private lateinit var webView: WebView // Notes tab (your server)
@@ -44,6 +48,8 @@ class MainActivity : Activity() {
     private var pendingPermission: PermissionRequest? = null
     private var pendingShare: String? = null
     private var pageReady = false
+    private var recognizer: SpeechRecognizer? = null
+    private var pendingDictationLang: String? = null // waiting for the microphone permission
 
     private val server: String? get() = prefs.getString("server", null)
     private val bookstore: String get() = prefs.getString("bookstore", null) ?: DEFAULT_BOOKSTORE
@@ -144,6 +150,85 @@ class MainActivity : Activity() {
     override fun onPause() {
         super.onPause()
         CookieManager.getInstance().flush()
+        if (recognizer != null) {
+            endDictation()
+            dictationEvent("end")
+        }
+    }
+
+    override fun onDestroy() {
+        endDictation()
+        super.onDestroy()
+    }
+
+    // ---------- speech to text (window.snDictation receives the events) ----------
+
+    private fun dictationEvent(type: String, text: String = "") {
+        val json = JSONObject().put("type", type).put("text", text).toString()
+        webView.evaluateJavascript("window.snDictation && window.snDictation($json)", null)
+    }
+
+    private fun beginDictation(lang: String) {
+        endDictation()
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingDictationLang = lang
+            requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQ_DICTATE)
+            return
+        }
+        val r = SpeechRecognizer.createSpeechRecognizer(this)
+        r.setRecognitionListener(object : RecognitionListener {
+            private fun best(results: Bundle?) =
+                results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull().orEmpty()
+
+            override fun onPartialResults(partialResults: Bundle?) {
+                best(partialResults).takeIf { it.isNotBlank() }?.let { dictationEvent("partial", it) }
+            }
+
+            override fun onResults(results: Bundle?) {
+                endDictation()
+                dictationEvent("final", best(results))
+            }
+
+            override fun onError(error: Int) {
+                endDictation()
+                val message = when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "Didn't catch anything. Try again."
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "The app needs microphone permission."
+                    SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
+                        "The phone's speech service needs the internet. Switch to the server engine under Account → Speech."
+                    SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED, SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ->
+                        "The phone can't recognise that language. Pick another under Account → Speech."
+                    SpeechRecognizer.ERROR_CLIENT -> "" // cancelled
+                    else -> "Speech recognition failed (error $error)."
+                }
+                dictationEvent("error", message)
+            }
+
+            override fun onReadyForSpeech(params: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onEvent(eventType: Int, params: Bundle?) {}
+        })
+        recognizer = r
+        r.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            if (lang.isNotBlank()) putExtra(RecognizerIntent.EXTRA_LANGUAGE, lang)
+            // Give people a moment to think mid-sentence before it stops listening.
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 2500L)
+        })
+    }
+
+    private fun endDictation() {
+        recognizer?.let {
+            it.cancel()
+            it.destroy()
+        }
+        recognizer = null
     }
 
     @Deprecated("Simple back handling; the website closes its own dialogs first.")
@@ -234,6 +319,21 @@ class MainActivity : Activity() {
         /** Lets the website know the Bookstore is a tab here (so it doesn't show its own link). */
         @JavascriptInterface
         fun openBookstore() = runOnUiThread { showTab(store = true) }
+
+        /** The phone has a speech recognizer the website can use instead of the server's. */
+        @JavascriptInterface
+        fun hasNativeSpeech(): Boolean = SpeechRecognizer.isRecognitionAvailable(this@MainActivity)
+
+        /** lang: a language code like "en", or "" for the phone's default. */
+        @JavascriptInterface
+        fun startDictation(lang: String) = runOnUiThread { beginDictation(lang) }
+
+        /** Stop listening and deliver what was heard so far. */
+        @JavascriptInterface
+        fun stopDictation() = runOnUiThread { recognizer?.stopListening() }
+
+        @JavascriptInterface
+        fun cancelDictation() = runOnUiThread { endDictation() }
     }
 
     /** window.SessionNotesApp on Bookstore pages. */
@@ -327,6 +427,13 @@ class MainActivity : Activity() {
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, results: IntArray) {
+        if (requestCode == REQ_DICTATE) {
+            val lang = pendingDictationLang ?: return
+            pendingDictationLang = null
+            if (results.firstOrNull() == PackageManager.PERMISSION_GRANTED) beginDictation(lang)
+            else dictationEvent("error", "The app needs microphone permission to listen.")
+            return
+        }
         if (requestCode != REQ_MIC) return
         val req = pendingPermission ?: return
         pendingPermission = null
@@ -348,6 +455,7 @@ class MainActivity : Activity() {
     companion object {
         private const val REQ_MIC = 1
         private const val REQ_FILES = 2
+        private const val REQ_DICTATE = 3
         private const val DEFAULT_BOOKSTORE = "https://bookstore.marshymadness.com"
     }
 }

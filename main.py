@@ -1,4 +1,5 @@
 import asyncio
+import os
 
 import decky
 import storage
@@ -8,8 +9,12 @@ from bookstore import Bookstore
 from overlay import Overlay
 
 
+DICTATION_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "dictation.wav")
+
+
 class Plugin:
     recorder = Recorder()
+    dictation = Recorder()  # separate from voice notes, so the button combo works with an editor open
     sync = Sync()
     bookstore = Bookstore()
     overlay = Overlay()
@@ -119,6 +124,37 @@ class Plugin:
     async def stop_recording(self):
         return await self.recorder.stop()
 
+    # speech to text (done by the sync server, if its owner allowed this account)
+    async def speech_status(self, refresh: bool = False):
+        return {"allowed": await asyncio.to_thread(self.sync.speech_allowed, refresh)}
+
+    async def start_dictation(self):
+        if os.path.exists(DICTATION_PATH):
+            os.remove(DICTATION_PATH)
+        await self.dictation.start_to(DICTATION_PATH)
+        return True
+
+    async def stop_dictation(self, appid: str = "", game: str = ""):
+        """Stop listening and return the words ("" if nothing was said)."""
+        if not await self.dictation.stop():
+            return ""
+        try:
+            return await asyncio.to_thread(self.sync.transcribe, DICTATION_PATH, appid, game)
+        finally:
+            if os.path.exists(DICTATION_PATH):
+                os.remove(DICTATION_PATH)
+
+    async def cancel_dictation(self):
+        await self.dictation.stop()
+        if os.path.exists(DICTATION_PATH):
+            os.remove(DICTATION_PATH)
+
+    async def transcribe_recording(self, appid: str, file: str):
+        text = await asyncio.to_thread(self.sync.transcribe_media, appid, file)
+        if text:
+            storage.set_transcript(appid, file, text)
+        return text
+
     # settings
     async def get_settings(self):
         return storage.get_settings()
@@ -217,3 +253,4 @@ class Plugin:
             self.overlay.task.cancel()
         self.overlay.clear()
         await self.recorder.stop()
+        await self.dictation.stop()

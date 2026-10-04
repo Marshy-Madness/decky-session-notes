@@ -87,6 +87,19 @@ class Accounts:
     def list_public(self) -> list:
         return [self.public(u) for u in self.db["users"].values()]
 
+    # ---- speech to text (runs on the server's GPU, so the owner hands it out per user) ----
+    def speech_allowed(self, u: dict) -> bool:
+        return bool(u) and (u.get("role") == "owner" or bool(u.get("speech")))
+
+    def set_speech(self, uid: str, allowed: bool) -> bool:
+        with lock:
+            u = self.db["users"].get(uid)
+            if not u or u.get("role") == "owner":
+                return False
+            u["speech"] = bool(allowed)
+            self.save()
+            return True
+
     def login_steam(self, steam_id: str, prof: dict, link_uid: str = None):
         """Returns (user, error). Links Steam to link_uid if given, else finds or creates the user."""
         with lock:

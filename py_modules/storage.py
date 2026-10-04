@@ -232,6 +232,20 @@ def save_note(appid: str, note: dict) -> dict:
     return note
 
 
+def set_transcript(appid: str, file: str, text: str) -> int:
+    """Attach the words of a voice note to it. Not an edit, so updatedAt stays as it is."""
+    game = load_game(appid)
+    hits = 0
+    for n in game.get("notes", []):
+        for r in n.get("recordings") or []:
+            if r.get("file") == file:
+                r["transcript"] = text
+                hits += 1
+    if hits:
+        _save_game(game, notify=False)
+    return hits
+
+
 def delete_note(appid: str, note_id: str):
     game = load_game(appid)
     note = next((n for n in game["notes"] if n["id"] == note_id), None)

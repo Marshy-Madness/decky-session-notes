@@ -55,7 +55,7 @@ class Sync:
 
     # ---- http ----
 
-    def _request(self, method: str, path: str, body=None, content_type="application/json"):
+    def _request(self, method: str, path: str, body=None, content_type="application/json", timeout=30):
         settings = storage.get_settings()
         base = (settings.get("syncUrl") or "").strip().rstrip("/")
         if not base:
@@ -67,13 +67,17 @@ class Sync:
         if body is not None:
             req.add_header("Content-Type", content_type)
         try:
-            with urllib.request.urlopen(req, timeout=30, context=_SSL) as resp:
+            with urllib.request.urlopen(req, timeout=timeout, context=_SSL) as resp:
                 data = resp.read()
                 ctype = resp.headers.get("Content-Type", "")
         except urllib.error.HTTPError as e:
             if e.code == 401:
                 raise RuntimeError("Server rejected the token")
-            raise RuntimeError(f"Server error {e.code}")
+            try:
+                message = json.loads(e.read()).get("error")
+            except Exception:
+                message = None
+            raise RuntimeError(message if message and e.code in (403, 413, 429, 502) else f"Server error {e.code}")
         except urllib.error.URLError as e:
             raise RuntimeError(f"Can't reach server: {e.reason}")
         return json.loads(data or b"null") if ctype.startswith("application/json") else data
@@ -115,6 +119,7 @@ class Sync:
 
         if self._sync_shared():
             pulled += 1
+        self._refresh_account(state)
         state["lastSync"] = int(time.time() * 1000)
         state["lastError"] = None
         self._save_state(state)
@@ -150,6 +155,43 @@ class Sync:
             return False
         storage.save_shared(cache)
         return True
+
+    # ---- speech to text (the server owner turns it on per account) ----
+
+    def _refresh_account(self, state: dict) -> bool:
+        try:
+            state["speech"] = bool((self._request("GET", "/api/account") or {}).get("speech"))
+        except RuntimeError as e:
+            if "404" not in str(e):  # older server: no speech
+                raise
+            state["speech"] = False
+        return state["speech"]
+
+    def speech_allowed(self, refresh: bool = False) -> bool:
+        """Cached from the last sync; refresh asks the server now (blocking)."""
+        state = self._state()
+        if refresh and (storage.get_settings().get("syncUrl") or "").strip():
+            try:
+                self._refresh_account(state)
+                self._save_state(state)
+            except RuntimeError:
+                pass
+        return bool(state.get("speech"))
+
+    def transcribe(self, path: str, appid: str = "", game: str = "") -> str:
+        """Send a WAV clip to the server and get the words back (blocking)."""
+        with open(path, "rb") as f:
+            audio = f.read()
+        lang = storage.get_settings().get("speechLanguage") or ""
+        q = urllib.parse.urlencode({"appId": appid, "game": game, "lang": lang})
+        return (self._request("POST", f"/api/transcribe?{q}", audio, "audio/wav", timeout=180) or {}).get("text", "")
+
+    def transcribe_media(self, appid: str, file: str) -> str:
+        """Transcribe a stored voice note on the server (uploading it first if needed)."""
+        path = os.path.join(storage.media_dir(appid), os.path.basename(file))
+        with open(path, "rb") as f:
+            self._request("PUT", f"/api/media/{_q(appid)}/{_q(file)}", f.read(), "application/octet-stream")
+        return (self._request("POST", f"/api/transcribe/{_q(appid)}/{_q(file)}", {}, timeout=180) or {}).get("text", "")
 
     # ---- pairing & sharing (blocking helpers) ----
 

@@ -15,14 +15,29 @@ def _stamp(item: dict) -> int:
     return item.get("updatedAt") or item.get("createdAt") or 0
 
 
+def _carry_transcripts(winner: dict, other: dict) -> dict:
+    """Voice-note transcripts are filled in by the server without touching updatedAt, so keep them
+    whichever copy of the note wins."""
+    known = {r.get("file"): r["transcript"] for r in other.get("recordings") or [] if r.get("transcript")}
+    if not known or not any(r.get("file") in known and not r.get("transcript") for r in winner.get("recordings") or []):
+        return winner
+    recs = [{**r, "transcript": known[r["file"]]} if not r.get("transcript") and r.get("file") in known else r
+            for r in winner["recordings"]]
+    return {**winner, "recordings": recs}
+
+
 def _merge_items(a: list, b: list, deleted: dict) -> list:
     out = {}
     for item in (a or []) + (b or []):
         if "id" not in item:
             continue
         cur = out.get(item["id"])
-        if cur is None or _stamp(item) > _stamp(cur):
+        if cur is None:
             out[item["id"]] = item
+        elif _stamp(item) > _stamp(cur):
+            out[item["id"]] = _carry_transcripts(item, cur)
+        else:
+            out[item["id"]] = _carry_transcripts(cur, item)
     return [i for i in out.values() if deleted.get(i["id"], -1) < _stamp(i)]
 
 
@@ -67,14 +82,21 @@ import os as _os
 NOTE_HISTORY_KEEP = 50
 
 
+def _without_transcripts(note: dict) -> dict:
+    if not any("transcript" in r for r in note.get("recordings") or []):
+        return note
+    return {**note, "recordings": [{k: v for k, v in r.items() if k != "transcript"} for r in note["recordings"]]}
+
+
 def changed_notes(old_notes: list, new_notes: list):
-    """Yield (old_version, reason) for every note that was edited or removed between two states."""
+    """Yield (old_version, reason) for every note that was edited or removed between two states.
+    A transcript arriving for a voice note isn't an edit."""
     new_by_id = {n["id"]: n for n in new_notes or [] if "id" in n}
     for old in old_notes or []:
         new = new_by_id.get(old.get("id"))
         if new is None:
             yield old, "deleted"
-        elif _stamp(new) != _stamp(old) or new != old:
+        elif _stamp(new) != _stamp(old) or _without_transcripts(new) != _without_transcripts(old):
             yield old, "edited"
 
 

@@ -8,6 +8,7 @@ import { formatDateTime } from "../utils/format";
 import { MediaImage } from "./MediaImage";
 import { kindInfo } from "../utils/kinds";
 import { AudioButton } from "./AudioButton";
+import { Transcripts } from "./Transcripts";
 import * as s from "./styles";
 
 const ImageModal: FC<{ appId: string; file: string; closeModal?: () => void }> = ({ appId, file, closeModal }) => (
@@ -163,6 +164,7 @@ export const NoteViewer: FC<{
           ))}
         </Focusable>
       )}
+      <Transcripts recordings={note.recordings} />
 
       {gallery.length > 0 && (
         <Focusable flow-children="row" style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>

@@ -21,7 +21,8 @@ Optional: `X-Client: n8n` (or any name) labels where a change came from in webho
 | --- | --- |
 | `GET /api/games` | `[{appId, name, rev, noteCount, lastLaunched, updatedAt}]` |
 | `GET /api/games/{appId}` | `{game, rev}`: the whole record (notes, folders, counters, sessions, leftOff) |
-| `GET /api/search?q=boss` | `[{appId, game, note}]`: matches in titles, information and tags across all games |
+| `GET /api/search?q=boss` | `[{appId, game, note}]`: matches in titles, information, tags and voice-note transcripts across all games |
+| `GET /api/account` | `{user, speech}`: who the token belongs to, and whether speech to text is on for them |
 | `GET /api/history/{appId}/{noteId}` | Earlier versions of a note, newest first: `[{savedAt, reason, note}]` |
 | `GET /api/deleted/{appId}` | Deleted notes that can be restored: `[{deletedAt, note}]` |
 | `GET /api/media/{appId}` | File names of screenshots and voice notes |
@@ -71,6 +72,21 @@ The website runs this when you open `/?import=bookstore:<id>`, which is where th
 ### Upload media
 `PUT /api/media/{appId}/{file}` with the raw bytes. Then reference the file in a note's `screenshots`
 (`{id, file, takenAt}`) or `recordings` (`{id, file, createdAt, durationSec}`) and sync.
+
+## Speech to text
+
+Runs on the server's Whisper container (`WHISPER_URL`). The owner always has it; other users only once the owner
+ticks 🎤 Speech for them (website → Account → Users). Everyone else gets `403`.
+
+| Request | What it does |
+| --- | --- |
+| `POST /api/transcribe?appId=&game=&lang=` (body: audio, any format) | `{text}`: dictation. `appId`/`game` help it spell game words; `lang` like `en` (empty = detect) |
+| `POST /api/transcribe/{appId}/{file}` | `{text}`: transcribe a stored voice note now and save it on the note |
+| `POST /api/admin/users/{id}/speech` `{allowed}` | Owner only: allow or block a user. Allowing also transcribes their existing voice notes |
+
+Voice notes are transcribed in the background as they sync. The text lands on the recording as
+`recordings[].transcript` and doesn't change the note's `updatedAt`. Dictation is limited to `SPEECH_PER_HOUR`
+clips per user (default 120, `429` past that).
 
 ## Webhooks
 Set `WEBHOOK_URLS` in docker-compose.yml (comma separated). After every change the server POSTs:

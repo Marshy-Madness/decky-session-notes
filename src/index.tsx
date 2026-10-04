@@ -9,6 +9,7 @@ import { getRunningGame, startLifetimeTracking } from "./hooks/useAppLifetime";
 import { startIntegrations } from "./integrations";
 import { emitDataChanged, getSettings, loadSettings } from "./state/notesStore";
 import { addPendingScreenshot, getPendingScreenshots } from "./state/pendingScreenshots";
+import { refreshSpeech } from "./state/speech";
 
 /** When you take a screenshot in-game, offer to attach it to a note. */
 function startScreenshotWatch(): () => void {
@@ -45,6 +46,7 @@ function startScreenshotWatch(): () => void {
 
 export default definePlugin(() => {
   loadSettings();
+  refreshSpeech();
   const stopTracking = startLifetimeTracking((game) => {
     if (getSettings().sessionRecap) {
       showModal(<SessionSummaryModal appId={game.appId} gameName={game.name} />);
@@ -53,7 +55,10 @@ export default definePlugin(() => {
   const stopScreenshots = startScreenshotWatch();
   const stopIntegrations = startIntegrations();
   // The backend emits this after a sync pulls in edits made on the website.
-  const onRemoteChange = () => emitDataChanged();
+  const onRemoteChange = () => {
+    emitDataChanged();
+    refreshSpeech(false); // the sync also re-checks whether speech to text is allowed
+  };
   addEventListener("data_changed", onRemoteChange);
 
   return {

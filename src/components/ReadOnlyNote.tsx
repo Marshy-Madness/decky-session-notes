@@ -5,6 +5,7 @@ import { Note } from "../types";
 import { formatDateTime } from "../utils/format";
 import { kindInfo } from "../utils/kinds";
 import { AudioButton } from "./AudioButton";
+import { Transcripts } from "./Transcripts";
 import { MediaImage, MediaLoader } from "./MediaImage";
 import * as s from "./styles";
 
@@ -115,6 +116,7 @@ export const ReadOnlyNote: FC<{
               ))}
             </Focusable>
           )}
+          <Transcripts recordings={note.recordings} />
           {gallery.length > 0 && (
             <Focusable flow-children="row" style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
               {gallery.map((shot) => (

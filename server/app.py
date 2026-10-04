@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import os
+import queue
 import re
 import secrets
 import shutil
@@ -22,6 +23,7 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import merge
+import speech
 import steam
 from accounts import OWNER_ID, Accounts
 
@@ -33,6 +35,7 @@ OWNER_WEBHOOKS = [u.strip() for u in os.environ.get("WEBHOOK_URLS", "").split(",
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
 BOOKSTORE_URL = (os.environ.get("BOOKSTORE_URL") or "https://bookstore.marshymadness.com").rstrip("/")
 MAX_BODY = 60 * 1024 * 1024
+SPEECH_PER_HOUR = int(os.environ.get("SPEECH_PER_HOUR", "120"))
 SAFE = re.compile(r"^[A-Za-z0-9._-]+$")
 HERE = os.path.dirname(os.path.abspath(__file__))
 COOKIE = "sn_session"
@@ -43,7 +46,8 @@ MEDIA_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png",
                ".wav": "audio/wav", ".webm": "audio/webm", ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".mp3": "audio/mpeg"}
 
 accounts = Accounts()
-write_lock = threading.Lock()
+write_lock = threading.RLock()
+speech_limit = speech.RateLimit(SPEECH_PER_HOUR)
 shares_lock = threading.Lock()
 failed_logins: dict = {}
 
@@ -66,6 +70,7 @@ class Store:
         self.uid = uid
         self.root = accounts.user_dir(uid)
         self.history = merge.NoteHistory(os.path.join(self.root, "note_history"))
+        self.transcripts = speech.Transcripts(os.path.join(self.root, "transcripts.json"))
 
     def game_path(self, appid: str) -> str:
         return os.path.join(self.root, "games", f"{appid}.json")
@@ -105,6 +110,7 @@ class Store:
         with write_lock:
             stored, rev = self.read(appid)
             merged = merge.merge_games(incoming, stored or {}, now_ms())
+            missing = self.fill_transcripts(appid, merged)
             if stored is None or json.dumps(merged, sort_keys=True) != json.dumps(stored, sort_keys=True):
                 self.history.record(appid, (stored or {}).get("notes", []), merged.get("notes", []), now_ms())
                 rev = self.write(appid, merged)
@@ -113,7 +119,47 @@ class Store:
                     events = describe_changes(stored or {}, merged)
                     if events:
                         threading.Thread(target=send_webhooks, args=(hooks, merged, events, source), daemon=True).start()
+        if missing and accounts.speech_allowed(accounts.get(self.uid)):
+            for file in missing:
+                transcriber.add(self.uid, appid, file)
         return {"game": merged, "rev": rev}
+
+    def fill_transcripts(self, appid: str, game: dict) -> list:
+        """Copy known transcripts onto voice notes (in place). Returns the files that still need one."""
+        cache, missing = None, []
+        for n in game.get("notes", []):
+            for r in n.get("recordings") or []:
+                if r.get("transcript") or not r.get("file"):
+                    continue
+                if cache is None:
+                    cache = self.transcripts.load()
+                hit = cache.get(f"{appid}/{r['file']}")
+                if hit and hit.get("text"):
+                    r["transcript"] = hit["text"]
+                elif not hit and os.path.exists(self.media_path(appid, r["file"])):
+                    missing.append(r["file"])
+        return missing
+
+    def transcribe_file(self, appid: str, file: str) -> str:
+        """Transcribe one stored voice note, remember the text and add it to the note."""
+        with open(self.media_path(appid, file), "rb") as f:
+            audio = f.read()
+        game, _ = self.read(appid)
+        try:
+            text = speech.transcribe(audio, file, prompt=speech_prompt((game or {}).get("name")))
+        except ValueError as e:  # too long: don't retry
+            self.transcripts.put(appid, file, {"error": str(e)})
+            raise
+        self.transcripts.put(appid, file, {"text": text} if text else {"error": "no speech"})
+        if text:
+            with write_lock:
+                game, _ = self.read(appid)
+                before = json.dumps(game)
+                if game:
+                    self.fill_transcripts(appid, game)
+                    if json.dumps(game) != before:
+                        self.write(appid, game)
+        return text
 
 
 # ---------- sharing ----------
@@ -191,6 +237,67 @@ def import_from_bookstore(store: "Store", entry_id: str, source: str) -> dict:
     name = (stored or {}).get("name") or e.get("gameName") or appid
     store.sync(appid, {"appId": appid, "name": name, "notes": [note]}, source)
     return {"note": note, "appId": appid, "gameName": name, "existing": False}
+
+
+# ---------- speech to text ----------
+
+def speech_prompt(game_name: str = None) -> str:
+    """Whisper spells game-specific names better when it knows what the clip is about."""
+    return f"Notes about the game {game_name}." if game_name else ""
+
+
+def speech_on(user: dict) -> bool:
+    return speech.enabled() and accounts.speech_allowed(user)
+
+
+class Transcriber:
+    """Background queue that transcribes voice notes, one at a time."""
+
+    def __init__(self):
+        self.q = queue.Queue()
+        self.pending = set()
+        self.lock = threading.Lock()
+        self.started = False
+
+    def add(self, uid: str, appid: str, file: str):
+        if not speech.enabled() or not speech.is_audio(file):
+            return
+        key = (uid, appid, file)
+        with self.lock:
+            if key in self.pending:
+                return
+            self.pending.add(key)
+            if not self.started:
+                self.started = True
+                threading.Thread(target=self.run, daemon=True).start()
+        self.q.put(key)
+
+    def backfill(self, uid: str):
+        """Queue every voice note this user has that has no transcript yet."""
+        store = Store(uid)
+        for appid in store.appids():
+            game, _ = store.read(appid)
+            for file in store.fill_transcripts(appid, game or {}):
+                self.add(uid, appid, file)
+
+    def run(self):
+        while True:
+            uid, appid, file = key = self.q.get()
+            try:
+                store = Store(uid)
+                if accounts.speech_allowed(accounts.get(uid)) and not store.transcripts.get(appid, file) \
+                        and os.path.exists(store.media_path(appid, file)):
+                    store.transcribe_file(appid, file)
+                    print(f"transcribed {uid}/{appid}/{file}", flush=True)
+            except Exception as e:
+                print(f"transcribing {appid}/{file} failed: {e}", flush=True)
+                time.sleep(5)  # Whisper may be starting up; the next sync queues it again
+            finally:
+                with self.lock:
+                    self.pending.discard(key)
+
+
+transcriber = Transcriber()
 
 
 # ---------- webhooks ----------
@@ -382,13 +489,16 @@ class Handler(BaseHTTPRequestHandler):
         if p[1:] == ["me"]:
             u = accounts.session_user(self.session_id())
             return self.send(200, {"loggedIn": bool(u), "user": accounts.public(u) if u else None,
-                                   "androidApp": os.path.exists(APK_PATH), "bookstoreUrl": BOOKSTORE_URL})
+                                   "androidApp": os.path.exists(APK_PATH), "bookstoreUrl": BOOKSTORE_URL,
+                                   "speech": speech_on(u)})
 
         user = self.current_user()
         if not user:
             return self.send(401, {"error": "unauthorized"})
         store = Store(user["id"])
 
+        if p[1:] == ["account"]:  # for devices: who am I, and what may I use
+            return self.send(200, {"user": accounts.public(user), "speech": speech_on(user)})
         if p[1:] == ["games"]:
             out = []
             for appid in store.appids():
@@ -406,7 +516,8 @@ class Handler(BaseHTTPRequestHandler):
             for appid in store.appids() if q else []:
                 g, _ = store.read(appid)
                 for n in g.get("notes", []):
-                    if q in (n.get("title", "") + "\n" + n.get("body", "") + "\n" + " ".join(n.get("tags", []))).lower():
+                    said = "\n".join(r.get("transcript", "") for r in n.get("recordings") or [])
+                    if q in (n.get("title", "") + "\n" + n.get("body", "") + "\n" + " ".join(n.get("tags", [])) + "\n" + said).lower():
                         hits.append({"appId": g.get("appId"), "game": g.get("name"), "note": n})
             return self.send(200, hits)
         if len(p) == 4 and p[1] == "history":
@@ -458,8 +569,11 @@ class Handler(BaseHTTPRequestHandler):
         if p[1:] == ["settings"]:
             return self.send(200, {"webhooks": user.get("webhooks", [])})
         if p[1:] == ["admin"] and user["role"] == "owner":
-            return self.send(200, {"users": accounts.list_public(), "invites": accounts.db.get("invites", []),
-                                   "allowSignups": accounts.db.get("allowSignups", False)})
+            return self.send(200, {"users": [{**accounts.public(u), "speech": accounts.speech_allowed(u)}
+                                             for u in accounts.db["users"].values()],
+                                   "invites": accounts.db.get("invites", []),
+                                   "allowSignups": accounts.db.get("allowSignups", False),
+                                   "speechAvailable": speech.enabled()})
         return self.send(404, {"error": "not found"})
 
     def steam_callback(self):
@@ -525,6 +639,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(404 if isinstance(err, LookupError) else 403, {"error": str(err)})
             except (urllib.error.URLError, OSError) as err:
                 return self.send(502, {"error": f"Couldn't reach the Bookstore: {err}"})
+        if len(p) >= 2 and p[:2] == ["api", "transcribe"]:
+            return self.transcribe(user, store, p[2:])
         if p == ["api", "devices", "code"]:
             return self.send(200, accounts.new_pairing_code(user["id"]))
         if p == ["api", "shares"]:
@@ -559,11 +675,50 @@ class Handler(BaseHTTPRequestHandler):
                     accounts.db["invites"].append(sid)
                     accounts.save()
                 return self.send(200, {"invites": accounts.db["invites"]})
+            if p[2] == "users" and len(p) == 5 and p[4] == "speech":
+                uid = safe(p[3])
+                if not accounts.set_speech(uid, bool(data.get("allowed"))):
+                    return self.send(400, {"error": "no such user"})
+                if data.get("allowed"):
+                    threading.Thread(target=transcriber.backfill, args=(uid,), daemon=True).start()
+                return self.send(200, {"ok": True})
             if p[2] == "settings":
                 accounts.db["allowSignups"] = bool(data.get("allowSignups"))
                 accounts.save()
                 return self.send(200, {"allowSignups": accounts.db["allowSignups"]})
         return self.send(404, {"error": "not found"})
+
+    def transcribe(self, user: dict, store: Store, rest: list):
+        """POST /api/transcribe?appId=&lang=  (body: audio)       -> {"text"}  dictation
+           POST /api/transcribe/{appId}/{file}                       -> {"text"}  a stored voice note, now"""
+        if not speech_on(user):
+            return self.send(403, {"error": "Speech to text isn't turned on for your account."})
+        if not speech_limit.allow(user["id"]):
+            return self.send(429, {"error": "That's a lot of talking! Try again in a while."})
+        try:
+            if len(rest) == 2:
+                appid, file = safe(rest[0]), safe(rest[1])
+                if not os.path.exists(store.media_path(appid, file)):
+                    return self.send(404, {"error": "no such file"})
+                return self.send(200, {"text": store.transcribe_file(appid, file)})
+            q = self.query()
+            audio = self.body()
+            if len(audio) < 512:
+                return self.send(400, {"error": "No audio was recorded"})
+            name = None
+            if q.get("appId"):
+                game, _ = store.read(safe(q["appId"]))
+                name = (game or {}).get("name") or q.get("game")
+            ext = {"audio/wav": "wav", "audio/x-wav": "wav", "audio/ogg": "ogg", "audio/mp4": "m4a", "audio/mpeg": "mp3",
+                   "audio/aac": "aac"}.get((self.headers.get("Content-Type") or "").split(";")[0].strip(), "webm")
+            text = speech.transcribe(audio, f"clip.{ext}", prompt=speech_prompt(name or q.get("game")),
+                                     language=re.sub(r"[^a-z]", "", q.get("lang", ""))[:3])
+            return self.send(200, {"text": text})
+        except ValueError as e:
+            return self.send(413 if "long" in str(e) else 400, {"error": str(e)})
+        except (urllib.error.URLError, OSError, RuntimeError) as e:
+            print(f"transcribe failed: {e}", flush=True)
+            return self.send(502, {"error": "The speech server didn't answer. Try again in a minute."})
 
     def add_note(self, store: Store, appid: str, data: dict):
         """Quick-add for automations: {title, body?, tags?, checklist?: [text], pinned?, kind?, gameName?}."""
@@ -598,6 +753,11 @@ class Handler(BaseHTTPRequestHandler):
                 data = self.body()
                 with open(os.path.join(d, safe(p[3])), "wb") as f:
                     f.write(data)
+                # The note may have synced before its audio arrived; transcribe now that we have it.
+                if speech.is_audio(p[3]) and speech_on(user):
+                    game, _ = store.read(safe(p[2]))
+                    if game and safe(p[3]) in store.fill_transcripts(safe(p[2]), game):
+                        transcriber.add(user["id"], safe(p[2]), safe(p[3]))
                 return self.send(200, {"ok": True})
         except ValueError:
             return self.send(400, {"error": "bad request"})

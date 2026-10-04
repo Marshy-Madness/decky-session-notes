@@ -10,6 +10,8 @@ export interface Recording {
   file: string;
   createdAt: number;
   durationSec?: number;
+  /** What was said, written out by the sync server's speech to text. */
+  transcript?: string;
 }
 
 export interface ChecklistItem {
@@ -160,6 +162,8 @@ export interface SteamScreenshot {
 export type SortMode = "alpha" | "created" | "edited" | "recent";
 export type PanelWidth = "normal" | "wide" | "extra";
 export type OpenChord = "l4r4" | "l5r5" | "l3r3" | "off";
+/** Where STEAM + L5 + R5 dictation goes: typed into whatever is focused, or saved as a note. */
+export type DictateTarget = "type" | "note";
 
 export interface Settings {
   sort?: SortMode;
@@ -186,6 +190,11 @@ export interface Settings {
   mainMenuEntry?: boolean;
   /** Give Session Notes its own Quick Access tab, next to Decky's. */
   qamTab?: boolean;
+  /** STEAM + L5 + R5 starts and stops speech to text anywhere. Off unless turned on. */
+  dictateChord?: boolean;
+  dictateTarget?: DictateTarget;
+  /** Language code for speech to text ("" = detect). */
+  speechLanguage?: string;
 }
 
 export type OverlayPosition =
