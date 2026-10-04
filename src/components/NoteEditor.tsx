@@ -1,4 +1,4 @@
-import { FC, useRef, useState } from "react";
+import { FC, useEffect, useRef, useState } from "react";
 import { ModalRoot, DialogButton, Dropdown, Focusable, TextField, ToggleField, showModal, ConfirmModal } from "@decky/ui";
 import { FaCrop, FaCamera, FaMicrophone, FaMicrophoneAlt, FaStop, FaTrash, FaParagraph, FaPlus, FaCheckSquare, FaRegSquare, FaFileAlt } from "react-icons/fa";
 import { toaster } from "@decky/api";
@@ -8,6 +8,7 @@ import { KINDS } from "../utils/kinds";
 import { formatClock, newId } from "../utils/format";
 import { useSessionTimer } from "../hooks/useSessionTimer";
 import { MediaImage } from "./MediaImage";
+import { EditorDraft, saveDraft } from "../state/resume";
 import { AudioButton } from "./AudioButton";
 import { Transcripts } from "./Transcripts";
 import { insertWords, useSpeechAllowed } from "../state/speech";
@@ -44,18 +45,20 @@ export const NoteEditor: FC<{
   initialScreenshots?: Screenshot[];
   defaultKind?: NoteKind;
   onSaved: (note: Note) => void;
+  /** Unsaved edits from before Session Notes was put away, to carry on with. */
+  draft?: EditorDraft;
   closeModal?: () => void;
-}> = ({ appId, note, folderId: initialFolder, folders, gameName, initialScreenshots = [], defaultKind, onSaved, closeModal }) => {
-  const [title, setTitle] = useState(note?.title ?? "");
-  const [body, setBody] = useState(note?.body ?? "");
-  const [tags, setTags] = useState(note?.tags.join(", ") ?? "");
-  const [folderId, setFolderId] = useState<string | null>(note?.folderId ?? initialFolder);
-  const [screenshots, setScreenshots] = useState<Screenshot[]>(note?.screenshots ?? initialScreenshots);
-  const [checklist, setChecklist] = useState<ChecklistItem[]>(note?.checklist ?? []);
+}> = ({ appId, note, folderId: initialFolder, folders, gameName, initialScreenshots = [], defaultKind, onSaved, draft, closeModal }) => {
+  const [title, setTitle] = useState(draft?.title ?? note?.title ?? "");
+  const [body, setBody] = useState(draft?.body ?? note?.body ?? "");
+  const [tags, setTags] = useState(draft?.tags ?? note?.tags.join(", ") ?? "");
+  const [folderId, setFolderId] = useState<string | null>(draft ? draft.folderId : note?.folderId ?? initialFolder);
+  const [screenshots, setScreenshots] = useState<Screenshot[]>(draft?.screenshots ?? note?.screenshots ?? initialScreenshots);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(draft?.checklist ?? note?.checklist ?? []);
   const [newItem, setNewItem] = useState("");
-  const [spoiler, setSpoiler] = useState(note?.spoiler ?? false);
-  const [kind, setKind] = useState<NoteKind>(note?.kind ?? defaultKind ?? "note");
-  const [recordings, setRecordings] = useState<Recording[]>(note?.recordings ?? []);
+  const [spoiler, setSpoiler] = useState(draft?.spoiler ?? note?.spoiler ?? false);
+  const [kind, setKind] = useState<NoteKind>(draft?.kind ?? note?.kind ?? defaultKind ?? "note");
+  const [recordings, setRecordings] = useState<Recording[]>(draft?.recordings ?? note?.recordings ?? []);
   const [recordStart, setRecordStart] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const elapsed = useSessionTimer(recordStart);
@@ -69,7 +72,12 @@ export const NoteEditor: FC<{
 
   // Media added in this editor session is deleted again on cancel. Media removed from the note is
   // kept on disk so older versions of the note can still be restored with it.
-  const added = useRef<(Screenshot | Recording)[]>([...initialScreenshots]);
+  const added = useRef<(Screenshot | Recording)[]>(draft?.added ?? [...initialScreenshots]);
+
+  // Keep the edits somewhere safe, so putting Session Notes away with the button combo doesn't lose them.
+  useEffect(() => {
+    saveDraft({ title, body, tags, folderId, screenshots, checklist, spoiler, kind, recordings, added: added.current });
+  }, [title, body, tags, folderId, screenshots, checklist, spoiler, kind, recordings]);
 
   const stopRecording = async () => {
     setRecordStart(null);
@@ -194,6 +202,7 @@ export const NoteEditor: FC<{
 
   const confirmCancel = () => {
     const dirty =
+      !!draft ||
       title !== (note?.title ?? "") ||
       body !== (note?.body ?? "") ||
       added.current.length > 0 ||

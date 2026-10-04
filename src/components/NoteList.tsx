@@ -1,4 +1,4 @@
-import { FC, useState } from "react";
+import { FC, useEffect, useState } from "react";
 import {
   ConfirmModal,
   DialogButton,
@@ -32,6 +32,7 @@ import { Counters, addCounter } from "./Counters";
 import { AttachScreenshotsModal } from "./AttachScreenshotsModal";
 import { DeletedNotesModal, VersionHistoryModal } from "./VersionHistory";
 import { usePendingScreenshots } from "../state/pendingScreenshots";
+import { lastFolder, noteToReopen, rememberFolder, showNoteModal, EditorDraft } from "../state/resume";
 import * as s from "./styles";
 
 const GUIDES = "__guides";
@@ -44,11 +45,25 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
   const { appId, game } = useGame();
   const settings = useSettings();
   const sort = settings.sort ?? "edited";
-  const [folderId, setFolderId] = useState<string | null>(null);
+  const [folderId, setFolderState] = useState<string | null>(() => lastFolder(appId));
+  const setFolderId = (id: string | null) => {
+    rememberFolder(appId, id);
+    setFolderState(id);
+  };
   const [search, setSearch] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeKinds, setActiveKinds] = useState<string[]>([]);
   const pending = usePendingScreenshots();
+
+  // Bring back the note that was open when Session Notes was put away.
+  useEffect(() => {
+    const reopen = game && noteToReopen(appId);
+    if (!reopen) return;
+    const note = reopen.noteId ? game.notes.find((n) => n.id === reopen.noteId) : null;
+    if (reopen.noteId && !note) return;
+    if (reopen.type === "edit") openEditor(note ?? null, reopen.draft);
+    else if (note) openNote(note);
+  }, [!!game]);
 
   if (!game) return <Spinner style={{ width: "32px" }} />;
 
@@ -92,9 +107,11 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
 
   // ---- actions ----
 
-  const openEditor = (note: Note | null) =>
-    showModal(
+  const openEditor = (note: Note | null, draft?: EditorDraft) =>
+    showNoteModal(
+      { type: "edit", appId, noteId: note?.id ?? null, draft },
       <NoteEditor
+        draft={draft}
         appId={appId}
         note={note}
         folderId={inGuides || inShared ? null : folderId}
@@ -125,7 +142,8 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
     );
 
   const openNote = (note: Note) =>
-    showModal(
+    showNoteModal(
+      { type: "view", appId, noteId: note.id },
       <NoteViewer
         appId={appId}
         note={note}

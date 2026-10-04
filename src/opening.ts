@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { Navigation } from "@decky/ui";
 import { getRunningGame } from "./hooks/useAppLifetime";
+import { putAwayNote } from "./state/resume";
 
 // Opening the full-screen page, kept apart from integrations.tsx so the panels can use it without an import loop.
 
@@ -22,6 +23,50 @@ export function openNotesPage() {
   } else {
     show();
   }
+}
+
+// ---- putting the page away again ----
+
+let pageMounted = false;
+let overlayActive = false;
+
+/** Called by the full-screen page as it mounts and unmounts. */
+export function setNotesPageMounted(mounted: boolean) {
+  pageMounted = mounted;
+}
+
+/** Follows Steam's in-game overlay, so we know whether the page is actually on screen. Returns a cleanup. */
+export function trackOverlay(): () => void {
+  const reg = (window as any).SteamClient?.Overlay?.RegisterForOverlayActivated?.(
+    (_pid: unknown, _appId: unknown, active: boolean) => {
+      overlayActive = !!active;
+    }
+  );
+  return () => reg?.unregister();
+}
+
+const notesPageShowing = () => pageMounted && (!getRunningGame() || overlayActive);
+
+/**
+ * Closes the page and goes back to the game (or wherever you were), keeping your place: the open note and
+ * any unsaved edits come back next time.
+ */
+export function closeNotesPage() {
+  putAwayNote();
+  const game = getRunningGame();
+  const gameId = game && (window as any).appStore?.GetAppOverviewByAppID?.(Number(game.appId))?.gameid;
+  if (gameId) {
+    // What Steam's own "Back to game" button does.
+    (window as any).SteamClient?.Overlay?.SetOverlayState?.(String(gameId), 0);
+  } else {
+    Navigation.NavigateBack();
+  }
+}
+
+/** The button combo: opens the page, or puts it away if it's already showing. */
+export function toggleNotesPage() {
+  if (notesPageShowing()) closeNotesPage();
+  else openNotesPage();
 }
 
 // ---- what the button combo sees, shown live in Settings so you can tell whether Steam reports the buttons ----
