@@ -318,10 +318,10 @@ const ButtonsSeen: FC = () => {
   const seen = useSeenButtons();
   return (
     <div style={{ fontSize: "12px", opacity: 0.8, padding: "4px 0" }}>
-      Buttons held: {seen || "none"}
+      Buttons held: {seen === null ? "nothing reported by Steam yet" : seen || "none"}
       <div style={{ opacity: 0.7 }}>
-        Hold your combo; if nothing shows here, Steam isn't passing the buttons to Session Notes (another plugin
-        that listens for buttons can take this over).
+        Hold your combo and its buttons should show up here. If it still says nothing was reported, Steam isn't
+        passing the buttons to Session Notes.
       </div>
     </div>
   );

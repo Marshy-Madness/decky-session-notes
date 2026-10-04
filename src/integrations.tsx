@@ -1,6 +1,6 @@
 import { cloneElement, isValidElement, ReactElement, ReactNode } from "react";
 import { routerHook } from "@decky/api";
-import { afterPatch, beforePatch, ErrorBoundary, Focusable, Patch } from "@decky/ui";
+import { afterPatch, beforePatch, ErrorBoundary, findModuleExport, Focusable, Patch } from "@decky/ui";
 import { FaRegStickyNote } from "react-icons/fa";
 import { NotesPage } from "./components/NotesPage";
 import { QuickAccessPanel } from "./components/QuickAccessPanel";
@@ -11,68 +11,136 @@ import { OpenChord } from "./types";
 
 // ---- button combo ----
 
-// Steam Deck button bits: ulButtons is the low 32 bits of the state, ulUpperButtons the high 32.
-const CHORDS: Record<OpenChord, { lo: number; hi: number } | null> = {
-  l4r4: { lo: 0, hi: 0x200 | 0x400 },
-  l5r5: { lo: 0x8000 | 0x10000, hi: 0 },
-  l3r3: { lo: 0x400000 | 0x4000000, hi: 0 },
+type Button = "STEAM" | "L4" | "R4" | "L5" | "R5" | "L3" | "R3";
+
+const CHORDS: Record<OpenChord, Button[] | null> = {
+  l4r4: ["L4", "R4"],
+  l5r5: ["L5", "R5"],
+  l3r3: ["L3", "R3"],
   off: null,
 };
-const STEAM = 0x2000;
-const DICTATE = STEAM | 0x8000 | 0x10000; // STEAM + L5 + R5
+const DICTATE: Button[] = ["STEAM", "L5", "R5"];
+const ORDER: Button[] = ["STEAM", "L4", "R4", "L5", "R5", "L3", "R3"];
 
-// Names for the live readout in Settings.
-const LO_NAMES: [number, string][] = [
-  [STEAM, "STEAM"],
+// The older feed's bits: ulButtons is the low 32 bits of the state, ulUpperButtons the high 32.
+const LO_BITS: [number, Button][] = [
+  [0x2000, "STEAM"],
   [0x8000, "L5"],
   [0x10000, "R5"],
   [0x400000, "L3"],
   [0x4000000, "R3"],
 ];
-const HI_NAMES: [number, string][] = [
+const HI_BITS: [number, Button][] = [
   [0x200, "L4"],
   [0x400, "R4"],
 ];
-const buttonNames = (lo: number, hi: number) =>
-  [...LO_NAMES.filter(([b]) => lo & b), ...HI_NAMES.filter(([b]) => hi & b)].map(([, n]) => n).join(" + ");
+
+// Steam's own button feed (what its controller test page uses). Each controller has to be asked to stream.
+type InputService = {
+  StartControllerStateFlow(req: { controller_index: number; flow_mode: number }): unknown;
+  RegisterForNotifyButtonStateChanged(cb: (msg: { Body(): { toObject(): any } }) => void): { unregister(): void } | null;
+};
+const BUTTON_FLOW = 0;
+const MAX_CONTROLLERS = 8;
+const FLOW_REFRESH_MS = 30_000; // Steam's test page ends the flow when it closes; start it again now and then
+
+function findInputService(): InputService | null {
+  try {
+    return (
+      findModuleExport(
+        (e: any) => typeof e?.RegisterForNotifyButtonStateChanged === "function" && typeof e?.StartControllerStateFlow === "function"
+      ) ?? null
+    );
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Opens the full-screen page when the chosen combo is pressed, and runs speech to text on STEAM + L5 + R5 if
- * that's turned on. (B closes the page; a second press used to, but the page stays mounted behind a game
- * after you go back to it, so that press ended up doing nothing.)
+ * that's turned on. Listens to Steam's newer button feed, with the older controller-state callback as a
+ * fallback (that one has a single slot, so another plugin can take it, and newer Steam may not send it at all).
  */
 function startChordWatch(): () => void {
-  const held = new Set<number>();
-  const dictateHeld = new Set<number>();
-  const registration = (window as any).SteamClient?.Input?.RegisterForControllerStateChanges?.(
+  const held = new Set<string>();
+  const dictateHeld = new Set<string>();
+
+  const onButtons = (controller: string, down: Set<Button>) => {
+    reportButtons(ORDER.filter((b) => down.has(b)).join(" + "));
+    const all = (list: Button[]) => list.every((b) => down.has(b));
+    if (dictationChordEnabled()) {
+      if (!all(DICTATE)) {
+        dictateHeld.delete(controller);
+      } else if (!dictateHeld.has(controller)) {
+        dictateHeld.add(controller);
+        held.add(controller); // L5 + R5 with STEAM held is for speaking, not the notes page
+        toggleAnywhereDictation();
+      }
+      if (down.has("STEAM")) return;
+    }
+    const chord = CHORDS[getSettings().openChord ?? "l4r4"];
+    if (!chord) return;
+    if (!all(chord)) {
+      held.delete(controller);
+    } else if (!held.has(controller)) {
+      held.add(controller);
+      openNotesPage();
+    }
+  };
+
+  const cleanups: (() => void)[] = [];
+
+  const service = findInputService();
+  const feed = service?.RegisterForNotifyButtonStateChanged((msg) => {
+    const t = msg.Body().toObject();
+    const down = new Set<Button>();
+    if (t.button_steam) down.add("STEAM");
+    if (t.l4) down.add("L4");
+    if (t.r4) down.add("R4");
+    if (t.l5) down.add("L5");
+    if (t.r5) down.add("R5");
+    if (t.left_stick_click) down.add("L3");
+    if (t.right_stick_click) down.add("R3");
+    onButtons(`feed${t.controller_index}`, down);
+  });
+  if (service && feed) {
+    const startFlows = () => {
+      for (let i = 0; i < MAX_CONTROLLERS; i++) {
+        try {
+          // Controllers that aren't connected just fail; that's fine.
+          Promise.resolve(service.StartControllerStateFlow({ controller_index: i, flow_mode: BUTTON_FLOW })).catch(() => {});
+        } catch (e) {
+          console.warn("Session Notes: couldn't start the button feed", i, e);
+        }
+      }
+    };
+    startFlows();
+    const timer = setInterval(startFlows, FLOW_REFRESH_MS);
+    cleanups.push(() => {
+      clearInterval(timer);
+      feed.unregister();
+    });
+  } else {
+    console.warn("Session Notes: Steam's button feed wasn't found; using the older controller callback only");
+  }
+
+  const legacy = (window as any).SteamClient?.Input?.RegisterForControllerStateChanges?.(
     (changes: { unControllerIndex: number; ulButtons: number; ulUpperButtons: number }[]) => {
-      const dictate = dictationChordEnabled();
-      const chord = CHORDS[getSettings().openChord ?? "l4r4"];
       for (const c of changes) {
-        reportButtons(buttonNames(c.ulButtons, c.ulUpperButtons));
-        if (dictate) {
-          if ((c.ulButtons & DICTATE) !== DICTATE) {
-            dictateHeld.delete(c.unControllerIndex);
-          } else if (!dictateHeld.has(c.unControllerIndex)) {
-            dictateHeld.add(c.unControllerIndex);
-            held.add(c.unControllerIndex); // L5 + R5 with STEAM held is for speaking, not the notes page
-            toggleAnywhereDictation();
-          }
-          if (c.ulButtons & STEAM) continue;
-        }
-        if (!chord) continue;
-        const down = (c.ulButtons & chord.lo) === chord.lo && (c.ulUpperButtons & chord.hi) === chord.hi;
-        if (!down) {
-          held.delete(c.unControllerIndex);
-        } else if (!held.has(c.unControllerIndex)) {
-          held.add(c.unControllerIndex);
-          openNotesPage();
-        }
+        const lo = Number(c.ulButtons) || 0;
+        const hi = Number(c.ulUpperButtons) || 0;
+        const down = new Set<Button>([
+          ...LO_BITS.filter(([b]) => lo & b).map(([, n]) => n),
+          ...HI_BITS.filter(([b]) => hi & b).map(([, n]) => n),
+        ]);
+        onButtons(`state${c.unControllerIndex}`, down);
       }
     }
   );
+  if (legacy) cleanups.push(() => legacy.unregister());
+
   return () => {
-    registration?.unregister();
+    cleanups.forEach((c) => c());
     stopAnywhereDictation();
   };
 }
