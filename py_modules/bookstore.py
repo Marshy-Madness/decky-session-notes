@@ -9,7 +9,7 @@ import uuid
 
 import decky
 import storage
-from sync import _SSL
+from sync import _SSL, clean_url
 
 DEFAULT_URL = "https://bookstore.marshymadness.com"
 CACHE_DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "bookstore_cache")
@@ -19,7 +19,7 @@ MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "
 
 class Bookstore:
     def base(self) -> str:
-        return (storage.get_settings().get("bookstoreUrl") or DEFAULT_URL).strip().rstrip("/")
+        return clean_url(storage.get_settings().get("bookstoreUrl") or DEFAULT_URL)
 
     def _request(self, method: str, path: str, body=None, raw: bytes = None, auth: bool = True):
         data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)

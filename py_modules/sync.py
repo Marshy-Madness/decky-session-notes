@@ -2,6 +2,7 @@ import asyncio
 import hashlib
 import json
 import os
+import re
 import ssl
 import time
 import urllib.error
@@ -17,6 +18,23 @@ CHANGE_DELAY_SEC = 20  # after a local edit, wait this long for more edits befor
 # Decky's bundled Python may not find the system CA store on its own.
 _CA_FILES = ["/etc/ssl/certs/ca-certificates.crt", "/etc/ca-certificates/extracted/tls-ca-bundle.pem"]
 _SSL = ssl.create_default_context(cafile=next((f for f in _CA_FILES if os.path.exists(f)), None))
+
+
+def clean_url(raw) -> str:
+    """Tidy a typed server address: add https:// if missing, fix 'https:/x' or 'https:///x', drop spaces."""
+    url = re.sub(r"\s+", "", str(raw or "")).replace("\\", "/").rstrip("/")
+    if not url:
+        return ""
+    m = re.match(r"^(https?)(?::/*|//+)(.*)$", url, re.I)
+    if m:
+        scheme, rest = m.group(1).lower(), m.group(2)
+    else:  # no scheme: plain http for a LAN IP/localhost, https for a domain
+        rest = url.lstrip("/")
+        local = re.match(r"^(localhost|\d+\.\d+\.\d+\.\d+)(:\d+)?(/|$)", rest)
+        scheme = "http" if local else "https"
+    if not rest or rest.startswith(("/", "?", "#")):
+        raise RuntimeError(f"Server address '{raw}' has no host name, e.g. https://steamnotes.example.com")
+    return f"{scheme}://{rest}"
 
 
 def _q(s: str) -> str:
@@ -57,7 +75,7 @@ class Sync:
 
     def _request(self, method: str, path: str, body=None, content_type="application/json", timeout=30):
         settings = storage.get_settings()
-        base = (settings.get("syncUrl") or "").strip().rstrip("/")
+        base = clean_url(settings.get("syncUrl"))
         if not base:
             raise RuntimeError("No server address set")
         if isinstance(body, (dict, list)):
