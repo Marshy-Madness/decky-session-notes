@@ -12,6 +12,7 @@ import { MediaImage, MediaLoader } from "./MediaImage";
 import { NameModal } from "./NameModal";
 import { ReadOnlyNote } from "./ReadOnlyNote";
 import * as s from "./styles";
+import { errText } from "../utils/errors";
 
 const mediaCache = new Map<string, Promise<string | null>>();
 export const bookstoreMedia: MediaLoader = (file) => {
@@ -19,7 +20,6 @@ export const bookstoreMedia: MediaLoader = (file) => {
   return mediaCache.get(file)!;
 };
 
-const errText = (e: unknown) => String(e).replace(/^Error: /, "");
 
 // ---------- linking your Steam account ----------
 

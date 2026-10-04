@@ -5,6 +5,7 @@ import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../s
 import { BackupStatus, OverlayPosition, PanelWidth } from "../types";
 import { LinkPanel } from "./Bookstore";
 import { formatDateTime } from "../utils/format";
+import { errText } from "../utils/errors";
 
 const WIDTH_OPTIONS: { label: string; data: PanelWidth }[] = [
   { label: "Normal (Steam default)", data: "normal" },
@@ -72,7 +73,7 @@ export const SettingsView: FC = () => {
       }
       setMessage(await fn());
     } catch (e) {
-      setMessage(`⚠️ ${String(e).replace(/^Error: /, "")}`);
+      setMessage(`⚠️ ${errText(e)}`);
     } finally {
       setBusy(false);
       refreshStatus();

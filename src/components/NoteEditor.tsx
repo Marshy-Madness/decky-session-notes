@@ -12,6 +12,7 @@ import { AudioButton } from "./AudioButton";
 import { ScreenshotPicker } from "./ScreenshotPicker";
 import { CropModal } from "./CropModal";
 import * as s from "./styles";
+import { errText } from "../utils/errors";
 
 /** Drop the marker for screenshot `index` (1-based) and renumber the ones after it. */
 function removeImageMarker(body: string, index: number): string {
@@ -77,7 +78,7 @@ export const NoteEditor: FC<{
       await backend.startRecording(appId);
       setRecordStart(Date.now());
     } catch (e) {
-      toaster.toast({ title: "Couldn't start recording", body: String(e) });
+      toaster.toast({ title: "Couldn't start recording", body: errText(e) });
     }
   };
 

@@ -7,6 +7,7 @@ import { emitDataChanged } from "../state/notesStore";
 import { SharedNote } from "../types";
 import { ReadOnlyNote } from "./ReadOnlyNote";
 import * as s from "./styles";
+import { errText } from "../utils/errors";
 
 /** A note someone shared with you: read it, or copy it into your own notes to edit. */
 export const SharedNoteViewer: FC<{ appId: string; shared: SharedNote; closeModal?: () => void }> = ({
@@ -24,7 +25,7 @@ export const SharedNoteViewer: FC<{ appId: string; shared: SharedNote; closeModa
       toaster.toast({ title: "Session Notes", body: `Copied "${shared.note.title}" to your notes.` });
       closeModal?.();
     } catch (e) {
-      toaster.toast({ title: "Couldn't copy", body: String(e) });
+      toaster.toast({ title: "Couldn't copy", body: errText(e) });
       setBusy(false);
     }
   };

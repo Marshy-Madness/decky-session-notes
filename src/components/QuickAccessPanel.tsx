@@ -1,5 +1,5 @@
-import { FC, useState } from "react";
-import { DialogButton, Focusable, quickAccessMenuClasses } from "@decky/ui";
+import { FC, useLayoutEffect, useRef, useState } from "react";
+import { DialogButton, Focusable } from "@decky/ui";
 import { FaCog } from "react-icons/fa";
 import { useRunningGame } from "../hooks/useAppLifetime";
 import { NotesProvider } from "../state/NotesProvider";
@@ -15,19 +15,52 @@ type Tab = "current" | "all" | "bookstore" | "settings";
 const WIDTHS: Record<PanelWidth, number | null> = { normal: null, wide: 620, extra: 860 };
 
 /**
- * Widens the Quick Access menu. The <style> lives inside our panel, so it only
- * applies while Session Notes is the open tab and disappears when you switch away.
+ * Widens the Quick Access menu while Session Notes is open. Steam's class names change between client
+ * versions, so instead of CSS we walk up from our own panel and widen every ancestor up to the menu's
+ * outer frame (the first one that's nearly full-screen stops the walk). Everything is put back on close.
  */
-const WidePanelStyle: FC<{ width: number | null }> = ({ width }) => {
-  if (!width) return null;
-  const q = quickAccessMenuClasses;
-  return (
-    <style>{`
-      .${q.Container} { width: ${width}px !important; max-width: 92vw !important; }
-      .${q.TabContentColumn} { flex: 1 1 auto !important; width: auto !important; max-width: none !important; }
-    `}</style>
-  );
-};
+function useWidePanel(width: number | null) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const root = ref.current;
+    if (!width || !root) return;
+    const touched: { el: HTMLElement; width: string; maxWidth: string; minWidth: string }[] = [];
+    const widen = () => {
+      const win = root.ownerDocument.defaultView ?? window;
+      const target = Math.min(width, win.innerWidth * 0.92);
+      const contentWidth = root.parentElement?.getBoundingClientRect().width ?? 0;
+      if (!contentWidth) return false; // not laid out yet
+      if (contentWidth >= target) return true;
+      const extra = target - contentWidth;
+      for (let el = root.parentElement; el && el !== root.ownerDocument.body; el = el.parentElement) {
+        const w = el.getBoundingClientRect().width;
+        if (w >= win.innerWidth * 0.9) break;
+        if (w < contentWidth - 1) continue;
+        touched.push({ el, width: el.style.width, maxWidth: el.style.maxWidth, minWidth: el.style.minWidth });
+        el.style.setProperty("width", `${w + extra}px`, "important");
+        el.style.setProperty("max-width", "none", "important");
+        el.style.setProperty("min-width", `${w + extra}px`, "important");
+      }
+      return true;
+    };
+    // The menu can still be hidden when we mount; try again for a second or so.
+    let frame = 0;
+    let tries = 0;
+    const attempt = () => {
+      if (!widen() && tries++ < 60) frame = requestAnimationFrame(attempt);
+    };
+    attempt();
+    return () => {
+      cancelAnimationFrame(frame);
+      for (const t of touched) {
+        t.el.style.width = t.width;
+        t.el.style.maxWidth = t.maxWidth;
+        t.el.style.minWidth = t.minWidth;
+      }
+    };
+  }, [width]);
+  return ref;
+}
 
 // Remember where you were between QAM opens.
 let lastTab: Tab | null = null;
@@ -42,9 +75,14 @@ const TabButton: FC<{ active: boolean; onClick: () => void; children: React.Reac
   <DialogButton
     onClick={onClick}
     style={{
-      flex: grow ? 1 : "0 0 auto",
-      minWidth: 0,
-      padding: "6px 14px",
+      flex: grow ? "1 1 0" : "0 0 40px",
+      width: grow ? "auto" : "40px",
+      minWidth: grow ? 0 : "40px",
+      padding: grow ? "6px 4px" : "6px 0",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      whiteSpace: "nowrap",
       background: active ? "#1a9fff" : undefined,
       color: active ? "white" : undefined,
     }}
@@ -59,6 +97,8 @@ export const QuickAccessPanel: FC = () => {
   const [tab, setTabState] = useState<Tab>(lastTab ?? (running ? "current" : "all"));
   const [openGame, setOpenGameState] = useState<string | null>(lastOpenedGame);
 
+  const panelRef = useWidePanel(WIDTHS[settings.panelWidth ?? "extra"]);
+
   const setTab = (t: Tab) => {
     lastTab = t;
     setTabState(t);
@@ -69,8 +109,7 @@ export const QuickAccessPanel: FC = () => {
   };
 
   return (
-    <div style={{ padding: "0 12px 16px" }}>
-      <WidePanelStyle width={WIDTHS[settings.panelWidth ?? "extra"]} />
+    <div ref={panelRef} style={{ padding: "0 12px 16px" }}>
 
       <Focusable style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
         <TabButton active={tab === "current"} onClick={() => setTab("current")}>

@@ -3,6 +3,7 @@ import { DialogButton, Focusable, ModalRoot, Spinner, ToggleField } from "@decky
 import { backend } from "../api/backend";
 import { Note, ServerUser, Share } from "../types";
 import * as s from "./styles";
+import { errText } from "../utils/errors";
 
 /** Share a note (read-only) with other people on your sync server. */
 export const ShareModal: FC<{ appId: string; note: Note; closeModal?: () => void }> = ({ appId, note, closeModal }) => {
@@ -17,7 +18,7 @@ export const ShareModal: FC<{ appId: string; note: Note; closeModal?: () => void
       setUsers(u);
       setShares(sh);
     } catch (e) {
-      setError(String(e).replace(/^Error: /, ""));
+      setError(errText(e));
     }
   };
   useEffect(() => {
@@ -34,7 +35,7 @@ export const ShareModal: FC<{ appId: string; note: Note; closeModal?: () => void
       }
       await load();
     } catch (e) {
-      setError(String(e).replace(/^Error: /, ""));
+      setError(errText(e));
     }
     setBusy(null);
   };
