@@ -45,6 +45,7 @@ export const chip: CSSProperties = {
 
 export const toolbar: CSSProperties = {
   display: "flex",
+  flexWrap: "wrap", // the Quick Access menu is narrow; buttons go onto a second line instead of off screen
   gap: "6px",
   alignItems: "center",
   marginBottom: "8px",

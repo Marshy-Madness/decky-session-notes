@@ -68,7 +68,7 @@ export const NoteItem: FC<{
           ))}
         </div>
       </div>
-      {shot && <MediaImage appId={appId} file={shot.thumb ?? shot.file} style={{ width: "128px", height: "72px", flex: "0 0 auto", ...hidden }} />}
+      {shot && <MediaImage appId={appId} file={shot.thumb ?? shot.file} style={{ width: "96px", height: "54px", flex: "0 0 auto", ...hidden }} />}
     </Focusable>
   );
 };

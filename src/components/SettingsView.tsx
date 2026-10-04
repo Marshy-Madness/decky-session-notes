@@ -2,18 +2,12 @@ import { FC, useEffect, useState } from "react";
 import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
-import { BackupStatus, DictateTarget, OpenChord, OverlayPosition, PanelWidth } from "../types";
+import { BackupStatus, DictateTarget, OpenChord, OverlayPosition } from "../types";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Bookstore";
 import { useSeenButtons } from "../opening";
 import { formatDateTime } from "../utils/format";
 import { errText } from "../utils/errors";
-
-const WIDTH_OPTIONS: { label: string; data: PanelWidth }[] = [
-  { label: "Normal (Steam default)", data: "normal" },
-  { label: "Wide", data: "wide" },
-  { label: "Extra wide", data: "extra" },
-];
 
 const CHORD_OPTIONS: { label: string; data: OpenChord }[] = [
   { label: "L4 + R4 (upper back grips)", data: "l4r4" },
@@ -117,17 +111,6 @@ export const SettingsView: FC = () => {
 
   return (
     <>
-      <Heading>Display</Heading>
-      <PanelSectionRow>
-        <DropdownItem
-          label="Panel width"
-          description="How wide the Quick Access menu gets while Session Notes is open."
-          rgOptions={WIDTH_OPTIONS}
-          selectedOption={settings.panelWidth ?? "extra"}
-          onChange={(o) => updateSettings({ panelWidth: o.data })}
-        />
-      </PanelSectionRow>
-
       <Heading>Opening Session Notes</Heading>
       <PanelSectionRow>
         <ToggleField

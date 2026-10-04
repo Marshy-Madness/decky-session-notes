@@ -160,14 +160,12 @@ export interface SteamScreenshot {
 }
 
 export type SortMode = "alpha" | "created" | "edited" | "recent";
-export type PanelWidth = "normal" | "wide" | "extra";
 export type OpenChord = "l4r4" | "l5r5" | "l3r3" | "off";
 /** Where STEAM + L5 + R5 dictation goes: typed into whatever is focused, or saved as a note. */
 export type DictateTarget = "type" | "note";
 
 export interface Settings {
   sort?: SortMode;
-  panelWidth?: PanelWidth;
   sessionRecap?: boolean;
   screenshotPrompt?: boolean;
   /** After a screenshot is attached to a note, delete it from Steam's screenshot library. */

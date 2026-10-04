@@ -178,7 +178,7 @@ export const NoteViewer: FC<{
       </>
       )}
 
-      <Focusable style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+      <Focusable style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "16px" }}>
         <DialogButton onClick={act(onEdit)}>
           <FaEdit /> Edit
         </DialogButton>

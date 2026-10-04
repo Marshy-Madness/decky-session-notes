@@ -235,7 +235,7 @@ export const NoteEditor: FC<{
         </div>
       </div>
 
-      <Focusable style={{ display: "flex", alignItems: "flex-end", gap: "8px", margin: "10px 0 4px" }}>
+      <Focusable style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "8px", margin: "10px 0 4px" }}>
         <div style={{ flex: 1, fontSize: "13px", opacity: 0.8 }}>Information</div>
         {canSpeak && (
           <DialogButton
