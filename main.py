@@ -8,9 +8,11 @@ from sync import Sync
 from bookstore import Bookstore
 from overlay import Overlay
 from buttons import Buttons
+import screenshot
 
 
 DICTATION_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "dictation.wav")
+VOICE_SHOT_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "voice-shot.png")
 
 
 class Plugin:
@@ -150,6 +152,25 @@ class Plugin:
         await self.dictation.stop()
         if os.path.exists(DICTATION_PATH):
             os.remove(DICTATION_PATH)
+
+    # screenshots for voice commands, taken the moment the voice combo is pressed
+    async def capture_screen(self):
+        """Takes a screenshot and keeps it aside until a command uses or discards it. Returns an error or ""."""
+        try:
+            await screenshot.capture(VOICE_SHOT_PATH)
+            return ""
+        except Exception as e:
+            decky.logger.warning(f"Screenshot failed: {e}")
+            return str(e)
+
+    async def attach_captured(self, appid: str):
+        if not os.path.exists(VOICE_SHOT_PATH):
+            return None
+        return screenshot.attach(appid, VOICE_SHOT_PATH)
+
+    async def discard_captured(self):
+        if os.path.exists(VOICE_SHOT_PATH):
+            os.remove(VOICE_SHOT_PATH)
 
     async def transcribe_recording(self, appid: str, file: str):
         text = await asyncio.to_thread(self.sync.transcribe_media, appid, file)

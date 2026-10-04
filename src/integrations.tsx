@@ -5,46 +5,69 @@ import { FaRegStickyNote } from "react-icons/fa";
 import { NotesPage } from "./components/NotesPage";
 import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { getSettings } from "./state/notesStore";
-import { dictationChordEnabled, stopAnywhereDictation, toggleAnywhereDictation } from "./dictation";
+import { dictationBusy, dictationChordEnabled, stopAnywhereDictation, toggleAnywhereDictation } from "./dictation";
 import { NOTES_ROUTE, reportButtons, toggleNotesPage } from "./opening";
-import { OpenChord } from "./types";
+import { Button, feedRecording, getCombo, isRecordingCombo, sortButtons } from "./combos";
+import { speechAllowed } from "./state/speech";
+import { stopVoiceCommand, toggleVoiceCommand, voiceBusy } from "./voice";
+import { ComboAction } from "./types";
 
-// ---- button combo ----
+// ---- button combos ----
 
-type Button = "STEAM" | "L4" | "R4" | "L5" | "R5" | "L3" | "R3";
-
-const CHORDS: Record<OpenChord, Button[] | null> = {
-  l4r4: ["L4", "R4"],
-  l5r5: ["L5", "R5"],
-  l3r3: ["L3", "R3"],
-  off: null,
+// Steam's navigation button codes (EGamepadButton), sent while Steam's own screens have focus.
+const NAV_BUTTONS: Record<number, Button> = {
+  0: "A",
+  1: "B",
+  2: "X",
+  3: "Y",
+  4: "UP",
+  5: "RIGHT",
+  6: "DOWN",
+  7: "LEFT",
+  8: "MENU",
+  9: "VIEW",
+  25: "L3",
+  28: "L2",
+  29: "R2",
+  30: "L1",
+  31: "R1",
+  32: "L5",
+  33: "R5",
+  34: "STEAM",
+  35: "VIEW",
+  36: "MENU",
+  37: "LPAD",
+  39: "RPAD",
+  41: "R3",
+  44: "L4",
+  45: "R4",
 };
-const DICTATE: Button[] = ["STEAM", "L5", "R5"];
-const ORDER: Button[] = ["STEAM", "L4", "R4", "L5", "R5", "L3", "R3"];
 
 // The older feed's bits: ulButtons is the low 32 bits of the state, ulUpperButtons the high 32.
 const LO_BITS: [number, Button][] = [
-  [0x2000, "STEAM"],
-  [0x8000, "L5"],
-  [0x10000, "R5"],
-  [0x400000, "L3"],
-  [0x4000000, "R3"],
+  [0x1, "R2"], [0x2, "L2"], [0x4, "R1"], [0x8, "L1"],
+  [0x10, "Y"], [0x20, "B"], [0x40, "X"], [0x80, "A"],
+  [0x100, "UP"], [0x200, "RIGHT"], [0x400, "LEFT"], [0x800, "DOWN"],
+  [0x1000, "VIEW"], [0x2000, "STEAM"], [0x4000, "MENU"],
+  [0x8000, "L5"], [0x10000, "R5"], [0x20000, "LPAD"], [0x40000, "RPAD"],
+  [0x400000, "L3"], [0x4000000, "R3"],
 ];
 const HI_BITS: [number, Button][] = [
   [0x200, "L4"],
   [0x400, "R4"],
+  [0x40000, "QAM"],
 ];
 
-// Steam's navigation button codes (EGamepadButton), sent while Steam's own screens have focus.
-const NAV_BUTTONS: Record<number, Button> = {
-  34: "STEAM",
-  44: "L4",
-  45: "R4",
-  32: "L5",
-  33: "R5",
-  25: "L3",
-  41: "R3",
-};
+// Fields of Steam Input's button messages.
+const FEED_FIELDS: [string, Button][] = [
+  ["button_steam", "STEAM"], ["button_quick_access", "QAM"], ["button_back_view", "VIEW"], ["button_start_options", "MENU"],
+  ["button_south", "A"], ["button_east", "B"], ["button_west", "X"], ["button_north", "Y"],
+  ["dpad_up", "UP"], ["dpad_down", "DOWN"], ["dpad_left", "LEFT"], ["dpad_right", "RIGHT"],
+  ["left_bumper", "L1"], ["right_bumper", "R1"], ["left_trigger", "L2"], ["right_trigger", "R2"],
+  ["left_stick_click", "L3"], ["right_stick_click", "R3"],
+  ["l4", "L4"], ["r4", "R4"], ["l5", "L5"], ["r5", "R5"],
+  ["left_trackpad_click", "LPAD"], ["right_trackpad_click", "RPAD"],
+];
 
 // Steam's own button feed (what its controller test page uses). Each controller has to be asked to stream.
 type InputService = {
@@ -68,44 +91,66 @@ function findInputService(): InputService | null {
   }
 }
 
+const ACTIONS: ComboAction[] = ["open", "dictate", "voice"];
+
+function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
+  const s = getSettings();
+  const on: Record<ComboAction, boolean> = {
+    open: true,
+    dictate: dictationChordEnabled(),
+    voice: !!s.voiceCommands && speechAllowed(),
+  };
+  return ACTIONS.flatMap((action) => {
+    const buttons = on[action] ? getCombo(action) : null;
+    return buttons ? [{ action, buttons }] : [];
+  });
+}
+
+function runCombo(action: ComboAction) {
+  if (action === "open") toggleNotesPage();
+  else if (action === "dictate") {
+    if (voiceBusy()) return;
+    toggleAnywhereDictation();
+  } else {
+    if (dictationBusy()) return;
+    toggleVoiceCommand();
+  }
+}
+
 /**
- * Opens the full-screen page when the chosen combo is pressed, and runs speech to text on STEAM + L5 + R5 if
- * that's turned on. The main source is the backend reading the Deck's controller directly, since Steam's
- * callbacks don't reach plugins in a game on current SteamOS. Steam's own feeds are kept as extras, for other
- * controllers and older Steam versions.
+ * Runs the button combos: the full-screen page, speech to text and voice commands, each on whatever 1 to 4
+ * buttons were set for it. When combos overlap (L4 + R4 and STEAM + L4 + R4), the one with the most buttons
+ * held wins, and a combo doesn't fire again until its buttons are let go. The main source is the backend
+ * reading the Deck's controller directly, since Steam's callbacks don't reach plugins in a game on current
+ * SteamOS. Steam's own feeds are kept as extras, for other controllers and older Steam versions.
  */
 function startChordWatch(): () => void {
-  const held = new Set<string>();
-  const dictateHeld = new Set<string>();
-  let lastOpen = 0;
-  let lastDictate = 0;
+  // Per controller: the combo that last fired, until its buttons are let go.
+  const active = new Map<string, Button[]>();
+  const lastFired = new Map<ComboAction, number>();
 
   const onButtons = (controller: string, down: Set<Button>, source: string) => {
-    reportButtons(ORDER.filter((b) => down.has(b)).join(" + "), source);
-    const all = (list: Button[]) => list.every((b) => down.has(b));
-    if (dictationChordEnabled()) {
-      if (!all(DICTATE)) {
-        dictateHeld.delete(controller);
-      } else if (!dictateHeld.has(controller)) {
-        dictateHeld.add(controller);
-        held.add(controller); // L5 + R5 with STEAM held is for speaking, not the notes page
-        if (Date.now() - lastDictate > REFIRE_MS) {
-          lastDictate = Date.now();
-          toggleAnywhereDictation();
-        }
-      }
-      if (down.has("STEAM")) return;
+    reportButtons(sortButtons(down).join(" + "), source);
+    if (isRecordingCombo()) {
+      feedRecording(controller, down);
+      active.set(controller, sortButtons(down)); // nothing fires until the recorded buttons are let go
+      return;
     }
-    const chord = CHORDS[getSettings().openChord ?? "l4r4"];
-    if (!chord) return;
-    if (!all(chord)) {
-      held.delete(controller);
-    } else if (!held.has(controller)) {
-      held.add(controller);
-      if (Date.now() - lastOpen > REFIRE_MS) {
-        lastOpen = Date.now();
-        toggleNotesPage();
-      }
+    const all = (list: Button[]) => list.every((b) => down.has(b));
+    const held = active.get(controller);
+    if (held && !all(held)) active.delete(controller);
+
+    const best = enabledCombos()
+      .filter((c) => all(c.buttons))
+      .sort((a, b) => b.buttons.length - a.buttons.length)[0];
+    if (!best) return;
+    const current = active.get(controller);
+    // Still holding the combo that fired, or a smaller one inside it: nothing new.
+    if (current && best.buttons.every((b) => current.includes(b))) return;
+    active.set(controller, best.buttons);
+    if (Date.now() - (lastFired.get(best.action) ?? 0) > REFIRE_MS) {
+      lastFired.set(best.action, Date.now());
+      runCombo(best.action);
     }
   };
 
@@ -134,14 +179,7 @@ function startChordWatch(): () => void {
   const service = findInputService();
   const feed = service?.RegisterForNotifyButtonStateChanged((msg) => {
     const t = msg.Body().toObject();
-    const down = new Set<Button>();
-    if (t.button_steam) down.add("STEAM");
-    if (t.l4) down.add("L4");
-    if (t.r4) down.add("R4");
-    if (t.l5) down.add("L5");
-    if (t.r5) down.add("R5");
-    if (t.left_stick_click) down.add("L3");
-    if (t.right_stick_click) down.add("R3");
+    const down = new Set<Button>(FEED_FIELDS.filter(([f]) => t[f]).map(([, b]) => b));
     onButtons(`feed${t.controller_index}`, down, "Steam Input");
   });
   if (service && feed) {
@@ -181,6 +219,7 @@ function startChordWatch(): () => void {
   return () => {
     cleanups.forEach((c) => c());
     stopAnywhereDictation();
+    stopVoiceCommand();
   };
 }
 

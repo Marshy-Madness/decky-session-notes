@@ -160,7 +160,12 @@ export interface SteamScreenshot {
 }
 
 export type SortMode = "alpha" | "created" | "edited" | "recent";
+/** @deprecated the old fixed choices for the open combo; see Settings.combos */
 export type OpenChord = "l4r4" | "l5r5" | "l3r3" | "off";
+/** What a button combo does: open the notes page, speech to text, or a voice command. */
+export type ComboAction = "open" | "dictate" | "voice";
+/** What a voice command does with words that don't start with a command. */
+export type VoiceFallback = "note" | "append" | "nothing";
 /** Where STEAM + L5 + R5 dictation goes: typed into whatever is focused, or saved as a note. */
 export type DictateTarget = "type" | "note";
 
@@ -182,15 +187,21 @@ export interface Settings {
   overlayHideStats?: boolean;
   /** Pin to screen: where the overlay sits; unset = wherever Steam puts it (top left). */
   overlayPosition?: OverlayPosition;
-  /** Button combo that opens the full-screen notes page; unset = L4 + R4. */
+  /** @deprecated replaced by combos.open */
   openChord?: OpenChord;
+  /** Buttons (1 to 4) for each combo; [] = off, unset = the default. */
+  combos?: Partial<Record<ComboAction, string[]>>;
   /** Add "Session Notes" to the main Steam-button menu. */
   mainMenuEntry?: boolean;
   /** Give Session Notes its own Quick Access tab, next to Decky's. */
   qamTab?: boolean;
-  /** STEAM + L5 + R5 starts and stops speech to text anywhere. Off unless turned on. */
+  /** The dictate combo starts and stops speech to text anywhere. Off unless turned on. */
   dictateChord?: boolean;
   dictateTarget?: DictateTarget;
+  /** The voice combo listens for a spoken command (keywords, see voice.ts). Off unless turned on. */
+  voiceCommands?: boolean;
+  /** Words that aren't a command: "note" (default) saves a new note, "append" adds to the last note. */
+  voiceFallback?: VoiceFallback;
   /** Language code for speech to text ("" = detect). */
   speechLanguage?: string;
 }

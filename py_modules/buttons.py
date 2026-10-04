@@ -16,9 +16,17 @@ REPORT_SIZE = 64
 REPORT_STATE = 0x09
 RESCAN_SECONDS = 5
 
-# Bits of the two button words in a state report (the same layout Steam uses).
-LO_BITS = [(0x2000, "STEAM"), (0x8000, "L5"), (0x10000, "R5"), (0x400000, "L3"), (0x4000000, "R3")]
-HI_BITS = [(0x200, "L4"), (0x400, "R4")]
+# Bits of the two button words in a state report (the same layout Steam and SDL use). Touch-only bits
+# (trackpads, sticks) are left out: they'd be "held" whenever a thumb rests there.
+LO_BITS = [
+    (0x1, "R2"), (0x2, "L2"), (0x4, "R1"), (0x8, "L1"),
+    (0x10, "Y"), (0x20, "B"), (0x40, "X"), (0x80, "A"),
+    (0x100, "UP"), (0x200, "RIGHT"), (0x400, "LEFT"), (0x800, "DOWN"),
+    (0x1000, "VIEW"), (0x2000, "STEAM"), (0x4000, "MENU"),
+    (0x8000, "L5"), (0x10000, "R5"), (0x20000, "LPAD"), (0x40000, "RPAD"),
+    (0x400000, "L3"), (0x4000000, "R3"),
+]
+HI_BITS = [(0x200, "L4"), (0x400, "R4"), (0x40000, "QAM")]
 LO_MASK = sum(b for b, _ in LO_BITS)
 HI_MASK = sum(b for b, _ in HI_BITS)
 

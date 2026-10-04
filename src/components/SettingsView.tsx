@@ -2,7 +2,8 @@ import { FC, useEffect, useState } from "react";
 import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
-import { BackupStatus, DictateTarget, OpenChord } from "../types";
+import { BackupStatus, DictateTarget, VoiceFallback } from "../types";
+import { ComboRow, VoiceCommandList } from "./ComboSettings";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Bookstore";
 import { PositionPicker } from "./PositionPicker";
@@ -10,16 +11,15 @@ import { useSeenButtons } from "../opening";
 import { formatDateTime } from "../utils/format";
 import { errText } from "../utils/errors";
 
-const CHORD_OPTIONS: { label: string; data: OpenChord }[] = [
-  { label: "L4 + R4 (upper back grips)", data: "l4r4" },
-  { label: "L5 + R5 (lower back grips)", data: "l5r5" },
-  { label: "L3 + R3 (click both sticks)", data: "l3r3" },
-  { label: "Off", data: "off" },
-];
-
 const DICTATE_TARGETS: { label: string; data: DictateTarget }[] = [
   { label: "Type it where I am", data: "type" },
   { label: "Save it as a note for this game", data: "note" },
+];
+
+const VOICE_FALLBACKS: { label: string; data: VoiceFallback }[] = [
+  { label: "Save it as a new note", data: "note" },
+  { label: "Add it to the last note", data: "append" },
+  { label: "Nothing", data: "nothing" },
 ];
 
 const SPEECH_LANGUAGES = [
@@ -119,12 +119,11 @@ export const SettingsView: FC = () => {
         />
       </PanelSectionRow>
       <PanelSectionRow>
-        <DropdownItem
+        <ComboRow
+          action="open"
           label="Button combo"
-          description="Press it any time, even in a game, to open the full-screen notes page. B closes it."
-          rgOptions={CHORD_OPTIONS}
-          selectedOption={settings.openChord ?? "l4r4"}
-          onChange={(o) => updateSettings({ openChord: o.data })}
+          description="Press it any time, even in a game, to open the full-screen notes page; again to put it away. Change it to any 1 to 4 buttons."
+          canTurnOff
         />
       </PanelSectionRow>
       <PanelSectionRow>
@@ -162,10 +161,18 @@ export const SettingsView: FC = () => {
           <Heading>Speech to text</Heading>
           <PanelSectionRow>
             <ToggleField
-              label="STEAM + L5 + R5 to speak"
-              description="Hold STEAM and press both lower back buttons, talk, then press them again. Works anywhere, even in a game. Uses your sync server."
+              label="Speech to text combo"
+              description="Press the combo, talk, then press it again. Works anywhere, even in a game. Uses your sync server."
               checked={settings.dictateChord ?? false}
               onChange={(v) => updateSettings({ dictateChord: v })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ComboRow
+              action="dictate"
+              label="Speech to text buttons"
+              description="Hold the first button before the others if it's STEAM."
+              disabled={!settings.dictateChord}
             />
           </PanelSectionRow>
           <PanelSectionRow>
@@ -178,6 +185,37 @@ export const SettingsView: FC = () => {
               onChange={(o) => updateSettings({ dictateTarget: o.data })}
             />
           </PanelSectionRow>
+          <Heading>Voice commands</Heading>
+          <PanelSectionRow>
+            <ToggleField
+              label="Voice command combo"
+              description="Separate from speech to text: press the combo, say a command like “new note …” or “screenshot …”, then press it again. Commands are fixed keywords; no AI guesses what you meant."
+              checked={settings.voiceCommands ?? false}
+              onChange={(v) => updateSettings({ voiceCommands: v })}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ComboRow
+              action="voice"
+              label="Voice command buttons"
+              description="Screenshots are taken the moment you press it, so they show what you were looking at."
+              disabled={!settings.voiceCommands}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <DropdownItem
+              label="Words that aren't a command"
+              rgOptions={VOICE_FALLBACKS}
+              selectedOption={settings.voiceFallback ?? "note"}
+              disabled={!settings.voiceCommands}
+              onChange={(o) => updateSettings({ voiceFallback: o.data })}
+            />
+          </PanelSectionRow>
+          {settings.voiceCommands && (
+            <PanelSectionRow>
+              <VoiceCommandList />
+            </PanelSectionRow>
+          )}
           <PanelSectionRow>
             <DropdownItem
               label="Language"

@@ -1,18 +1,24 @@
 import { toaster } from "@decky/api";
 import { backend } from "./api/backend";
+import { comboLabel, getCombo } from "./combos";
 import { getRunningGame } from "./hooks/useAppLifetime";
 import { emitDataChanged, getSettings } from "./state/notesStore";
 import { speechAllowed } from "./state/speech";
 import { errText } from "./utils/errors";
 import { newId } from "./utils/format";
 
-// Speech to text anywhere: STEAM + L5 + R5 starts listening, the same combo again stops. The words are typed
+// Speech to text anywhere: the dictate combo (STEAM + L5 + R5 unless changed) starts listening, the same combo
+// again stops. The words are typed
 // into whatever has focus (through Steam's on-screen keyboard API, so games get them too), or saved as a note
 // for the running game. Off unless turned on in settings, and only if the server owner allowed this account.
 
 const MAX_LISTEN_MS = 60_000;
 let state: "idle" | "listening" | "writing" = "idle";
 let timer: ReturnType<typeof setTimeout> | undefined;
+
+export function dictationBusy(): boolean {
+  return state !== "idle";
+}
 
 export function dictationChordEnabled(): boolean {
   return !!getSettings().dictateChord && speechAllowed();
@@ -29,7 +35,7 @@ export async function toggleAnywhereDictation() {
   }
   state = "listening";
   timer = setTimeout(finish, MAX_LISTEN_MS);
-  toaster.toast({ title: "🎙 Listening…", body: "Talk, then press STEAM + L5 + R5 again.", duration: 3000 });
+  toaster.toast({ title: "🎙 Listening…", body: `Talk, then press ${comboLabel(getCombo("dictate"))} again.`, duration: 3000 });
 }
 
 async function finish() {

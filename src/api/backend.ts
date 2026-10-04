@@ -43,6 +43,10 @@ export const backend = {
   /** Stops listening and returns the words ("" if nothing was heard). */
   stopDictation: (appId = "", game = "") => call<[string, string], string>("stop_dictation", appId, game),
   cancelDictation: () => call<[], void>("cancel_dictation"),
+  /** Screenshot for a voice command, kept aside until used. Returns "" if it worked, else why not. */
+  captureScreen: () => call<[], string>("capture_screen"),
+  attachCaptured: (appId: string) => call<[string], Screenshot | null>("attach_captured", appId),
+  discardCaptured: () => call<[], void>("discard_captured"),
   transcribeRecording: (appId: string, file: string) => call<[string, string], string>("transcribe_recording", appId, file),
 
   syncNow: () => call<[], { pushed: number; pulled: number }>("sync_now"),
