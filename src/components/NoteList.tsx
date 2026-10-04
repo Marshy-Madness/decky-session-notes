@@ -20,6 +20,7 @@ import { SORT_LABELS, newId, sortNotes } from "../utils/format";
 import { KINDS, isGuide } from "../utils/kinds";
 import { SharedNoteViewer } from "./SharedNotes";
 import { ShareModal } from "./ShareModal";
+import { PublishModal } from "./Bookstore";
 import { NoteItem } from "./NoteItem";
 import { NoteEditor, folderPath } from "./NoteEditor";
 import { NoteViewer } from "./NoteViewer";
@@ -155,6 +156,9 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
         {folders.length > 0 && <MenuItem onSelected={() => moveNote(note)}>Move to folder…</MenuItem>}
         <MenuItem onSelected={() => showModal(<VersionHistoryModal appId={appId} note={note} />)}>Version history…</MenuItem>
         {settings.syncUrl && <MenuItem onSelected={() => showModal(<ShareModal appId={appId} note={note} />)}>Share with…</MenuItem>}
+        <MenuItem onSelected={() => showModal(<PublishModal appId={appId} note={note} />)}>
+          {note.bookstoreId ? "Update in Bookstore…" : "Publish to Bookstore…"}
+        </MenuItem>
         <MenuItem tone="destructive" onSelected={() => deleteNote(note)}>
           Delete
         </MenuItem>

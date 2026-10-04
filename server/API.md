@@ -3,10 +3,14 @@
 Base URL: your server, e.g. `https://steamnotes.marshymadness.com` (or `http://192.168.0.144:8430` on the LAN).
 
 ## Auth
-Send the Deck token (`API_TOKEN` in docker-compose.yml) as a header on every request:
+Every request acts as one user. Get a device token for your account:
+1. On the website: your name → **Devices** → **Connect a device**. Note the code (e.g. `K7P-4QX`).
+2. `POST /api/pair` with `{"code": "K7P-4QX", "label": "My script"}` returns `{token, user}`.
+
+Then send the token on every request (the owner's legacy `API_TOKEN` also works):
 
 ```
-Authorization: Bearer <API_TOKEN>
+Authorization: Bearer <token>
 ```
 
 Optional: `X-Client: n8n` (or any name) labels where a change came from in webhooks. It defaults to `deck`.
@@ -23,6 +27,17 @@ Optional: `X-Client: n8n` (or any name) labels where a change came from in webho
 | `GET /api/media/{appId}` | File names of screenshots and voice notes |
 | `GET /api/media/{appId}/{file}` | The file itself |
 | `GET /api/health` | `{ok: true}` (no auth needed) |
+
+## Sharing
+
+| Request | What it does |
+| --- | --- |
+| `GET /api/users` | Other people on the server: `[{id, name, avatar, steamId}]` |
+| `POST /api/shares` `{appId, noteId, to}` | Share one of your notes (read-only) with a user |
+| `GET /api/shares?appId=` | Notes you've shared, with recipient names |
+| `DELETE /api/shares/{id}` | Stop sharing (either side can remove a share) |
+| `GET /api/shared` | Notes shared with you: `[{shareId, fromName, appId, gameName, note}]` |
+| `GET /api/shared/media/{shareId}/{file}` | A screenshot or voice note from a shared note |
 
 ## Writing
 

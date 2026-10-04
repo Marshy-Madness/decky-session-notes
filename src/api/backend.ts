@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import { ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot } from "../types";
+import { BookstoreEntry, BookstoreGame, BookstoreSummary, BookstoreUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot } from "../types";
 
 export const backend = {
   listGames: () => call<[], GameSummary[]>("list_games"),
@@ -46,6 +46,28 @@ export const backend = {
   unshareNote: (shareId: string) => call<[string], void>("unshare_note", shareId),
   testBackupServer: () => call<[], { ok: boolean }>("test_backup_server"),
   backupStatus: () => call<[], BackupStatus>("backup_status"),
+
+  bsGames: (q = "") => call<[string], BookstoreGame[]>("bs_games", q),
+  bsEntries: (params: Record<string, string>) => call<[Record<string, string>], BookstoreSummary[]>("bs_entries", params),
+  bsEntry: (id: string) => call<[string], BookstoreEntry>("bs_entry", id),
+  bsMedia: (file: string) => call<[string], string | null>("bs_media", file),
+  bsStartLink: () =>
+    call<[], { deviceCode: string; userCode: string; verifyUrl: string; interval: number; expiresIn: number }>("bs_start_link"),
+  bsPollLink: (deviceCode: string) => call<[string], { status: string; user?: BookstoreUser }>("bs_poll_link", deviceCode),
+  bsUnlink: () => call<[], void>("bs_unlink"),
+  bsLike: (id: string) => call<[string], BookstoreEntry>("bs_like", id),
+  bsComment: (id: string, text: string) => call<[string, string], BookstoreEntry>("bs_comment", id, text),
+  bsUsers: (q: string) => call<[string], BookstoreUser[]>("bs_users", q),
+  bsUpdate: (id: string, fields: Record<string, unknown>) => call<[string, Record<string, unknown>], BookstoreEntry>("bs_update", id, fields),
+  bsPublish: (appId: string, noteId: string, options: Record<string, unknown>) =>
+    call<[string, string, Record<string, unknown>], BookstoreEntry>("bs_publish", appId, noteId, options),
+  bsCopy: (id: string, appId: string) => call<[string, string], Note>("bs_copy", id, appId),
+
+  pinOverlay: (appId: string, noteId: string) =>
+    call<[string, string], { overlayRunning: boolean; pinned: boolean }>("pin_overlay", appId, noteId),
+  unpinOverlay: () => call<[], { overlayRunning: boolean; pinned: boolean }>("unpin_overlay"),
+  overlayStatus: () =>
+    call<[], { overlayRunning: boolean; pinned: boolean; pin?: { appId: string; noteId: string } }>("overlay_status"),
 
   getSettings: () => call<[], Settings>("get_settings"),
   saveSettings: (settings: Settings) => call<[Settings], void>("save_settings", settings),

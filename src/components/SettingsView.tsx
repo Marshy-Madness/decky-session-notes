@@ -3,6 +3,7 @@ import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } fro
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
 import { BackupStatus, PanelWidth } from "../types";
+import { LinkPanel } from "./Bookstore";
 import { formatDateTime } from "../utils/format";
 
 const WIDTH_OPTIONS: { label: string; data: PanelWidth }[] = [
@@ -34,6 +35,7 @@ export const SettingsView: FC = () => {
   const [url, setUrl] = useState(settings.syncUrl ?? "");
   const [token, setToken] = useState(settings.syncToken ?? "");
   const [status, setStatus] = useState<BackupStatus | null>(null);
+  const [bsUrl, setBsUrl] = useState(settings.bookstoreUrl ?? "https://bookstore.marshymadness.com");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -158,6 +160,29 @@ export const SettingsView: FC = () => {
           </ButtonItem>
         </div>
       </PanelSectionRow>
+      <Heading>Bookstore</Heading>
+      <PanelSectionRow>
+        <TextField
+          label="Bookstore address"
+          description="The public library behind the Bookstore tab"
+          value={bsUrl}
+          onChange={(e) => setBsUrl(e.target.value)}
+          onBlur={() => updateSettings({ bookstoreUrl: bsUrl.trim() || undefined })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        {settings.bookstoreUser ? (
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div style={{ flex: 1 }}>Linked as {settings.bookstoreUser.name}</div>
+            <ButtonItem layout="below" onClick={async () => { await backend.bsUnlink(); await loadSettings(); }}>
+              Unlink
+            </ButtonItem>
+          </div>
+        ) : (
+          <LinkPanel />
+        )}
+      </PanelSectionRow>
+
       <div style={{ fontSize: "12px", opacity: 0.75, padding: "4px 0" }}>
         {message && <div>{message}</div>}
         {status && (

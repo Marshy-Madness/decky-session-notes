@@ -1,6 +1,8 @@
-import { FC, Fragment, useState } from "react";
+import { FC, Fragment, useEffect, useState } from "react";
 import { ModalRoot, DialogButton, Focusable, showModal } from "@decky/ui";
-import { FaCheckSquare, FaHistory, FaEdit, FaEye, FaRegSquare, FaThumbtack, FaTrash } from "react-icons/fa";
+import { toaster } from "@decky/api";
+import { backend } from "../api/backend";
+import { FaThumbtack as FaPinScreen, FaCheckSquare, FaHistory, FaEdit, FaEye, FaRegSquare, FaThumbtack, FaTrash } from "react-icons/fa";
 import { Note } from "../types";
 import { formatDateTime } from "../utils/format";
 import { MediaImage } from "./MediaImage";
@@ -30,6 +32,27 @@ export const NoteViewer: FC<{
 }> = ({ appId, note: initial, folderLabel, onEdit, onTogglePin, onDelete, onHistory, onUpdate, closeModal }) => {
   const [note, setNote] = useState(initial);
   const [revealed, setRevealed] = useState(!initial.spoiler);
+  const [onScreen, setOnScreen] = useState(false);
+
+  useEffect(() => {
+    backend.overlayStatus().then((st) => setOnScreen(st.pin?.noteId === initial.id));
+  }, [initial.id]);
+
+  const toggleScreenPin = async () => {
+    if (onScreen) {
+      await backend.unpinOverlay();
+      setOnScreen(false);
+      return;
+    }
+    const st = await backend.pinOverlay(appId, note.id);
+    setOnScreen(true);
+    toaster.toast({
+      title: "Pinned to screen",
+      body: st.overlayRunning
+        ? "Shows in the performance overlay. Ticking items off updates it."
+        : "Turn on the Performance Overlay (Quick Access → ⚡ → Level 1 or higher) to see it.",
+    });
+  };
 
   const toggleItem = (id: string) => {
     const next = { ...note, checklist: note.checklist?.map((i) => (i.id === id ? { ...i, done: !i.done } : i)) };
@@ -111,8 +134,13 @@ export const NoteViewer: FC<{
 
       {note.checklist && note.checklist.length > 0 && (
         <Focusable style={{ marginBottom: "12px" }}>
-          <div style={{ fontSize: "13px", opacity: 0.8, marginBottom: "4px" }}>
-            Checklist · {note.checklist.filter((i) => i.done).length}/{note.checklist.length}
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+            <div style={{ fontSize: "13px", opacity: 0.8, flex: 1 }}>
+              Checklist · {note.checklist.filter((i) => i.done).length}/{note.checklist.length}
+            </div>
+            <DialogButton style={{ ...s.smallButton, padding: "2px 10px", fontSize: "12px" }} onClick={toggleScreenPin}>
+              <FaPinScreen size={10} /> {onScreen ? "Unpin from screen" : "Pin to screen"}
+            </DialogButton>
           </div>
           {note.checklist.map((item) => (
             <Focusable

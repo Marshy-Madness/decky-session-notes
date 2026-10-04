@@ -4,11 +4,15 @@ import decky
 import storage
 from recorder import Recorder
 from sync import Sync
+from bookstore import Bookstore
+from overlay import Overlay
 
 
 class Plugin:
     recorder = Recorder()
     sync = Sync()
+    bookstore = Bookstore()
+    overlay = Overlay()
 
     # games / launches
     async def list_games(self):
@@ -21,6 +25,9 @@ class Plugin:
         return storage.record_launch(appid, name)
 
     async def record_exit(self, appid: str):
+        pin = storage.get_settings().get("overlayPin") or {}
+        if pin.get("appId") == appid:
+            await self.unpin_overlay()
         return storage.record_exit(appid)
 
     async def ensure_game(self, appid: str, name: str):
@@ -28,7 +35,33 @@ class Plugin:
 
     # notes / folders
     async def save_note(self, appid: str, note: dict):
-        return storage.save_note(appid, note)
+        saved = storage.save_note(appid, note)
+        self._refresh_overlay(appid, note["id"])
+        return saved
+
+    def _refresh_overlay(self, appid: str, note_id: str):
+        pin = storage.get_settings().get("overlayPin") or {}
+        if pin.get("appId") == appid and pin.get("noteId") == note_id:
+            note = next((n for n in storage.load_game(appid).get("notes", []) if n["id"] == note_id), None)
+            self.overlay.set_note(note)
+
+    # on-screen to-do pin (experimental, uses the performance overlay)
+    async def pin_overlay(self, appid: str, note_id: str):
+        settings = storage.get_settings()
+        settings["overlayPin"] = {"appId": appid, "noteId": note_id}
+        storage.save_settings(settings)
+        self._refresh_overlay(appid, note_id)
+        return self.overlay.status()
+
+    async def unpin_overlay(self):
+        settings = storage.get_settings()
+        settings.pop("overlayPin", None)
+        storage.save_settings(settings)
+        self.overlay.clear()
+        return self.overlay.status()
+
+    async def overlay_status(self):
+        return {**self.overlay.status(), "pin": storage.get_settings().get("overlayPin")}
 
     async def delete_note(self, appid: str, note_id: str):
         return storage.delete_note(appid, note_id)
@@ -121,11 +154,55 @@ class Plugin:
     async def backup_status(self):
         return self.sync.status()
 
+    # Bookstore (public library of notes, guides and tips)
+    async def bs_games(self, q: str = ""):
+        return await asyncio.to_thread(self.bookstore.games, q)
+
+    async def bs_entries(self, params: dict):
+        return await asyncio.to_thread(self.bookstore.entries, params)
+
+    async def bs_entry(self, entry_id: str):
+        return await asyncio.to_thread(self.bookstore.entry, entry_id)
+
+    async def bs_media(self, file: str):
+        return await asyncio.to_thread(self.bookstore.media, file)
+
+    async def bs_start_link(self):
+        return await asyncio.to_thread(self.bookstore.start_link)
+
+    async def bs_poll_link(self, device_code: str):
+        return await asyncio.to_thread(self.bookstore.poll_link, device_code)
+
+    async def bs_unlink(self):
+        return await asyncio.to_thread(self.bookstore.unlink)
+
+    async def bs_like(self, entry_id: str):
+        return await asyncio.to_thread(self.bookstore.like, entry_id)
+
+    async def bs_comment(self, entry_id: str, text: str):
+        return await asyncio.to_thread(self.bookstore.comment, entry_id, text)
+
+    async def bs_users(self, q: str):
+        return await asyncio.to_thread(self.bookstore.users, q)
+
+    async def bs_update(self, entry_id: str, fields: dict):
+        return await asyncio.to_thread(self.bookstore.update, entry_id, fields)
+
+    async def bs_publish(self, appid: str, note_id: str, options: dict):
+        return await asyncio.to_thread(self.bookstore.publish, appid, note_id, options)
+
+    async def bs_copy(self, entry_id: str, appid: str):
+        return await asyncio.to_thread(self.bookstore.copy, entry_id, appid)
+
     async def _main(self):
         self.sync.task = asyncio.get_event_loop().create_task(self.sync.auto_loop())
+        self.overlay.task = asyncio.get_event_loop().create_task(self.overlay.loop())
         decky.logger.info("Session Notes plugin loaded")
 
     async def _unload(self):
         if self.sync.task:
             self.sync.task.cancel()
+        if self.overlay.task:
+            self.overlay.task.cancel()
+        self.overlay.clear()
         await self.recorder.stop()

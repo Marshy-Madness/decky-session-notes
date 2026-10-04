@@ -173,6 +173,58 @@ export interface Settings {
   autoBackup?: boolean;
   /** Minutes between checks for website edits; 0 = manual only. */
   syncInterval?: number;
+  bookstoreUrl?: string;
+  bookstoreUser?: BookstoreUser;
+}
+
+export interface BookstoreUser {
+  steamId: string;
+  name: string;
+  avatar: string;
+}
+
+export type EditPolicy = "owner" | "select" | "anyone";
+
+export interface BookstoreSummary {
+  id: string;
+  appId: string;
+  gameName: string;
+  title: string;
+  firstLine: string;
+  kind: NoteKind;
+  tags: string[];
+  spoiler: boolean;
+  spoilerLabel: string;
+  author: BookstoreUser;
+  likes: number;
+  comments: number;
+  allowCopy: boolean;
+  hasScreenshots: boolean;
+  hasVoice: boolean;
+  hasChecklist: boolean;
+  thumb: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface BookstoreEntry extends BookstoreSummary {
+  body: string;
+  checklist: ChecklistItem[];
+  screenshots: Screenshot[];
+  recordings: Recording[];
+  editPolicy: EditPolicy;
+  editors: BookstoreUser[];
+  canEdit: boolean;
+  isAuthor: boolean;
+  canDelete: boolean;
+  liked: boolean;
+  commentList: { id: string; text: string; createdAt: number; author: BookstoreUser }[];
+}
+
+export interface BookstoreGame {
+  appId: string;
+  gameName: string;
+  count: number;
 }
 
 export interface BackupStatus {

@@ -8,8 +8,9 @@ import { PanelWidth } from "../types";
 import { NoteList } from "./NoteList";
 import { Library } from "./Library";
 import { SettingsView } from "./SettingsView";
+import { BookstoreView } from "./Bookstore";
 
-type Tab = "current" | "all" | "settings";
+type Tab = "current" | "all" | "bookstore" | "settings";
 
 const WIDTHS: Record<PanelWidth, number | null> = { normal: null, wide: 620, extra: 860 };
 
@@ -78,6 +79,9 @@ export const QuickAccessPanel: FC = () => {
         <TabButton active={tab === "all"} onClick={() => setTab("all")}>
           All
         </TabButton>
+        <TabButton active={tab === "bookstore"} onClick={() => setTab("bookstore")}>
+          Bookstore
+        </TabButton>
         <TabButton active={tab === "settings"} onClick={() => setTab("settings")} grow={false}>
           <FaCog />
         </TabButton>
@@ -103,6 +107,7 @@ export const QuickAccessPanel: FC = () => {
           <Library onOpen={setOpenGame} runningAppId={running?.appId} />
         ))}
 
+      {tab === "bookstore" && <BookstoreView />}
       {tab === "settings" && <SettingsView />}
     </div>
   );

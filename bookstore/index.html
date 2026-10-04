@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1b1722">
+<title>Session Notes Bookstore</title>
+<style>
+  :root { color-scheme: dark; --bg: #15131a; --panel: #1f1b27; --line: #2e2939; --chip: #2f2a3b; --accent: #b98cff; --danger: #e5484d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: #ebe7f2; }
+  a { color: var(--accent); }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { background: #2c2738; border: 1px solid #3d3650; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button:hover { background: #352f44; } button.primary { background: var(--accent); border-color: var(--accent); color: #160f22; font-weight: 600; }
+  button.on { background: #463a63; border-color: var(--accent); } button.danger { color: var(--danger); }
+  input, select, textarea { background: #252130; border: 1px solid #3d3650; border-radius: 6px; padding: 6px 10px; }
+  textarea { width: 100%; resize: vertical; line-height: 1.45; }
+  header { padding: 12px 20px; background: var(--panel); display: flex; gap: 12px; align-items: center; position: sticky; top: 0; z-index: 2; flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; cursor: pointer; } header .grow { flex: 1; }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .meta, small { opacity: .65; font-size: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .game { background: var(--panel); border-radius: 8px; padding: 12px; cursor: pointer; display: flex; gap: 10px; align-items: center; }
+  .game:hover { background: #28233a; } .game img { width: 92px; height: 43px; object-fit: cover; border-radius: 4px; background: #2a2536; }
+  .toolbar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+  .card { background: var(--panel); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; display: flex; gap: 12px; cursor: pointer; }
+  .card:hover { background: #28233a; } .card .text { flex: 1; min-width: 0; }
+  .card h3 { margin: 0; font-size: 15px; } .card .first { opacity: .75; font-size: 13px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card img.thumb { width: 140px; height: 79px; object-fit: cover; border-radius: 6px; }
+  .chip { display: inline-block; font-size: 11px; background: var(--chip); border-radius: 8px; padding: 1px 7px; margin: 4px 4px 0 0; }
+  .who { display: inline-flex; align-items: center; gap: 6px; } .who img { width: 20px; height: 20px; border-radius: 3px; }
+  .blur { filter: blur(6px); }
+  dialog { background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 10px; width: min(900px, 95vw); max-height: 92vh; padding: 20px; }
+  dialog::backdrop { background: rgba(0,0,0,.65); }
+  dialog label { display: block; font-size: 12px; opacity: .75; margin: 12px 0 4px; }
+  .body { white-space: pre-wrap; line-height: 1.5; margin: 12px 0; } .body img { max-width: 100%; border-radius: 6px; display: block; margin: 8px 0; }
+  .gallery { display: flex; gap: 8px; flex-wrap: wrap; } .gallery img { width: 200px; height: 112px; object-fit: cover; border-radius: 6px; cursor: zoom-in; }
+  .spoiler-gate { text-align: center; padding: 30px; background: #1a1622; border-radius: 10px; margin: 12px 0; }
+  .comment { border-top: 1px solid var(--line); padding: 10px 0; } .comment p { margin: 4px 0 0; white-space: pre-wrap; }
+  .row { display: flex; gap: 10px; } .row > * { flex: 1; }
+  .check { display: flex; gap: 8px; align-items: center; padding: 3px 0; } .check input[type=text] { flex: 1; }
+  .shot { width: 160px; font-size: 11px; } .shot img { width: 160px; height: 90px; object-fit: cover; border-radius: 6px; display: block; }
+  .code-input { font-size: 28px; letter-spacing: 4px; text-align: center; text-transform: uppercase; width: 100%; padding: 12px; }
+  .hidden { display: none !important; }
+  .steam-btn { background: #171a21; border: 1px solid #66c0f4; color: #66c0f4; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: 600; }
+  @media (max-width: 760px) {
+    main { padding: 12px; } header { padding: 10px 12px; } .card img.thumb { width: 90px; height: 51px; }
+    dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; border: 0; }
+    .row { flex-direction: column; gap: 0; } button, select, input:not([type=checkbox]):not([type=radio]) { min-height: 42px; }
+    input, select, textarea { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="home">📚 Bookstore</h1>
+  <input id="gameSearch" class="grow" placeholder="Search games…">
+  <span id="userBox"></span>
+</header>
+<main id="main"></main>
+<dialog id="dlg"></dialog>
+<dialog id="dlg2"></dialog>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const date = (ms) => (ms ? new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—");
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }));
+const media = (f) => `/api/media/${encodeURIComponent(f)}`;
+const art = (appId) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${encodeURIComponent(appId)}/capsule_184x69.jpg`;
+const KINDS = [["note", "📝", "Note"], ["guide", "📘", "Guide"], ["tip", "💡", "Tip"], ["walkthrough", "🧭", "Walkthrough"],
+  ["boss", "⚔️", "Boss strategy"], ["build", "🛡️", "Build / loadout"], ["collectibles", "🗺️", "Collectibles / map"],
+  ["secret", "🔮", "Secret / easter egg"], ["settings", "⚙️", "Deck settings"], ["achievement", "🏆", "Achievement guide"]];
+const kindOf = (k) => KINDS.find((x) => x[0] === k) || KINDS[0];
+let me = null, admin = false, view = { appId: null, gameName: "", kinds: [], has: [], sort: "top", q: "" };
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: { "X-Requested-With": "bookstore", ...(opts.json ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) },
+    body: opts.json ? JSON.stringify(opts.json) : opts.body });
+  const data = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(data?.error || r.statusText);
+  return data;
+}
+const who = (u) => `<span class="who">${u.avatar ? `<img src="${esc(u.avatar)}">` : ""}${esc(u.name)}</span>`;
+const signIn = (next = location.pathname + location.search) => `/auth/steam?next=${encodeURIComponent(next)}`;
+
+async function start() {
+  const r = await api("/api/me");
+  me = r.user; admin = r.admin;
+  $("#userBox").innerHTML = me ? `${who(me)} <button id="logout">Log out</button>` : `<a class="steam-btn" href="${signIn()}">Sign in with Steam</a>`;
+  if (me) $("#logout").onclick = async () => { await api("/api/logout", { method: "POST" }); location.reload(); };
+  const err = new URLSearchParams(location.search).get("error");
+  if (err) alert(err);
+  if (location.pathname === "/link") return linkPage();
+  const params = new URLSearchParams(location.search);
+  if (params.get("game")) return openGame(params.get("game"), params.get("name") || "");
+  home();
+}
+
+// ---------- pages ----------
+async function home(q = "") {
+  view.appId = null;
+  history.replaceState(null, "", "/");
+  const [games, recent] = await Promise.all([api(`/api/games?q=${encodeURIComponent(q)}`), q ? [] : api("/api/entries?sort=new")]);
+  $("#main").innerHTML = `
+    <p>Notes, guides and tips for your games, shared by players. Open one on your Deck from the <b>Bookstore</b> tab in Session Notes.</p>
+    <h2>${q ? "Games matching “" + esc(q) + "”" : "Games"}</h2>
+    <div class="grid">${games.map((g) => `<div class="game" data-app="${esc(g.appId)}" data-name="${esc(g.gameName)}"><img src="${art(g.appId)}" onerror="this.style.visibility='hidden'"><div><b>${esc(g.gameName)}</b><br><small>${g.count} posts</small></div></div>`).join("") || '<p class="meta">Nothing yet. Be the first to post!</p>'}</div>
+    ${me ? '<div class="toolbar"><button class="primary" id="newAny">+ Post something</button></div>' : ""}
+    ${recent.length ? `<h2>Latest</h2>${recent.slice(0, 15).map(card).join("")}` : ""}`;
+  $("#main").querySelectorAll(".game").forEach((el) => (el.onclick = () => openGame(el.dataset.app, el.dataset.name)));
+  wireCards();
+  if ($("#newAny")) $("#newAny").onclick = () => editEntry(null, {});
+}
+
+async function openGame(appId, gameName) {
+  Object.assign(view, { appId, gameName });
+  history.replaceState(null, "", `/?game=${encodeURIComponent(appId)}&name=${encodeURIComponent(gameName)}`);
+  await renderGame();
+}
+
+async function renderGame() {
+  const params = new URLSearchParams({ appId: view.appId, sort: view.sort, q: view.q });
+  if (view.kinds.length) params.set("kind", view.kinds.join(","));
+  if (view.has.length) params.set("has", view.has.join(","));
+  const entries = await api(`/api/entries?${params}`);
+  if (!view.gameName && entries[0]) view.gameName = entries[0].gameName;
+  $("#main").innerHTML = `
+    <div class="toolbar"><button id="back">← All games</button><img src="${art(view.appId)}" style="height:34px;border-radius:4px" onerror="this.remove()"><h2 style="margin:0">${esc(view.gameName || view.appId)}</h2>
+      <span style="flex:1"></span>${me ? '<button class="primary" id="newEntry">+ Post for this game</button>' : `<a class="steam-btn" href="${signIn()}">Sign in to post</a>`}</div>
+    <div class="toolbar">${KINDS.map((k) => `<button data-kind="${k[0]}" class="${view.kinds.includes(k[0]) ? "on" : ""}">${k[1]} ${k[2]}</button>`).join("")}</div>
+    <div class="toolbar"><span class="meta">Contains:</span>
+      ${[["screenshots", "📷 Screenshots"], ["voice", "🎙 Voice recording"], ["checklist", "☑ Checklist"]].map(([h, l]) => `<button data-has="${h}" class="${view.has.includes(h) ? "on" : ""}">${l}</button>`).join("")}
+      <span style="flex:1"></span><input id="q" placeholder="Search posts…" value="${esc(view.q)}">
+      <select id="sort"><option value="top">Most liked</option><option value="new">Newest</option><option value="updated">Recently updated</option></select></div>
+    ${entries.map(card).join("") || '<p class="meta">No posts match.</p>'}`;
+  $("#sort").value = view.sort;
+  $("#back").onclick = () => home();
+  $("#sort").onchange = (e) => { view.sort = e.target.value; renderGame(); };
+  $("#q").onchange = (e) => { view.q = e.target.value; renderGame(); };
+  $("#main").querySelectorAll("[data-kind]").forEach((b) => (b.onclick = () => { const k = b.dataset.kind; view.kinds = view.kinds.includes(k) ? view.kinds.filter((x) => x !== k) : [...view.kinds, k]; renderGame(); }));
+  $("#main").querySelectorAll("[data-has]").forEach((b) => (b.onclick = () => { const k = b.dataset.has; view.has = view.has.includes(k) ? view.has.filter((x) => x !== k) : [...view.has, k]; renderGame(); }));
+  if ($("#newEntry")) $("#newEntry").onclick = () => editEntry(null, { appId: view.appId, gameName: view.gameName });
+  wireCards();
+}
+
+function card(e) {
+  const k = kindOf(e.kind);
+  return `<div class="card" data-id="${esc(e.id)}"><div class="text">
+    <h3>${k[1]} ${esc(e.title)}</h3>
+    <div class="first ${e.spoiler ? "blur" : ""}">${e.spoiler ? "Spoiler" + (e.spoilerLabel ? ": " + esc(e.spoilerLabel) : "") : esc(e.firstLine) || "&nbsp;"}</div>
+    <span class="chip">${k[2]}</span>${view.appId ? "" : `<span class="chip">🎮 ${esc(e.gameName)}</span>`}<span class="chip">${who(e.author)}</span>
+    <span class="chip">♥ ${e.likes}</span><span class="chip">💬 ${e.comments}</span>
+    ${e.hasScreenshots ? '<span class="chip">📷</span>' : ""}${e.hasVoice ? '<span class="chip">🎙</span>' : ""}${e.hasChecklist ? '<span class="chip">☑</span>' : ""}
+    ${e.spoiler ? `<span class="chip">🙈 ${esc(e.spoilerLabel || "Spoiler")}</span>` : ""}${e.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}</div>
+    ${e.thumb ? `<img class="thumb ${e.spoiler ? "blur" : ""}" loading="lazy" src="${media(e.thumb)}">` : ""}</div>`;
+}
+function wireCards() { $("#main").querySelectorAll(".card").forEach((c) => (c.onclick = () => openEntry(c.dataset.id))); }
+
+// ---------- entry view ----------
+async function openEntry(id, revealed = false, prefetched = null) {
+  const e = prefetched || await api(`/api/entries/${encodeURIComponent(id)}`);
+  const dlg = $("#dlg");
+  const k = kindOf(e.kind);
+  const inlined = new Set();
+  const body = esc(e.body).replace(/\[img:(\d+)\]/g, (_, i) => { inlined.add(i - 1); const s = e.screenshots[i - 1]; return s ? `<img src="${media(s.file)}">` : ""; });
+  const hidden = e.spoiler && !revealed;
+  dlg.innerHTML = `
+    <div class="toolbar" style="margin-top:0"><h2 style="margin:0;flex:1">${k[1]} ${esc(e.title)}</h2><button id="close">Close</button></div>
+    <span class="chip">${k[2]}</span><span class="chip">🎮 ${esc(e.gameName)}</span><span class="chip">by ${who(e.author)}</span>
+    <span class="chip">Updated ${date(e.updatedAt)}${e.updatedBy && e.updatedBy.steamId !== e.author.steamId ? " by " + esc(e.updatedBy.name) : ""}</span>
+    ${e.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}
+    <span class="chip">${{ owner: "🔒 Only the poster edits", select: "👥 Selected people edit", anyone: "✏️ Anyone signed in can edit" }[e.editPolicy]}</span>
+    <span class="chip">${e.allowCopy ? "📋 Copying allowed" : "🚫 No copies"}</span>
+    ${hidden ? `<div class="spoiler-gate"><p>🙈 Spoiler${e.spoilerLabel ? `: <b>${esc(e.spoilerLabel)}</b>` : ""}</p><button class="primary" id="reveal">Reveal</button></div>` : `
+      <div class="body">${body || '<span class="meta">(no text)</span>'}</div>
+      ${e.checklist.length ? `<div>${e.checklist.map((c) => `<div>☐ ${esc(c.text)}</div>`).join("")}</div>` : ""}
+      ${e.recordings.map((r) => `<audio controls preload="none" src="${media(r.file)}"></audio>`).join(" ")}
+      <div class="gallery">${e.screenshots.filter((_, i) => !inlined.has(i)).map((s) => `<img src="${media(s.thumb || s.file)}" data-full="${esc(s.file)}">`).join("")}</div>`}
+    <div class="toolbar">
+      <button id="like" class="${e.liked ? "on" : ""}">♥ ${e.likes}</button>
+      ${e.canEdit ? '<button id="edit">✏️ Edit</button>' : ""}<button id="history">🕘 History</button>
+      ${e.canDelete ? '<button id="del" class="danger">Delete</button>' : ""}
+      <span style="flex:1"></span><span class="meta">Copy it to your own notes from the Session Notes plugin on your Deck.</span>
+    </div>
+    <h3>Comments (${e.commentList.length})</h3>
+    ${e.commentList.map((c) => `<div class="comment">${who(c.author)} <small>${date(c.createdAt)}</small> ${c.canDelete ? `<button class="danger" data-delc="${esc(c.id)}" style="float:right">✕</button>` : ""}<p>${esc(c.text)}</p></div>`).join("") || '<p class="meta">No comments yet.</p>'}
+    ${me ? '<textarea id="comment" rows="2" placeholder="Add a comment…"></textarea><div class="toolbar"><button class="primary" id="postComment">Comment</button></div>'
+      : `<p><a href="${signIn()}">Sign in with Steam</a> to like and comment.</p>`}`;
+  $("#close", dlg).onclick = () => dlg.close();
+  if ($("#reveal", dlg)) $("#reveal", dlg).onclick = () => {
+    const draft = $("#comment", dlg)?.value || "";
+    openEntry(id, true, e).then(() => { if ($("#comment", dlg)) $("#comment", dlg).value = draft; });
+  };
+  dlg.querySelectorAll(".gallery img").forEach((img) => (img.onclick = () => window.open(media(img.dataset.full))));
+  $("#like", dlg).onclick = async () => { if (!me) return (location.href = signIn()); await api(`/api/entries/${id}/like`, { method: "POST" }); openEntry(id, revealed); };
+  if ($("#edit", dlg)) $("#edit", dlg).onclick = () => editEntry(e);
+  $("#history", dlg).onclick = () => showHistory(e);
+  if ($("#del", dlg)) $("#del", dlg).onclick = async () => { if (!confirm("Delete this post for everyone?")) return; await api(`/api/entries/${id}`, { method: "DELETE" }); dlg.close(); view.appId ? renderGame() : home(); };
+  if ($("#postComment", dlg)) $("#postComment", dlg).onclick = async () => {
+    const text = $("#comment", dlg).value.trim(); if (!text) return;
+    await api(`/api/entries/${id}/comments`, { method: "POST", json: { text } }); openEntry(id, revealed);
+  };
+  dlg.querySelectorAll("[data-delc]").forEach((b) => (b.onclick = async () => { await api(`/api/comments/${b.dataset.delc}`, { method: "DELETE" }); openEntry(id, revealed); }));
+  if (!dlg.open) dlg.showModal();
+}
+
+async function showHistory(e) {
+  const versions = await api(`/api/entries/${e.id}/history`);
+  const d = $("#dlg2");
+  d.innerHTML = `<h2 style="margin-top:0">Edit history</h2>${versions.map((v) => `<div class="comment"><b>${esc(v.entry.title)}</b> <small>saved ${date(v.savedAt)} · by ${esc(v.savedBy.name)}</small><p class="meta">${esc((v.entry.body || "").slice(0, 200))}</p></div>`).join("") || '<p class="meta">No earlier versions.</p>'}
+    <div class="toolbar"><button id="c2">Close</button></div>`;
+  $("#c2", d).onclick = () => d.close();
+  d.showModal();
+}
+
+// ---------- editor ----------
+async function upload(blob, ext, thumb = false) {
+  return (await api(`/api/uploads?ext=${encodeURIComponent(ext)}${thumb ? "&thumb=1" : ""}`, { method: "POST", body: blob })).file;
+}
+
+function editEntry(orig, defaults) {
+  const isNew = !orig;
+  const e = orig ? structuredClone(orig) : { title: "", body: "", kind: "guide", tags: [], checklist: [], screenshots: [], recordings: [], spoiler: false,
+    spoilerLabel: "", editPolicy: "owner", editors: [], allowCopy: true, appId: defaults.appId || "", gameName: defaults.gameName || "" };
+  const canAdmin = isNew || orig.isAuthor || admin;
+  const d = $("#dlg2");
+  const draw = () => {
+    d.innerHTML = `<h2 style="margin-top:0">${isNew ? "New post" : "Edit post"}</h2>
+      ${isNew ? `<div class="row"><div><label>Game name</label><input id="fGame" style="width:100%" value="${esc(e.gameName)}"></div>
+        <div><label>Steam app ID <a href="https://steamdb.info" target="_blank" class="meta">find it</a></label><input id="fApp" style="width:100%" inputmode="numeric" value="${esc(e.appId)}"></div></div>` : ""}
+      <div class="row"><div style="flex:2"><label>Title</label><input id="fTitle" style="width:100%" value="${esc(e.title)}"></div>
+        <div><label>Type</label><select id="fKind" style="width:100%">${KINDS.map((k) => `<option value="${k[0]}">${k[1]} ${k[2]}</option>`).join("")}</select></div></div>
+      <label>Text <span class="meta">— [img:1] on its own line shows screenshot 1 there</span></label><textarea id="fBody" rows="10">${esc(e.body)}</textarea>
+      <label>Tags (comma separated)</label><input id="fTags" style="width:100%" value="${esc(e.tags.join(", "))}">
+      <label>Checklist</label>${e.checklist.map((c, i) => `<div class="check"><input type="text" data-ci="${i}" value="${esc(c.text)}"><button data-cdel="${i}" class="danger">✕</button></div>`).join("")}
+      <div class="check"><input type="text" id="fNewItem" placeholder="Add an item and press Enter"><button id="fAddItem">Add</button></div>
+      <label>Screenshots</label><div class="toolbar">${e.screenshots.map((s, i) => `<div class="shot"><img src="${media(s.thumb || s.file)}">Screenshot ${i + 1} <button data-sdel="${i}" class="danger">✕</button></div>`).join("")}</div>
+      <input type="file" id="fShots" accept="image/*" multiple>
+      <label>Voice recordings</label>${e.recordings.map((r, i) => `<div class="toolbar"><audio controls preload="none" src="${media(r.file)}"></audio><button data-rdel="${i}" class="danger">✕</button></div>`).join("")}
+      <input type="file" id="fAudio" accept="audio/*">
+      <label><input type="checkbox" id="fSpoiler" ${e.spoiler ? "checked" : ""}> Spoiler: hide it until people choose to reveal</label>
+      <input id="fSpoilerLabel" class="${e.spoiler ? "" : "hidden"}" style="width:100%" placeholder="Spoils what? e.g. Beat the first boss" value="${esc(e.spoilerLabel)}">
+      ${canAdmin ? `<label>Who can edit</label>
+        <select id="fPolicy" style="width:100%"><option value="owner">Only me</option><option value="select">Me and people I choose</option><option value="anyone">Anyone signed in</option></select>
+        <div id="fEditors" class="${e.editPolicy === "select" ? "" : "hidden"}">
+          ${e.editors.map((u, i) => `<span class="chip">${who(u)} <a href="#" data-edel="${i}">✕</a></span>`).join("")}
+          <div class="toolbar"><input id="fUserQ" placeholder="Find people by Steam name…"><button id="fUserFind">Find</button></div><div id="fUserResults"></div>
+        </div>
+        <label><input type="checkbox" id="fCopy" ${e.allowCopy ? "checked" : ""}> Let people copy this into their own notes (their copy is private to them)</label>` : ""}
+      <div class="toolbar" style="margin-top:16px"><button class="primary" id="fSave">${isNew ? "Publish" : "Save"}</button><button id="fCancel">Cancel</button></div>`;
+    $("#fKind", d).value = e.kind;
+    if ($("#fPolicy", d)) $("#fPolicy", d).value = e.editPolicy;
+    wire();
+  };
+  const collect = () => {
+    if (isNew) { e.gameName = $("#fGame", d).value.trim(); e.appId = $("#fApp", d).value.replace(/\D/g, ""); }
+    e.title = $("#fTitle", d).value; e.body = $("#fBody", d).value; e.kind = $("#fKind", d).value;
+    e.tags = $("#fTags", d).value.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean);
+    d.querySelectorAll("[data-ci]").forEach((el) => (e.checklist[el.dataset.ci].text = el.value));
+    e.spoiler = $("#fSpoiler", d).checked; e.spoilerLabel = $("#fSpoilerLabel", d).value;
+    if ($("#fPolicy", d)) { e.editPolicy = $("#fPolicy", d).value; e.allowCopy = $("#fCopy", d).checked; }
+  };
+  const wire = () => {
+    $("#fCancel", d).onclick = () => d.close();
+    $("#fSpoiler", d).onchange = (ev) => $("#fSpoilerLabel", d).classList.toggle("hidden", !ev.target.checked);
+    if ($("#fPolicy", d)) $("#fPolicy", d).onchange = (ev) => $("#fEditors", d).classList.toggle("hidden", ev.target.value !== "select");
+    const add = () => { collect(); const t = $("#fNewItem", d).value.trim(); if (!t) return; e.checklist.push({ id: uid(), text: t }); draw(); $("#fNewItem", d).focus(); };
+    $("#fAddItem", d).onclick = add;
+    $("#fNewItem", d).onkeydown = (ev) => { if (ev.key === "Enter") { ev.preventDefault(); add(); } };
+    d.querySelectorAll("[data-cdel]").forEach((b) => (b.onclick = () => { collect(); e.checklist.splice(+b.dataset.cdel, 1); draw(); }));
+    d.querySelectorAll("[data-sdel]").forEach((b) => (b.onclick = () => { collect(); e.screenshots.splice(+b.dataset.sdel, 1); draw(); }));
+    d.querySelectorAll("[data-rdel]").forEach((b) => (b.onclick = () => { collect(); e.recordings.splice(+b.dataset.rdel, 1); draw(); }));
+    d.querySelectorAll("[data-edel]").forEach((a) => (a.onclick = (ev) => { ev.preventDefault(); collect(); e.editors.splice(+a.dataset.edel, 1); draw(); }));
+    $("#fShots", d).onchange = async (ev) => {
+      collect();
+      for (const f of ev.target.files) {
+        const ext = (f.name.split(".").pop() || "jpg").toLowerCase();
+        e.screenshots.push({ id: uid(), file: await upload(f, ext) });
+      }
+      draw();
+    };
+    $("#fAudio", d).onchange = async (ev) => {
+      collect();
+      for (const f of ev.target.files) e.recordings.push({ id: uid(), file: await upload(f, (f.name.split(".").pop() || "webm").toLowerCase()) });
+      draw();
+    };
+    if ($("#fUserFind", d)) $("#fUserFind", d).onclick = async () => {
+      const users = await api(`/api/users?q=${encodeURIComponent($("#fUserQ", d).value)}`);
+      $("#fUserResults", d).innerHTML = users.filter((u) => u.steamId !== me.steamId).map((u) => `<div class="toolbar">${who(u)} <button data-addu='${esc(JSON.stringify(u))}'>Add</button></div>`).join("") || '<p class="meta">No one found. They need to sign in to the Bookstore once.</p>';
+      d.querySelectorAll("[data-addu]").forEach((b) => (b.onclick = () => { collect(); const u = JSON.parse(b.dataset.addu); if (!e.editors.some((x) => x.steamId === u.steamId)) e.editors.push(u); draw(); }));
+    };
+    $("#fSave", d).onclick = async () => {
+      collect();
+      const payload = { title: e.title, body: e.body, kind: e.kind, tags: e.tags, checklist: e.checklist, screenshots: e.screenshots, recordings: e.recordings,
+        spoiler: e.spoiler, spoilerLabel: e.spoilerLabel, editPolicy: e.editPolicy, editors: e.editors.map((u) => u.steamId), allowCopy: e.allowCopy };
+      try {
+        const saved = isNew ? await api("/api/entries", { method: "POST", json: { ...payload, appId: e.appId, gameName: e.gameName } })
+          : await api(`/api/entries/${orig.id}`, { method: "PUT", json: payload });
+        d.close();
+        if (isNew) await openGame(saved.appId, saved.gameName); else if (view.appId) renderGame(); else home();
+        openEntry(saved.id);
+      } catch (err) { alert(err.message); }
+    };
+  };
+  draw();
+  d.showModal();
+}
+
+// ---------- link a Deck ----------
+function linkPage() {
+  $("#main").innerHTML = `<div style="max-width:420px;margin:8vh auto;text-align:center">
+    <h2>Link your Steam Deck</h2>
+    ${me ? `<p>Type the code shown in Session Notes on your Deck.</p><input id="code" class="code-input" maxlength="9" placeholder="ABCD-1234" autofocus>
+      <div class="toolbar" style="justify-content:center"><button class="primary" id="approve">Link it</button></div><p id="msg"></p>`
+    : `<p>First sign in with the Steam account you want to use on your Deck.</p><a class="steam-btn" href="${signIn("/link")}">Sign in with Steam</a>`}</div>`;
+  if (!me) return;
+  $("#approve").onclick = async () => {
+    try { await api("/api/device/approve", { method: "POST", json: { userCode: $("#code").value } });
+      $("#msg").textContent = "✅ Linked! Your Deck will finish connecting in a few seconds."; }
+    catch (err) { $("#msg").textContent = "⚠️ " + err.message; }
+  };
+}
+
+$("#home").onclick = () => home();
+$("#gameSearch").onchange = (e) => home(e.target.value.trim());
+start();
+</script>
+</body>
+</html>

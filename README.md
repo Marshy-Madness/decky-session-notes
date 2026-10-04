@@ -4,12 +4,13 @@ Per-game notes for the Steam Deck, right in the Quick Access menu. Write down wh
 voice memos and screenshots while you play. Optionally sync everything to your own server, then read and edit it from a
 browser or an Android app.
 
-Three parts, all in this repo:
+Four parts, all in this repo:
 
 | Part | Folder | What it is |
 | --- | --- | --- |
 | **Decky plugin** | `src/`, `main.py`, `py_modules/` | The Quick Access panel on the Deck |
-| **Sync server** | `server/` | Small self-hosted container: two-way sync, web editor, API, webhooks |
+| **Sync server** | `server/` | Self-hosted, multi-user: two-way sync, web editor, sharing, API, webhooks |
+| **Bookstore** | `bookstore/` | Public library where players post notes, guides and tips for everyone |
 | **Android app** | `android/` | Native shell around the web editor, with mic, photo picker and share sheet |
 
 ---
@@ -20,12 +21,18 @@ Three parts, all in this repo:
 - **Wide panel.** The Quick Access menu widens while Session Notes is open (Normal / Wide / Extra wide).
 - **Current** tab: notes for the game you're playing right now.
 - **All** tab: every game you've played or written notes for.
+- **Bookstore** tab: browse what other players posted for your game (see [Bookstore](#bookstore)).
 - **Sort** by Alphabetical, Created, Last Edited or Recent Games. Pinned notes stay on top.
 - **Search** and **tag filters** inside each game.
 
 ### Notes
 - Title plus free-form **information** text.
+- **Types:** Note, Guide, Tip, Walkthrough, Boss strategy, Build / loadout, Collectibles / map, Secret / easter egg,
+  Deck settings, Achievement guide. Filter by type. Guides, walkthroughs and achievement guides also gather in a
+  built-in **Guides** folder.
 - **Screenshots**: attach several at once from the game's Steam screenshots, and place them inside the text with `[img:1]`.
+  **Crop** them with four sliders (gamepad friendly). Optionally **remove them from Steam's screenshot library**
+  once they're attached (the note keeps its own copy), so your Steam screenshots don't fill up.
 - **Voice notes**: record from the Deck's microphone and play back from the note.
 - **Checklists**: tick items off straight from the note view. The list shows progress like "3/7".
 - **Spoiler** notes stay blurred until you choose **Reveal**.
@@ -40,15 +47,21 @@ Three parts, all in this repo:
 - **Where I left off.** A pinned note per game that pops up every time you launch it.
 - **Session recap** (optional): when you quit a game, it asks where you left off and pins your answer for next time.
 - **Screenshot prompt.** Press STEAM + R1 and get offered "New note with it" or "Add to an existing note".
+- **Pin to screen** (experimental): show a note's unchecked to-dos over the game, through Steam's performance overlay.
+  Turn the overlay on (Quick Access → ⚡ → Level 1 or higher). Ticking items off updates it, and it clears when you quit.
 - **Counters.** Death counter, boss attempts (with **Defeated**) and custom counters, with − and + buttons and
   "+3 this session".
 - **Stats** per game: launch count, playtime, last played and a session history.
 
-### Sync (optional)
-Connect the plugin to your own [sync server](#sync-server) under **gear tab → Sync**:
+### Sync and sharing (optional)
+Connect the plugin to your own [sync server](#sync-server) under **gear tab → Sync**. Enter the server address and
+the one-time **pairing code** shown on the website (your name → Devices → Connect a device). Then:
 - Your Deck edits are sent ~20 seconds after you make them.
 - **Check website for changes:** every 1 / 5 / 10 / 30 / 60 minutes, or **Manual only**.
 - Edits made on the website or phone show up on the Deck automatically. The newest edit wins, and deletions sync too.
+- **Share with…** (a note's ☰ menu): share a note with other people on your server, picked by their Steam name.
+  It shows up read-only in their game's **Shared Notes** folder, and they can **copy it** into their own notes to
+  edit (for example, to fill out a checklist).
 
 ### Install
 - From the **Madness Decky Store**, or
@@ -60,6 +73,8 @@ Connect the plugin to your own [sync server](#sync-server) under **gear tab → 
 ## Sync server
 
 A dependency-free Python container (`server/`) that:
+- Has **accounts per person**: sign in with **Steam**, so everyone is known by Steam ID and name. The server owner
+  invites people by Steam ID, or opens sign-ups to anyone. Each person's notes are stored separately.
 - **Syncs both ways** with the Deck, using the same merge rules on both sides (`py_modules/merge.py`).
 - Serves a **web editor** with a phone layout. It can be installed to your home screen.
 - Keeps **version history** for every note (last 50 versions) and the last 30 snapshots of each game.
@@ -91,9 +106,12 @@ services:
 ```
 Put it behind a reverse proxy (e.g. Nginx Proxy Manager) with HTTPS to use it away from home.
 
-### Security
-- The website uses a password login with a 30-day session cookie. Repeated wrong passwords are locked out for 15 minutes.
-- The Deck and API clients use a bearer token.
+### Accounts and security
+- **Steam sign-in** (OpenID, no API key needed) for everyone. The owner can also use the password from `WEB_PASSWORD`,
+  and can link their Steam account from the account menu.
+- **Invite-only** by default. Account → Users: invite by Steam ID or profile link, allow open sign-ups, remove people.
+- **Devices** (Deck, scripts) link with a one-time pairing code and get their own token, which can be unlinked any time.
+- Sessions last 30 days. Repeated wrong passwords or codes are locked out for 15 minutes.
 - Changes made through a browser session require a custom header, which blocks cross-site request forgery.
 
 ### API and webhooks
@@ -102,6 +120,45 @@ See [`server/API.md`](server/API.md). In short:
 - `GET /api/search?q=` searches every game.
 - **Webhooks:** set `WEBHOOK_URLS` to get a JSON event after every change. Prefix a URL with `ntfy+` for plain-text
   [ntfy](https://ntfy.sh) phone notifications.
+
+---
+
+## Bookstore
+
+A separate public container (`bookstore/`) where players publish notes for everyone. It shows up as the
+**Bookstore** tab on the Deck and as a website.
+
+- **Browse** by game, filter by type (Guide, Tip, Boss strategy, …) and by what a post contains (📷 screenshots,
+  🎙 voice recordings, ☑ checklists). Sort by most liked, newest or recently updated.
+- **Publish** any of your notes from its ☰ menu (with its screenshots, voice notes and checklist). Publishing again
+  updates the same post.
+- **Who can edit:** Only me, Me and people I choose (picked by Steam name), or Anyone signed in. Every edit is kept
+  in the post's history.
+- **Allow copies:** let people copy a post into their own notes, where their copy is private (e.g. to tick off a
+  checklist). Copies go to their own notes and sync server, never back into the Bookstore.
+- **Spoiler tag:** hide a post until readers choose to reveal it, with a label like "Beat the first boss" so they
+  know when it's safe.
+- **Likes and comments.**
+- **Sign in with Steam** to post. On the Deck: gear tab → Bookstore → **Link your Steam account**. It shows a code
+  to enter at `<bookstore>/link` on your phone.
+- Admins (`ADMIN_STEAM_IDS`) can delete any post or comment and ban users.
+
+```yaml
+services:
+  bookstore:
+    build:
+      context: /path/to/decky-session-notes
+      dockerfile: bookstore/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8431:8431"
+    volumes:
+      - ./data:/data
+    environment:
+      - ADMIN_STEAM_IDS=7656119xxxxxxxxxx
+```
+
+The plugin points at `https://bookstore.marshymadness.com` by default. Change it under gear tab → Bookstore.
 
 ---
 
