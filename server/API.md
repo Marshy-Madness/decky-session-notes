@@ -2,6 +2,18 @@
 
 Base URL: your server, e.g. `https://steamnotes.marshymadness.com` (or `http://192.168.0.144:8430` on the LAN).
 
+## Accounts
+People sign in on the website with Steam, or with an email and password (`POST /api/signup` `{name, email, password}`,
+then `POST /api/login` `{email, password}`). New accounts are `pending` until the owner approves them under
+Account → Users, unless "Let new people in without approval" is ticked. Invited Steam IDs skip the wait. If
+`WEBHOOK_URLS` is set, the owner gets a `user.pending` notification for each request.
+
+| Request | What it does |
+| --- | --- |
+| `POST /api/account/login` `{email?, password?, current?}` | Set or change your own email and password (`current` is needed once you have a password). For the owner, this password replaces `WEB_PASSWORD` |
+| `POST /api/admin/users/{id}/approve` | Owner only: let a pending account in. Reject it with `DELETE /api/admin/users/{id}` |
+| `POST /api/admin/users/{id}/password` `{password}` | Owner only: set a new password for someone who forgot theirs |
+
 ## Auth
 Every request acts as one user. Get a device token for your account:
 1. On the website: your name → **Devices** → **Connect a device**. Note the code (e.g. `K7P-4QX`).
@@ -19,8 +31,9 @@ Optional: `X-Client: n8n` (or any name) labels where a change came from in webho
 
 | Request | Returns |
 | --- | --- |
-| `GET /api/games` | `[{appId, name, rev, noteCount, lastLaunched, updatedAt}]` |
-| `GET /api/games/{appId}` | `{game, rev}`: the whole record (notes, folders, counters, sessions, leftOff) |
+| `GET /api/games` | `[{appId, name, rev, noteCount, lastLaunched, updatedAt, aliases, icon, image, steamApp, customName}]` |
+| `GET /api/games/{appId}` | `{game, rev}`: the whole record (notes, folders, counters, sessions, leftOff). Works with any of the game's IDs |
+| `GET /api/steam/apps/{appId}` | `{appId, name, found, icon, image, steamApp, yours}`: what Steam calls an app ID, plus its icon and header art. `yours` is your game for that ID, if you have one |
 | `GET /api/search?q=boss` | `[{appId, game, note}]`: matches in titles, information, tags and voice-note transcripts across all games |
 | `GET /api/account` | `{user, speech}`: who the token belongs to, and whether speech to text is on for them |
 | `GET /api/history/{appId}/{noteId}` | Earlier versions of a note, newest first: `[{savedAt, reason, note}]` |
@@ -56,6 +69,18 @@ curl -X POST https://steamnotes.marshymadness.com/api/games/1245620/notes \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"title":"Try the bleed build","tags":["idea"]}'
 ```
+
+### Games: add, rename, link more app IDs
+
+| Request | What it does |
+| --- | --- |
+| `POST /api/games` `{appId, name?}` | Start a game. A Steam app gets its name from Steam (a different `name` becomes your own name for it). Any other ID, such as a non-Steam shortcut's, needs `name`. Returns `{game, existing}` |
+| `POST /api/games/{appId}/name` `{name}` | Your own name for the game. It wins over the name the Deck reports. `""` goes back to that name |
+| `POST /api/games/{appId}/aliases` `{appId}` | Make another app ID point at this game, e.g. a non-Steam game whose shortcut got a new ID. If that ID already has notes, they're merged in (its old record is kept in `merged/` on the server). Returns `{game, aliases}` |
+| `DELETE /api/games/{appId}/aliases/{otherId}` | Unlink an ID again. Notes stay where they are; a device that still uses that ID starts a separate copy on its next sync |
+
+Every endpoint accepts any of a game's IDs. Syncs answer under the ID you sent, so a Deck keeps its own shortcut ID.
+`GET /api/games` lists each game once for the website. A device sees each game under the ID(s) it has synced it with.
 
 ### Copy a Bookstore post into your notes
 `POST /api/import/bookstore` with `{"id": "<entry id>"}`. The server downloads the post and its media from

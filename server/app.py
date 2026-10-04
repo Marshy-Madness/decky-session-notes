@@ -1,7 +1,8 @@
 """Session Notes sync server: multi-user two-way sync for the Decky plugin, web editor, sharing, API, webhooks.
 
 Sign-in:
-- Website: "Sign in with Steam", or the owner password (WEB_PASSWORD).
+- Website: "Sign in with Steam", email + password, or the owner password (WEB_PASSWORD until one is set on the website).
+  New accounts wait for the owner's approval unless sign-ups are open.
 - Deck / Android / API: a device token, obtained with a pairing code from the website.
   The legacy API_TOKEN still works and belongs to the owner.
 """
@@ -25,7 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import merge
 import speech
 import steam
-from accounts import OWNER_ID, Accounts
+from accounts import OWNER_ID, Accounts, check_password
 
 DATA = os.environ.get("DATA_DIR", "/data")
 WEB_PASSWORD = os.environ.get("WEB_PASSWORD") or "AdminPassword"
@@ -66,17 +67,118 @@ def safe(name: str) -> str:
 # ---------- per-user game storage ----------
 
 class Store:
+    """One user's games. A game can answer to several app IDs (e.g. a non-Steam game whose shortcut ID changed,
+    or the same game on two devices): aliases.json maps each extra ID to the game's main ID, and everything
+    (record, media, history) lives under the main ID."""
+
     def __init__(self, uid: str):
         self.uid = uid
         self.root = accounts.user_dir(uid)
         self.history = merge.NoteHistory(os.path.join(self.root, "note_history"))
         self.transcripts = speech.Transcripts(os.path.join(self.root, "transcripts.json"))
+        self.aliases_path = os.path.join(self.root, "aliases.json")
+        self.devices_path = os.path.join(self.root, "device_ids.json")
+
+    def aliases(self) -> dict:
+        if os.path.exists(self.aliases_path):
+            with open(self.aliases_path) as f:
+                return json.load(f)
+        return {}
+
+    def _save_json(self, path: str, data):
+        os.makedirs(self.root, exist_ok=True)
+        with open(path + ".tmp", "w") as f:
+            json.dump(data, f, indent=2)
+        os.replace(path + ".tmp", path)
+
+    def canon(self, appid: str) -> str:
+        return self.aliases().get(str(appid), str(appid))
+
+    def aliases_of(self, appid: str) -> list:
+        return sorted(a for a, c in self.aliases().items() if c == appid)
 
     def game_path(self, appid: str) -> str:
-        return os.path.join(self.root, "games", f"{appid}.json")
+        return os.path.join(self.root, "games", f"{self.canon(appid)}.json")
 
     def media_path(self, appid: str, file: str = "") -> str:
-        return os.path.join(self.root, "media", appid, file)
+        return os.path.join(self.root, "media", self.canon(appid), file)
+
+    def add_alias(self, appid: str, other: str, source: str) -> dict:
+        """Make `other` another ID for `appid`. If `other` already has notes, they're merged in."""
+        with write_lock:
+            target, other = self.canon(appid), str(other)
+            if self.canon(other) == target:
+                return self.read(target)[0]
+            aliases = self.aliases()
+            old_main = aliases.get(other, other)
+            old_path = os.path.join(self.root, "games", f"{old_main}.json")
+            old = None
+            if os.path.exists(old_path):
+                with open(old_path) as f:
+                    old = json.load(f)
+            # The other game (and any IDs that already pointed at it) now point here.
+            for a, c in list(aliases.items()):
+                if c == old_main:
+                    aliases[a] = target
+            aliases[old_main] = target
+            aliases[other] = target
+            self._save_json(self.aliases_path, aliases)
+            if old is not None:
+                src = os.path.join(self.root, "media", old_main)
+                if os.path.isdir(src):
+                    dst = self.media_path(target)
+                    os.makedirs(dst, exist_ok=True)
+                    for name in os.listdir(src):
+                        if not os.path.exists(os.path.join(dst, name)):
+                            shutil.move(os.path.join(src, name), os.path.join(dst, name))
+                for key, entry in self.transcripts.load().items():
+                    if key.startswith(old_main + "/"):
+                        self.transcripts.put(target, key.split("/", 1)[1], entry)
+                hist = os.path.join(self.root, "note_history", old_main)
+                if os.path.isdir(hist):
+                    dst = os.path.join(self.root, "note_history", target)
+                    os.makedirs(dst, exist_ok=True)
+                    for name in os.listdir(hist):
+                        if not os.path.exists(os.path.join(dst, name)):
+                            shutil.move(os.path.join(hist, name), os.path.join(dst, name))
+                mine, _ = self.read(target)
+                old.pop("customName", None), old.pop("customNameAt", None)  # keep this game's name
+                if mine and mine.get("name") and mine.get("name") != target:
+                    old["name"] = mine["name"]
+                old["appId"] = target
+                self.sync(target, old, source)
+                kept = os.path.join(self.root, "merged", f"{old_main}-{now_ms()}.json")
+                os.makedirs(os.path.dirname(kept), exist_ok=True)
+                shutil.move(old_path, kept)
+        return self.read(target)[0]
+
+    def remove_alias(self, appid: str, other: str) -> bool:
+        with write_lock:
+            aliases = self.aliases()
+            if aliases.get(str(other)) != self.canon(appid):
+                return False
+            del aliases[str(other)]
+            self._save_json(self.aliases_path, aliases)
+            return True
+
+    # Each device keeps games under the IDs it knows. Remember which ones it used, so the game list
+    # shows a device a game under its own ID instead of handing it a duplicate under the main one.
+    def device_ids(self, device: str) -> set:
+        if os.path.exists(self.devices_path):
+            with open(self.devices_path) as f:
+                return set(json.load(f).get(device, []))
+        return set()
+
+    def mark_device_id(self, device: str, appid: str):
+        if appid in self.device_ids(device):
+            return
+        with write_lock:
+            data = {}
+            if os.path.exists(self.devices_path):
+                with open(self.devices_path) as f:
+                    data = json.load(f)
+            data[device] = sorted(set(data.get(device, [])) | {appid})
+            self._save_json(self.devices_path, data)
 
     def read(self, appid: str):
         path = self.game_path(appid)
@@ -106,6 +208,7 @@ class Store:
         return sorted(n[:-5] for n in os.listdir(gdir) if n.endswith(".json")) if os.path.isdir(gdir) else []
 
     def sync(self, appid: str, incoming: dict, source: str) -> dict:
+        appid = self.canon(appid)
         incoming["appId"] = appid
         with write_lock:
             stored, rev = self.read(appid)
@@ -126,6 +229,7 @@ class Store:
 
     def fill_transcripts(self, appid: str, game: dict) -> list:
         """Copy known transcripts onto voice notes (in place). Returns the files that still need one."""
+        appid = self.canon(appid)
         cache, missing = None, []
         for n in game.get("notes", []):
             for r in n.get("recordings") or []:
@@ -142,6 +246,7 @@ class Store:
 
     def transcribe_file(self, appid: str, file: str) -> str:
         """Transcribe one stored voice note, remember the text and add it to the note."""
+        appid = self.canon(appid)
         with open(self.media_path(appid, file), "rb") as f:
             audio = f.read()
         game, _ = self.read(appid)
@@ -285,7 +390,7 @@ class Transcriber:
             uid, appid, file = key = self.q.get()
             try:
                 store = Store(uid)
-                if accounts.speech_allowed(accounts.get(uid)) and not store.transcripts.get(appid, file) \
+                if accounts.speech_allowed(accounts.get(uid)) and not store.transcripts.get(store.canon(appid), file) \
                         and os.path.exists(store.media_path(appid, file)):
                     store.transcribe_file(appid, file)
                     print(f"transcribed {uid}/{appid}/{file}", flush=True)
@@ -365,6 +470,35 @@ def send_webhooks(urls: list, game: dict, events: list, source: str):
             print(f"webhook to {url.split('?')[0]} failed: {e}", flush=True)
 
 
+def notify_owner(event: str, text: str, **extra):
+    """Tell the owner something about the server itself (e.g. someone asked for an account)."""
+    payload = {"source": "server", "event": event, "at": now_ms(), "summary": [text], "url": PUBLIC_URL or None, **extra}
+
+    def post():
+        for url in user_webhooks(OWNER_ID):
+            try:
+                if url.startswith("ntfy+"):
+                    req = urllib.request.Request(url[5:], data=text.encode(), method="POST")
+                    req.add_header("Title", "Session Notes")
+                    req.add_header("Tags", "bust_in_silhouette")
+                    if PUBLIC_URL:
+                        req.add_header("Click", PUBLIC_URL)
+                else:
+                    req = urllib.request.Request(url, data=json.dumps(payload).encode(), method="POST")
+                    req.add_header("Content-Type", "application/json")
+                urllib.request.urlopen(req, timeout=10).read()
+            except Exception as e:
+                print(f"webhook to {url.split('?')[0]} failed: {e}", flush=True)
+    threading.Thread(target=post, daemon=True).start()
+
+
+def user_is_pending(user: dict):
+    if user and user.get("status") == "pending":
+        how = user.get("email") or f"Steam {user.get('steamId')}"
+        notify_owner("user.pending", f"{user.get('name')} ({how}) asked for an account. Approve it under Account → Users.",
+                     userId=user["id"])
+
+
 # ---------- HTTP ----------
 
 class Handler(BaseHTTPRequestHandler):
@@ -411,10 +545,12 @@ class Handler(BaseHTTPRequestHandler):
         return c + ("; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else "")
 
     def current_user(self, mutating: bool = False):
-        """The signed-in user (device token or web session), or None."""
+        """The signed-in user (device token or web session), or None. Sets self.device to the token's ID."""
+        self.device = None
         auth = self.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
-            return accounts.token_user(auth[7:])
+            user, self.device = accounts.token_lookup(auth[7:])
+            return user
         user = accounts.session_user(self.session_id())
         # Browser changes need a custom header, which other sites can't send (CSRF protection).
         if user and mutating and self.headers.get("X-Requested-With") != "session-notes":
@@ -488,9 +624,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"ok": True})
         if p[1:] == ["me"]:
             u = accounts.session_user(self.session_id())
-            return self.send(200, {"loggedIn": bool(u), "user": accounts.public(u) if u else None,
+            return self.send(200, {"loggedIn": bool(u), "user": {**accounts.public(u), "email": u.get("email"),
+                                                                  "hasPassword": bool(u.get("password"))} if u else None,
                                    "androidApp": os.path.exists(APK_PATH), "bookstoreUrl": BOOKSTORE_URL,
-                                   "speech": speech_on(u)})
+                                   "speech": speech_on(u), "signups": "open" if accounts.db.get("allowSignups") else "approval",
+                                   "pendingUsers": len(accounts.pending()) if u and u.get("role") == "owner" else 0})
 
         user = self.current_user()
         if not user:
@@ -500,16 +638,17 @@ class Handler(BaseHTTPRequestHandler):
         if p[1:] == ["account"]:  # for devices: who am I, and what may I use
             return self.send(200, {"user": accounts.public(user), "speech": speech_on(user)})
         if p[1:] == ["games"]:
-            out = []
-            for appid in store.appids():
-                g, rev = store.read(appid)
-                out.append({"appId": g.get("appId"), "name": g.get("name"), "rev": rev, "noteCount": len(g.get("notes", [])),
-                            "lastLaunched": g.get("lastLaunched"),
-                            "updatedAt": int(os.path.getmtime(store.game_path(appid)) * 1000)})
-            return self.send(200, out)
+            return self.send(200, self.list_games(store))
         if len(p) == 3 and p[1] == "games":
-            g, rev = store.read(safe(p[2]))
-            return self.send(200, {"game": g, "rev": rev}) if g else self.send(404, {"error": "no such game"})
+            appid = safe(p[2])
+            g, rev = store.read(appid)
+            return self.send(200, {"game": {**g, "appId": appid}, "rev": rev}) if g else self.send(404, {"error": "no such game"})
+        if len(p) == 4 and p[1:3] == ["steam", "apps"]:  # name + icon for an app ID, to show before adding it
+            appid = safe(p[3])
+            info = steam.apps([appid]).get(appid) or {"appId": appid, "name": None, "found": False, "icon": None, "image": None}
+            g, _ = store.read(appid) if appid.isdigit() else (None, None)
+            return self.send(200, {**info, "steamApp": steam.is_steam_app(appid),
+                                   "yours": {"appId": g["appId"], "name": g.get("name")} if g else None})
         if p[1:] == ["search"]:
             q = self.query().get("q", "").lower().strip()
             hits = []
@@ -521,10 +660,10 @@ class Handler(BaseHTTPRequestHandler):
                         hits.append({"appId": g.get("appId"), "game": g.get("name"), "note": n})
             return self.send(200, hits)
         if len(p) == 4 and p[1] == "history":
-            return self.send(200, list(reversed(store.history.get(safe(p[2]), safe(p[3])))))
+            return self.send(200, list(reversed(store.history.get(store.canon(safe(p[2])), safe(p[3])))))
         if len(p) == 3 and p[1] == "deleted":
             g, _ = store.read(safe(p[2]))
-            return self.send(200, store.history.deleted(p[2], (g or {}).get("notes", [])))
+            return self.send(200, store.history.deleted(store.canon(safe(p[2])), (g or {}).get("notes", [])))
         if len(p) == 3 and p[1] == "media":
             d = store.media_path(safe(p[2]))
             return self.send(200, sorted(os.listdir(d)) if os.path.isdir(d) else [])
@@ -569,12 +708,42 @@ class Handler(BaseHTTPRequestHandler):
         if p[1:] == ["settings"]:
             return self.send(200, {"webhooks": user.get("webhooks", [])})
         if p[1:] == ["admin"] and user["role"] == "owner":
-            return self.send(200, {"users": [{**accounts.public(u), "speech": accounts.speech_allowed(u)}
+            return self.send(200, {"users": [{**accounts.public(u), "speech": accounts.speech_allowed(u), "email": u.get("email"),
+                                              "status": u.get("status", "active"), "createdAt": u.get("createdAt")}
                                              for u in accounts.db["users"].values()],
                                    "invites": accounts.db.get("invites", []),
                                    "allowSignups": accounts.db.get("allowSignups", False),
                                    "speechAvailable": speech.enabled()})
         return self.send(404, {"error": "not found"})
+
+    def list_games(self, store: Store) -> list:
+        """Every game once, under its main ID with its other IDs in `aliases`. A device instead sees each game
+        under the ID(s) it has used for it, so it never gets a second copy under an ID it doesn't know."""
+        aliases = store.aliases()
+        appids = store.appids()
+        art = steam.apps(appids + list(aliases), fetch=not self.device)  # devices: don't wait on Steam
+        seen = store.device_ids(self.device) if self.device else None
+        out = []
+        for appid in appids:
+            g, rev = store.read(appid)
+            ids = [appid] + sorted(a for a, c in aliases.items() if c == appid)
+            pic = next((art[i] for i in ids if i in art and art[i]["found"]), {})
+            entry = {"appId": appid, "name": g.get("name"), "rev": rev, "noteCount": len(g.get("notes", [])),
+                     "lastLaunched": g.get("lastLaunched"), "updatedAt": int(os.path.getmtime(store.game_path(appid)) * 1000),
+                     "aliases": ids[1:], "icon": pic.get("icon"), "image": pic.get("image"),
+                     "steamApp": any(steam.is_steam_app(i) for i in ids), "customName": bool(g.get("customName"))}
+            if seen is None:
+                out.append(entry)
+            else:
+                out += [{**entry, "appId": i} for i in ([i for i in ids if i in seen] or [appid])]
+        return out
+
+    def sync_game(self, store: Store, appid: str) -> dict:
+        """A sync answered under the ID the client asked with, even when that's another ID for the game."""
+        res = store.sync(appid, self.json_body(), self.source())
+        if self.device:
+            store.mark_device_id(self.device, appid)
+        return res if res["game"]["appId"] == appid else {"game": {**res["game"], "appId": appid}, "rev": res["rev"]}
 
     def steam_callback(self):
         q = self.query()
@@ -588,8 +757,11 @@ class Handler(BaseHTTPRequestHandler):
         if not steam_id:
             return self.redirect("/?error=" + urllib.parse.quote("Steam sign-in failed. Try again."))
         current = accounts.session_user(self.session_id())
+        new = not accounts.by_steam(steam_id)
         user, err = accounts.login_steam(steam_id, steam.profile(steam_id), current["id"] if (link and current) else None)
         if err:
+            if new:
+                user_is_pending(accounts.by_steam(steam_id))
             return self.redirect("/?error=" + urllib.parse.quote(err))
         return self.redirect("/", self.cookie_for(accounts.new_session(user["id"])))
 
@@ -602,14 +774,36 @@ class Handler(BaseHTTPRequestHandler):
 
     def _post(self):
         p = self.parts()
-        if p == ["api", "login"]:  # owner password
+        if p == ["api", "login"]:  # email + password, or just the owner password
             if self.throttled():
                 return self.send(429, {"error": "Too many attempts. Try again in 15 minutes."})
-            password = (self.json_body().get("password") or "")
-            if not hmac.compare_digest(password.encode(), WEB_PASSWORD.encode()):
+            data = self.json_body()
+            password, email = str(data.get("password") or ""), str(data.get("email") or "").strip()
+            if email:
+                user, err = accounts.login_email(email, password)
+                if not user:
+                    if "approve" not in err:
+                        self.failed()
+                    return self.send(403 if "approve" in err else 401, {"error": err})
+                uid = user["id"]
+            elif accounts.check_owner_password(password):
+                uid = OWNER_ID
+            else:
                 self.failed()
                 return self.send(401, {"error": "Wrong password"})
-            return self.send(200, {"ok": True}, headers={"Set-Cookie": self.cookie_for(accounts.new_session(OWNER_ID))})
+            return self.send(200, {"ok": True}, headers={"Set-Cookie": self.cookie_for(accounts.new_session(uid))})
+        if p == ["api", "signup"]:
+            if self.throttled():
+                return self.send(429, {"error": "Too many attempts. Try again in 15 minutes."})
+            data = self.json_body()
+            user, err = accounts.signup_email(str(data.get("email") or ""), str(data.get("password") or ""), str(data.get("name") or ""))
+            if not user:
+                self.failed()  # also slows down guessing which emails have accounts
+                return self.send(400, {"error": err})
+            if not accounts.active(user):
+                user_is_pending(user)
+                return self.send(200, {"pending": True})
+            return self.send(200, {"pending": False}, headers={"Set-Cookie": self.cookie_for(accounts.new_session(user["id"]))})
         if p == ["api", "logout"]:
             accounts.end_session(self.session_id())
             return self.send(200, {"ok": True}, headers={"Set-Cookie": f"{COOKIE}=; Path=/; Max-Age=0"})
@@ -629,9 +823,29 @@ class Handler(BaseHTTPRequestHandler):
         store = Store(user["id"])
 
         if len(p) == 3 and p[:2] == ["api", "sync"]:
-            return self.send(200, store.sync(safe(p[2]), self.json_body(), self.source()))
+            return self.send(200, self.sync_game(store, safe(p[2])))
         if len(p) == 4 and p[:2] == ["api", "games"] and p[3] == "notes":
             return self.add_note(store, safe(p[2]), self.json_body())
+        if p == ["api", "games"]:
+            return self.add_game(store, self.json_body())
+        if len(p) == 4 and p[:2] == ["api", "games"] and p[3] == "name":
+            return self.rename_game(store, safe(p[2]), str(self.json_body().get("name") or "").strip())
+        if len(p) == 4 and p[:2] == ["api", "games"] and p[3] == "aliases":
+            appid, other = safe(p[2]), str(self.json_body().get("appId") or "").strip()
+            if not other.isdigit():
+                return self.send(400, {"error": "An app ID is a number, e.g. 1245620"})
+            if not store.read(appid)[0]:
+                return self.send(404, {"error": "no such game"})
+            game = store.add_alias(appid, other, self.source())
+            return self.send(200, {"game": game, "aliases": store.aliases_of(game["appId"])})
+        if p == ["api", "account", "login"]:  # set my email and/or password
+            data = self.json_body()
+            if user.get("password") and not check_password(str(data.get("current") or ""), user["password"]):
+                return self.send(403, {"error": "Your current password is wrong"})
+            err = accounts.set_login(user["id"], email=data["email"] if "email" in data else None,
+                                     password=data["password"] if data.get("password") else None)
+            u = accounts.get(user["id"])
+            return self.send(400, {"error": err}) if err else self.send(200, {"email": u.get("email"), "hasPassword": bool(u.get("password"))})
         if p == ["api", "import", "bookstore"]:
             try:
                 return self.send(200, import_from_bookstore(store, str(self.json_body().get("id", "")), self.source()))
@@ -675,6 +889,14 @@ class Handler(BaseHTTPRequestHandler):
                     accounts.db["invites"].append(sid)
                     accounts.save()
                 return self.send(200, {"invites": accounts.db["invites"]})
+            if p[2] == "users" and len(p) == 5 and p[4] == "approve":
+                return self.send(200, {"ok": accounts.approve(safe(p[3]))})
+            if p[2] == "users" and len(p) == 5 and p[4] == "password":
+                target = accounts.get(safe(p[3]))
+                if not target or target.get("role") == "owner":
+                    return self.send(400, {"error": "no such user"})
+                err = accounts.set_login(target["id"], password=str(data.get("password") or ""))
+                return self.send(400, {"error": err}) if err else self.send(200, {"ok": True})
             if p[2] == "users" and len(p) == 5 and p[4] == "speech":
                 uid = safe(p[3])
                 if not accounts.set_speech(uid, bool(data.get("allowed"))):
@@ -720,6 +942,38 @@ class Handler(BaseHTTPRequestHandler):
             print(f"transcribe failed: {e}", flush=True)
             return self.send(502, {"error": "The speech server didn't answer. Try again in a minute."})
 
+    def add_game(self, store: Store, data: dict):
+        """{appId, name?}: start a game from the website. Steam games get their name from Steam; anything else
+        (a non-Steam shortcut's ID) needs a name."""
+        appid, name = str(data.get("appId") or "").strip(), str(data.get("name") or "").strip()[:120]
+        if not appid.isdigit():
+            return self.send(400, {"error": "An app ID is a number, e.g. 1245620"})
+        existing, _ = store.read(appid)
+        if existing:
+            return self.send(200, {"game": existing, "existing": True})
+        info = steam.apps([appid]).get(appid) or {}
+        if not name and not info.get("name"):
+            return self.send(404, {"error": f"Steam doesn't know app {appid}. Type a name to add it as a non-Steam game."})
+        now = now_ms()
+        game = {"appId": appid, "name": info.get("name") or name, "notes": [], "firstSeen": now}
+        if name and info.get("name") and name != info["name"]:
+            game.update(customName=name, customNameAt=now)
+        return self.send(200, {"game": store.sync(appid, game, self.source())["game"], "existing": False})
+
+    def rename_game(self, store: Store, appid: str, name: str):
+        """Give a game your own name (empty = go back to the name Steam or the Deck reports)."""
+        stored, _ = store.read(appid)
+        if not stored:
+            return self.send(404, {"error": "no such game"})
+        now = now_ms()
+        if name:
+            change = {"name": stored.get("name"), "customName": name[:120], "customNameAt": now}
+        else:
+            main = stored["appId"]
+            steam_name = next((a["name"] for a in steam.apps([main] + store.aliases_of(main)).values() if a["found"]), None)
+            change = {"name": stored.get("baseName") or steam_name or main, "customName": None, "customNameAt": now}
+        return self.send(200, {"game": store.sync(appid, change, self.source())["game"]})
+
     def add_note(self, store: Store, appid: str, data: dict):
         """Quick-add for automations: {title, body?, tags?, checklist?: [text], pinned?, kind?, gameName?}."""
         if not str(data.get("title", "")).strip():
@@ -746,7 +1000,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(401, {"error": "unauthorized"})
             store = Store(user["id"])
             if len(p) == 3 and p[:2] == ["api", "games"]:  # older plugin builds
-                return self.send(200, store.sync(safe(p[2]), self.json_body(), self.source()))
+                return self.send(200, self.sync_game(store, safe(p[2])))
             if len(p) == 4 and p[:2] == ["api", "media"]:
                 d = store.media_path(safe(p[2]))
                 os.makedirs(d, exist_ok=True)
@@ -777,6 +1031,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"ok": len(keep) < len(shares)})
             if len(p) == 3 and p[:2] == ["api", "devices"]:
                 return self.send(200, {"ok": accounts.revoke_token(user["id"], p[2])})
+            if len(p) == 5 and p[:2] == ["api", "games"] and p[3] == "aliases":
+                store = Store(user["id"])
+                main = store.canon(safe(p[2]))
+                return self.send(200, {"ok": store.remove_alias(main, safe(p[4])), "aliases": store.aliases_of(main)})
             if len(p) >= 4 and p[:2] == ["api", "admin"] and user["role"] == "owner":
                 if p[2] == "invites":
                     accounts.db["invites"] = [i for i in accounts.db.get("invites", []) if i != p[3]]
@@ -794,7 +1052,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    if WEB_PASSWORD == "AdminPassword":
+    if WEB_PASSWORD == "AdminPassword" and not (accounts.get(OWNER_ID) or {}).get("password"):
         print("NOTE: the owner password is the default (AdminPassword). Set WEB_PASSWORD to change it.", flush=True)
     port = int(os.environ.get("PORT", "8430"))
     print(f"Session Notes server on :{port}, data in {DATA}", flush=True)

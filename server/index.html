@@ -46,7 +46,15 @@
   .shot img { width: 180px; height: 101px; object-fit: cover; border-radius: 6px; display: block; }
   .check { display: flex; gap: 8px; align-items: center; padding: 3px 0; } .check input[type=text] { flex: 1; }
   #login { max-width: 340px; margin: 18vh auto; background: var(--panel); padding: 24px; border-radius: 10px; }
-  #login input { width: 100%; margin: 12px 0; } .err { color: var(--danger); font-size: 13px; min-height: 18px; }
+  #login input { width: 100%; margin: 6px 0; } .err { color: var(--danger); font-size: 13px; min-height: 18px; }
+  .ok { color: #46c37b; font-size: 13px; } #login a { color: #66c0f4; }
+  .badge { background: var(--danger); color: #fff; border-radius: 9px; font-size: 11px; padding: 0 6px; margin-left: 4px; }
+  nav .gicon, .gicon { width: 32px; height: 32px; border-radius: 4px; object-fit: cover; background: #2c323d; flex: none; }
+  nav button.game { display: flex; gap: 10px; align-items: center; } nav button.game .t { flex: 1; min-width: 0; }
+  .gicon.ph { display: inline-flex; align-items: center; justify-content: center; font-size: 16px; }
+  .gamehead { display: flex; gap: 12px; align-items: center; } .gamehead .gicon { width: 44px; height: 44px; }
+  .lookup { display: flex; gap: 12px; align-items: center; min-height: 60px; background: #171a20; border-radius: 8px; padding: 8px 12px; margin: 8px 0; }
+  .lookup img { width: 120px; height: 56px; object-fit: cover; border-radius: 4px; }
   .hidden { display: none !important; }
   .steam-btn { display: block; text-align: center; background: #171a21; border: 1px solid #66c0f4; color: #66c0f4; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: 600; margin: 14px 0 6px; }
   .steam-btn:hover { background: #1b2838; }
@@ -98,10 +106,15 @@
   <h2 style="margin-top:0">📝 Session Notes</h2>
   <a href="/auth/steam" class="steam-btn">Sign in with Steam</a>
   <div class="err" id="loginErr"></div>
-  <details><summary class="meta" style="cursor:pointer">Server owner? Use the password</summary>
-    <input id="password" type="password" placeholder="Owner password" autocomplete="current-password">
-    <button class="primary" style="width:100%">Log in</button>
-  </details>
+  <div class="ok" id="loginOk"></div>
+  <div class="meta" style="text-align:center;margin:10px 0 0">or with email</div>
+  <input id="signupName" class="hidden" placeholder="Your name" autocomplete="nickname" maxlength="60">
+  <input id="email" type="email" placeholder="Email" autocomplete="username">
+  <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+  <button class="primary" id="loginBtn" style="width:100%">Log in</button>
+  <p class="meta hidden" id="signupNote"></p>
+  <p class="meta" style="text-align:center"><a href="#" id="toggleSignup">New here? Create an account</a></p>
+  <p class="meta" id="ownerHint">Server owner: leave the email empty and use the owner password.</p>
 </form>
 
 <div id="app" class="hidden">
@@ -138,15 +151,31 @@ async function api(path, opts = {}) {
 }
 
 // ---------- login ----------
-function showLogin() { $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); $("#password").focus(); }
+function showLogin() { $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); $("#email").focus(); }
+let signingUp = false;
+function setSignup(on) {
+  signingUp = on;
+  $("#signupName").classList.toggle("hidden", !on);
+  $("#ownerHint").classList.toggle("hidden", on);
+  $("#signupNote").classList.toggle("hidden", !on);
+  $("#signupNote").textContent = "The server owner approves new accounts before you can sign in.";
+  $("#loginBtn").textContent = on ? "Create account" : "Log in";
+  $("#toggleSignup").textContent = on ? "Already have an account? Log in" : "New here? Create an account";
+  $("#password").autocomplete = on ? "new-password" : "current-password";
+  $("#password").placeholder = on ? "Password (8+ characters)" : "Password";
+}
+$("#toggleSignup").onclick = (e) => { e.preventDefault(); $("#loginErr").textContent = ""; setSignup(!signingUp); };
 $("#login").onsubmit = async (e) => {
   e.preventDefault();
-  $("#loginErr").textContent = "";
+  $("#loginErr").textContent = $("#loginOk").textContent = "";
   try {
-    const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: $("#password").value }) });
+    const body = signingUp ? { name: $("#signupName").value, email: $("#email").value, password: $("#password").value }
+      : { email: $("#email").value, password: $("#password").value };
+    const r = await fetch(signingUp ? "/api/signup" : "/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error);
     $("#password").value = "";
+    if (data.pending) { setSignup(false); $("#loginOk").textContent = "Thanks! You can log in once the server owner approves your account."; return; }
     start();
   } catch (err) { $("#loginErr").textContent = err.message; }
 };
@@ -155,26 +184,31 @@ if (window.SessionNotesApp) {
   $("#changeServer").onclick = () => window.SessionNotesApp.changeServer();
 }
 const loginError = new URLSearchParams(location.search).get("error");
-if (loginError) { $("#loginErr").textContent = loginError; history.replaceState(null, "", "/"); }
+if (loginError) { $(/approve/.test(loginError) ? "#loginOk" : "#loginErr").textContent = loginError; history.replaceState(null, "", "/"); }
 // "Save to my notes" from the Bookstore links here as /?import=bookstore:<entryId>. Kept across a sign-in.
 const importParam = new URLSearchParams(location.search).get("import");
 if (importParam?.startsWith("bookstore:")) { sessionStorage.setItem("sn-import", importParam.slice(10)); history.replaceState(null, "", "/"); }
 
 // ---------- state ----------
 let games = [], game = null, folderFilter = "all", kindFilter = "all", sortMode = localStorage.getItem("sn-sort") || "edited";
-let me = null, sharedWithMe = [], speechOn = false;
+let me = null, sharedWithMe = [], speechOn = false, pendingUsers = 0;
 const KINDS = [["note", "📝", "Note"], ["guide", "📘", "Guide"], ["tip", "💡", "Tip"], ["walkthrough", "🧭", "Walkthrough"],
   ["boss", "⚔️", "Boss strategy"], ["build", "🛡️", "Build / loadout"], ["collectibles", "🗺️", "Collectibles / map"],
   ["secret", "🔮", "Secret / easter egg"], ["settings", "⚙️", "Deck settings"], ["achievement", "🏆", "Achievement guide"]];
 const GUIDE_KINDS = ["guide", "walkthrough", "achievement"];
 const kindOf = (k) => KINDS.find((x) => x[0] === (k || "note")) || KINDS[0];
 
+function paintAccount() {
+  $("#account").innerHTML = `${me.avatar ? `<img src="${esc(me.avatar)}">` : "👤"}<span class="hide-sm">${esc(me.name)}</span>${pendingUsers ? `<span class="badge" title="People waiting for approval">${pendingUsers}</span>` : ""}`;
+}
+
 async function start() {
   const info = await (await fetch("/api/me")).json();
   if (!info.loggedIn) return showLogin();
   me = info.user;
   speechOn = !!info.speech;
-  $("#account").innerHTML = `${me.avatar ? `<img src="${esc(me.avatar)}">` : "👤"}<span class="hide-sm">${esc(me.name)}</span>`;
+  pendingUsers = info.pendingUsers || 0;
+  paintAccount();
   $("#account").onclick = accountDialog;
   if (info.androidApp && !window.SessionNotesApp && /Android/i.test(navigator.userAgent)) $("#getApp").classList.remove("hidden");
   if (info.bookstoreUrl && !window.SessionNotesApp?.openBookstore) { $("#bookstoreLink").href = info.bookstoreUrl; $("#bookstoreLink").classList.remove("hidden"); }
@@ -199,10 +233,12 @@ async function loadGames() {
     else games.push({ appId: s.appId, name: s.gameName || s.appId, noteCount: 0, sharedCount: 1, lastLaunched: 0 });
   }
   games.sort((a, b) => (b.lastLaunched ?? 0) - (a.lastLaunched ?? 0));
-  $("#games").innerHTML = games.map((g) => `<button data-id="${esc(g.appId)}" class="${g.appId === game?.appId ? "active" : ""}">${esc(g.name)}<br><small>${g.noteCount} notes${g.sharedCount ? ` · 👥 ${g.sharedCount} shared` : ""} · last played ${day(g.lastLaunched)}</small></button>`).join("") || '<p class="meta" style="padding:16px">Nothing synced yet. Turn on sync in the Deck plugin.</p>';
-  $("#games").querySelectorAll("button").forEach((b) => (b.onclick = () => openGame(b.dataset.id)));
+  $("#games").innerHTML = '<button id="addGame" class="game"><span class="gicon ph">＋</span><span class="t">Add a game</span></button>' +
+    (games.map((g) => `<button data-id="${esc(g.appId)}" class="game ${g.appId === game?.appId ? "active" : ""}">${gameIcon(g)}<span class="t">${esc(g.name)}<br><small>${g.noteCount} notes${g.sharedCount ? ` · 👥 ${g.sharedCount} shared` : ""} · last played ${day(g.lastLaunched)}</small></span></button>`).join("") || '<p class="meta" style="padding:16px">Nothing synced yet. Turn on sync in the Deck plugin, or add a game above.</p>');
+  $("#games").querySelectorAll("button[data-id]").forEach((b) => (b.onclick = () => openGame(b.dataset.id)));
+  $("#addGame").onclick = addGameDialog;
   $("#gamePicker").innerHTML = (game ? "" : '<option value="">Pick a game…</option>') +
-    games.map((g) => `<option value="${esc(g.appId)}">${esc(g.name)} (${g.noteCount})</option>`).join("");
+    games.map((g) => `<option value="${esc(g.appId)}">${esc(g.name)} (${g.noteCount})</option>`).join("") + '<option value="+">＋ Add a game…</option>';
   if (game) $("#gamePicker").value = game.appId;
 }
 
@@ -252,7 +288,8 @@ function render() {
   const icon = { death: "💀", boss: "⚔️", custom: "#" };
 
   $("#content").innerHTML = `
-    <h2 style="margin:0">${esc(game.name)}</h2>
+    <div class="gamehead">${gameIcon(games.find((g) => g.appId === game.appId) || game)}<h2 style="margin:0;flex:1">${esc(game.name)}</h2>
+      <button id="gameSettings" title="Rename, or link more app IDs to this game">⚙ Game</button></div>
     <div class="meta">Launched ${game.launchCount ?? 0}× · ${Math.round((game.playtimeSeconds ?? 0) / 60)} min played · last played ${date(game.lastLaunched)}</div>
 
     <div class="box" style="margin-top:14px">
@@ -331,6 +368,7 @@ function render() {
     save();
   })));
   $("#newNote").onclick = () => editNote(null);
+  $("#gameSettings").onclick = gameDialog;
   $("#showDeleted").onclick = showDeleted;
   $("#newFolder").onclick = () => {
     const name = prompt("Folder name"); if (!name) return;
@@ -631,6 +669,111 @@ function viewShared(s) {
   dlg.showModal();
 }
 
+// ---------- games: add, rename, link app IDs ----------
+const gameIcon = (g) => (g?.icon ? `<img class="gicon" loading="lazy" src="${esc(g.icon)}" alt="">` : '<span class="gicon ph">🎮</span>');
+
+/** Look up an app ID as you type it and show Steam's name and art. Calls done(info) with the result. */
+function wireLookup(input, out, done, naming = false) {
+  let timer = null, last = "";
+  input.oninput = () => {
+    clearTimeout(timer);
+    const id = input.value.trim().replace(/^.*\/app\/(\d+).*$/, "$1");
+    if (id === last) return;
+    last = id;
+    if (!/^\d+$/.test(id)) { out.innerHTML = id ? '<span class="meta">An app ID is a number, e.g. 1245620 (or paste a store.steampowered.com link)</span>' : '<span class="meta">Type an app ID</span>'; return done(null); }
+    out.innerHTML = '<span class="meta">Looking it up…</span>';
+    timer = setTimeout(async () => {
+      try {
+        const info = await api(`/api/steam/apps/${id}`);
+        if (last !== id) return;
+        out.innerHTML = info.found
+          ? `${info.image ? `<img src="${esc(info.image)}" alt="">` : gameIcon(info)}<div><b>${esc(info.name)}</b><div class="meta">Steam app ${esc(id)}${info.yours ? ` · you already have notes for it${info.yours.name !== info.name ? ` (as ${esc(info.yours.name)})` : ""}` : ""}</div></div>`
+          : `<span class="gicon ph">🎮</span><div><b>Not on the Steam store</b><div class="meta">${info.yours ? `You have notes for it as ${esc(info.yours.name)}` : (info.steamApp ? "No Steam app has this ID." : "Looks like a non-Steam shortcut's ID.") + (naming ? " Give it a name below." : "")}</div></div>`;
+        done({ ...info, appId: id });
+      } catch (err) { out.innerHTML = `<span class="err">${esc(err.message)}</span>`; done(null); }
+    }, 350);
+  };
+  out.innerHTML = '<span class="meta">Type an app ID</span>';
+}
+
+function addGameDialog() {
+  const dlg = $("#panel");
+  dlg.innerHTML = `<h3 style="margin-top:0">Add a game</h3>
+    <p class="meta">Start notes for a game before you play it on the Deck. Find the app ID in the game's Steam store link (store.steampowered.com/app/<b>1245620</b>/…). For a non-Steam game, use the ID the Deck gives its shortcut and type a name.</p>
+    <label>App ID or store link</label><input id="gId" inputmode="numeric" style="width:100%" autofocus>
+    <div class="lookup" id="gLook"></div>
+    <label>Name <span id="gNameHint">(optional: leave empty to use Steam's)</span></label><input id="gName" style="width:100%" maxlength="120">
+    <div class="err" id="gErr"></div>
+    <div class="toolbar"><span style="flex:1"></span><button id="gCancel">Cancel</button><button class="primary" id="gAdd" disabled>Add game</button></div>`;
+  let info = null;
+  const update = () => {
+    $("#gAdd", dlg).disabled = !info || (!info.found && !$("#gName", dlg).value.trim() && !info.yours);
+    $("#gNameHint", dlg).textContent = info && !info.found ? "(needed: Steam doesn't know this one)" : "(optional: leave empty to use Steam's)";
+    $("#gAdd", dlg).textContent = info?.yours ? "Open it" : "Add game";
+  };
+  wireLookup($("#gId", dlg), $("#gLook", dlg), (i) => { info = i; update(); }, true);
+  $("#gName", dlg).oninput = update;
+  $("#gCancel", dlg).onclick = () => dlg.close();
+  $("#gAdd", dlg).onclick = async () => {
+    try {
+      const r = await api("/api/games", { method: "POST", json: { appId: info.appId, name: $("#gName", dlg).value.trim() } });
+      dlg.close();
+      await loadGames();
+      await openGame(r.game.appId);
+    } catch (err) { $("#gErr", dlg).textContent = err.message; }
+  };
+  dlg.showModal();
+  $("#gId", dlg).focus();
+}
+
+async function gameDialog() {
+  const dlg = $("#panel");
+  const g = games.find((x) => x.appId === game.appId) || { appId: game.appId, aliases: [] };
+  const others = games.filter((x) => x.appId !== game.appId && x.noteCount !== undefined && !x.aliases?.includes(game.appId) && x.rev);
+  dlg.innerHTML = `<div class="gamehead">${gameIcon(g)}<h3 style="margin:0;flex:1">${esc(game.name)}</h3></div>
+    <label>Name</label>
+    <div class="toolbar" style="margin:0"><input id="rName" value="${esc(game.name)}" maxlength="120" style="flex:1"><button class="primary" id="rSave">Rename</button>
+      ${game.customName ? `<button id="rReset" title="Use the name from Steam or the Deck again">Reset${game.baseName ? ` to “${esc(game.baseName)}”` : ""}</button>` : ""}</div>
+    <p class="meta">Your name sticks everywhere, even when the Deck reports a different one (handy for non-Steam games).</p>
+    <h3>App IDs</h3>
+    <p class="meta">Notes for any of these IDs end up here. Use it when a non-Steam game's shortcut was re-added and got a new ID, or when you play the same game under different IDs.</p>
+    <div class="person"><div class="who"><b>${esc(game.appId)}</b> <span class="meta">main ID</span></div></div>
+    ${(g.aliases || []).map((a) => `<div class="person"><div class="who">${esc(a)}</div><button data-unlink="${esc(a)}">Unlink</button></div>`).join("")}
+    <label>Add another ID</label><input id="lId" inputmode="numeric" style="width:100%">
+    <div class="lookup" id="lLook"></div>
+    ${others.length ? `<label>…or merge one of your games into this one</label><select id="lPick" style="width:100%"><option value="">Pick a game…</option>${others.map((o) => `<option value="${esc(o.appId)}">${esc(o.name)} (${esc(o.appId)} · ${o.noteCount} notes)</option>`).join("")}</select>` : ""}
+    <div class="err" id="lErr"></div>
+    <div class="toolbar"><span style="flex:1"></span><button id="lClose">Close</button><button class="primary" id="lAdd" disabled>Link ID</button></div>`;
+  let target = null;
+  const set = (id) => { target = id; $("#lAdd", dlg).disabled = !id; };
+  wireLookup($("#lId", dlg), $("#lLook", dlg), (i) => { if ($("#lPick", dlg)) $("#lPick", dlg).value = ""; set(i?.appId && i.appId !== game.appId ? i.appId : null); });
+  if ($("#lPick", dlg)) $("#lPick", dlg).onchange = (e) => { $("#lId", dlg).value = ""; $("#lLook", dlg).innerHTML = '<span class="meta">Type an app ID</span>'; set(e.target.value || null); };
+  const refresh = async () => { await loadGames(); await openGame(game.appId); gameDialog(); };
+  $("#lClose", dlg).onclick = () => dlg.close();
+  $("#rSave", dlg).onclick = async () => {
+    const name = $("#rName", dlg).value.trim();
+    if (!name) return;
+    try { await api(`/api/games/${encodeURIComponent(game.appId)}/name`, { method: "POST", json: { name } }); await refresh(); }
+    catch (err) { $("#lErr", dlg).textContent = err.message; }
+  };
+  if ($("#rReset", dlg)) $("#rReset", dlg).onclick = async () => {
+    try { await api(`/api/games/${encodeURIComponent(game.appId)}/name`, { method: "POST", json: { name: "" } }); await refresh(); }
+    catch (err) { $("#lErr", dlg).textContent = err.message; }
+  };
+  $("#lAdd", dlg).onclick = async () => {
+    const other = games.find((x) => x.appId === target);
+    if (other && !confirm(`Merge “${other.name}” (${other.noteCount} notes) into “${game.name}”? Its notes, counters and play history move here and it disappears from the list.`)) return;
+    try { await api(`/api/games/${encodeURIComponent(game.appId)}/aliases`, { method: "POST", json: { appId: target } }); await refresh(); }
+    catch (err) { $("#lErr", dlg).textContent = err.message; }
+  };
+  dlg.querySelectorAll("[data-unlink]").forEach((b) => (b.onclick = async () => {
+    if (!confirm(`Unlink ${b.dataset.unlink}? Notes already here stay here. A device that still uses that ID will start a separate copy of this game the next time it syncs.`)) return;
+    try { await api(`/api/games/${encodeURIComponent(game.appId)}/aliases/${encodeURIComponent(b.dataset.unlink)}`, { method: "DELETE" }); await refresh(); }
+    catch (err) { $("#lErr", dlg).textContent = err.message; }
+  }));
+  if (!dlg.open) dlg.showModal();
+}
+
 async function accountDialog() {
   const dlg = $("#panel");
   const draw = async (tab = "devices", extra = "") => {
@@ -653,16 +796,26 @@ async function accountDialog() {
         if ($("#aEngine", dlg)) { $("#aEngine", dlg).value = engine; $("#aEngine", dlg).onchange = (e) => localStorage.setItem("sn-speech-engine", e.target.value); }
         $("#aLang", dlg).value = lang; $("#aLang", dlg).onchange = (e) => localStorage.setItem("sn-speech-lang", e.target.value);
       });
+    } else if (tab === "login") {
+      html = `<p class="meta">Sign in on the website with an email and password${me.steamId ? " as well as with Steam" : ""}.${me.role === "owner" ? " As the owner, this password also replaces the owner password (WEB_PASSWORD), and the email can be left empty." : ""}</p>
+        <label>Email</label><input id="aEmail" type="email" autocomplete="username" value="${esc(me.email || "")}" style="width:100%">
+        ${me.hasPassword ? '<label>Current password</label><input id="aCurrent" type="password" autocomplete="current-password" style="width:100%">' : ""}
+        <label>${me.hasPassword ? "New password (leave empty to keep it)" : "Password (8+ characters)"}</label><input id="aPass" type="password" autocomplete="new-password" style="width:100%">
+        <div class="err" id="aLoginErr"></div><div class="toolbar"><button class="primary" id="aSaveLogin">Save</button></div>`;
     } else if (tab === "users") {
       const a = await api("/api/admin");
-      html = `<label style="margin:0"><input type="checkbox" id="aSignups" ${a.allowSignups ? "checked" : ""}> Anyone with a Steam account can sign up</label>
+      const waiting = a.users.filter((u) => u.status === "pending");
+      pendingUsers = waiting.length;
+      html = `${waiting.length ? `<h3 style="margin-top:0">Waiting for approval</h3>${waiting.map((u) => personRow({ ...u, steamId: u.email || u.steamId }, `<span class="meta">${day(u.createdAt)}</span><button class="primary" data-approve="${esc(u.id)}">Approve</button><button class="danger" data-reject="${esc(u.id)}">Reject</button>`)).join("")}` : ""}
+        <label style="margin:0"><input type="checkbox" id="aSignups" ${a.allowSignups ? "checked" : ""}> Let new people in without approval</label>
+        <p class="meta">When this is off, anyone can still ask for an account (with Steam or an email), and they show up above for you to approve.</p>
         <h3>Invite</h3><div class="toolbar"><input id="aInvite" placeholder="Steam ID or steamcommunity.com/profiles/… link" style="flex:1"><button id="aInviteBtn" class="primary">Invite</button></div>
         ${a.invites.map((i) => `<div class="person"><div class="who">${esc(i)} <span class="meta">invited, hasn't signed in yet</span></div><button data-uninvite="${esc(i)}">Cancel</button></div>`).join("")}
         <h3>Users</h3>${a.speechAvailable ? '<p class="meta">🎤 Speech to text runs on this server\'s GPU. Tick who may use it.</p>' : '<p class="meta">🎤 Speech to text is off: set WHISPER_URL on the server to turn it on.</p>'}
-        ${a.users.map((u) => personRow(u, u.role === "owner" ? '<span class="chip">owner</span>' : `<label style="margin:0;opacity:1"><input type="checkbox" data-speech="${esc(u.id)}" ${u.speech ? "checked" : ""}> 🎤 Speech</label><button class="danger" data-remove="${esc(u.id)}">Remove</button>`)).join("")}`;
+        ${a.users.filter((u) => u.status !== "pending").map((u) => personRow({ ...u, steamId: [u.email, u.steamId && "Steam " + u.steamId].filter(Boolean).join(" · ") }, u.role === "owner" ? '<span class="chip">owner</span>' : `<label style="margin:0;opacity:1"><input type="checkbox" data-speech="${esc(u.id)}" ${u.speech ? "checked" : ""}> 🎤 Speech</label>${u.email ? `<button data-setpass="${esc(u.id)}" title="Set a new password for them">Password</button>` : ""}<button class="danger" data-remove="${esc(u.id)}">Remove</button>`)).join("")}`;
     }
-    dlg.innerHTML = `<div class="person" style="border:0">${me.avatar ? `<img src="${esc(me.avatar)}">` : '<div class="ph"></div>'}<div class="who"><b>${esc(me.name)}</b><div class="meta">${me.steamId ? "Steam " + esc(me.steamId) : "Not linked to Steam"}</div></div></div>
-      <div class="toolbar"><button data-tab="devices">Devices</button><button data-tab="notify">Notifications</button>${speechOn ? '<button data-tab="speech">Speech</button>' : ""}${me.role === "owner" ? '<button data-tab="users">Users</button>' : ""}
+    dlg.innerHTML = `<div class="person" style="border:0">${me.avatar ? `<img src="${esc(me.avatar)}">` : '<div class="ph"></div>'}<div class="who"><b>${esc(me.name)}</b><div class="meta">${[me.email, me.steamId ? "Steam " + me.steamId : "Not linked to Steam"].filter(Boolean).map(esc).join(" · ")}</div></div></div>
+      <div class="toolbar"><button data-tab="devices">Devices</button><button data-tab="login">Sign-in</button><button data-tab="notify">Notifications</button>${speechOn ? '<button data-tab="speech">Speech</button>' : ""}${me.role === "owner" ? `<button data-tab="users">Users${pendingUsers ? `<span class="badge">${pendingUsers}</span>` : ""}</button>` : ""}
         ${!me.steamId ? '<a href="/auth/steam?link=1"><button>Link Steam account</button></a>' : ""}<span style="flex:1"></span><button id="aLogout">Log out</button><button id="pClose">Close</button></div>${html}`;
     dlg.querySelectorAll("[data-tab]").forEach((b) => { b.classList.toggle("primary", b.dataset.tab === tab); b.onclick = () => draw(b.dataset.tab); });
     $("#pClose", dlg).onclick = () => dlg.close();
@@ -680,6 +833,23 @@ async function accountDialog() {
     dlg.querySelectorAll("[data-speech]").forEach((b) => (b.onchange = async () => {
       try { await api(`/api/admin/users/${encodeURIComponent(b.dataset.speech)}/speech`, { method: "POST", json: { allowed: b.checked } }); }
       catch (err) { alert(err.message); b.checked = !b.checked; }
+    }));
+    if ($("#aSaveLogin", dlg)) $("#aSaveLogin", dlg).onclick = async () => {
+      try {
+        const r = await api("/api/account/login", { method: "POST", json: { email: $("#aEmail", dlg).value, password: $("#aPass", dlg).value, current: $("#aCurrent", dlg)?.value || "" } });
+        me.email = r.email; me.hasPassword = r.hasPassword;
+        draw("login", "");
+        alert("Saved.");
+      } catch (err) { $("#aLoginErr", dlg).textContent = err.message; }
+    };
+    const after = async () => { await draw("users"); paintAccount(); };
+    dlg.querySelectorAll("[data-approve]").forEach((b) => (b.onclick = async () => { await api(`/api/admin/users/${encodeURIComponent(b.dataset.approve)}/approve`, { method: "POST", json: {} }); after(); }));
+    dlg.querySelectorAll("[data-reject]").forEach((b) => (b.onclick = async () => { if (confirm("Reject this request? They can ask again later.")) { await api(`/api/admin/users/${encodeURIComponent(b.dataset.reject)}`, { method: "DELETE" }); after(); } }));
+    dlg.querySelectorAll("[data-setpass]").forEach((b) => (b.onclick = async () => {
+      const pw = prompt("New password for this user (8+ characters). Tell them yourself; they can change it under Account → Sign-in.");
+      if (!pw) return;
+      try { await api(`/api/admin/users/${encodeURIComponent(b.dataset.setpass)}/password`, { method: "POST", json: { password: pw } }); alert("Password changed."); }
+      catch (err) { alert(err.message); }
     }));
     dlg.querySelectorAll("[data-uninvite]").forEach((b) => (b.onclick = async () => { await api(`/api/admin/invites/${b.dataset.uninvite}`, { method: "DELETE" }); draw("users"); }));
     dlg.querySelectorAll("[data-remove]").forEach((b) => (b.onclick = async () => {
@@ -897,7 +1067,10 @@ window.snBack = () => {
 };
 
 $("#search").oninput = render;
-$("#gamePicker").onchange = (e) => e.target.value && openGame(e.target.value);
+$("#gamePicker").onchange = (e) => {
+  if (e.target.value === "+") { e.target.value = game?.appId || ""; return addGameDialog(); }
+  if (e.target.value) openGame(e.target.value);
+};
 if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {});
 start();
 </script>

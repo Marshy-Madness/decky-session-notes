@@ -6,6 +6,7 @@ Rules:
   dropped if it was deleted at or after its last edit.
 - Sessions are only ever added, so they're a plain union.
 - Totals (launches, playtime) take the max; the left-off pin takes the newer one.
+- A game renamed on the website keeps that name (customName) over the one Steam reports.
 """
 
 TOMBSTONE_TTL_MS = 180 * 24 * 3600 * 1000
@@ -64,9 +65,24 @@ def merge_games(a: dict, b: dict, now_ms: int = 0) -> dict:
     firsts = [x for x in (a.get("firstSeen"), b.get("firstSeen")) if x]
     result["firstSeen"] = min(firsts) if firsts else None
 
+    # A name set on the website (customName) beats the one Steam reports on every launch. customNameAt says
+    # which side heard about the latest rename or reset, and that side's name wins.
     appid = str(result.get("appId"))
-    names = [n for n in (a.get("name"), b.get("name")) if n and n != appid]
-    result["name"] = names[0] if names else appid
+    ca, cb = a.get("customNameAt") or 0, b.get("customNameAt") or 0
+    first, second = (b, a) if cb > ca else (a, b)
+    custom = first.get("customName") if max(ca, cb) else None
+    names = [n for n in (first.get("name"), second.get("name")) if n and n != appid]
+    if custom:
+        base = [n for n in names + [first.get("baseName"), second.get("baseName")] if n and n != custom]
+        result["baseName"] = base[0] if base else None
+        result["name"] = custom
+    else:
+        result.pop("baseName", None)
+        result["name"] = names[0] if names else appid
+    if max(ca, cb):
+        result["customName"], result["customNameAt"] = custom or None, max(ca, cb)
+    else:
+        result.pop("customName", None), result.pop("customNameAt", None)
 
     la, lb = a.get("leftOff"), b.get("leftOff")
     result["leftOff"] = max((x for x in (la, lb) if x), key=lambda x: x.get("updatedAt", 0), default=None)
