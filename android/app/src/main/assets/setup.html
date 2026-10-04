@@ -9,6 +9,7 @@
   h1 { margin: 0 0 6px; font-size: 22px; } p { opacity: .7; font-size: 14px; line-height: 1.4; }
   input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 12px; border-radius: 8px; border: 1px solid #39404c; background: #262b35; color: inherit; margin: 10px 0; }
   button { width: 100%; font-size: 16px; padding: 12px; border-radius: 8px; border: 0; background: #1a9fff; color: #fff; }
+  summary { opacity: .7; font-size: 14px; margin: 4px 0; }
   .err { color: #e5484d; font-size: 14px; min-height: 18px; }
 </style>
 </head>
@@ -17,18 +18,25 @@
   <h1>📝 Session Notes</h1>
   <p>Enter the address of your Session Notes server. You'll log in with the website password next.</p>
   <input id="url" type="url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://steamnotes.example.com">
+  <details><summary>Bookstore address</summary>
+    <input id="store" type="url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://bookstore.marshymadness.com">
+  </details>
   <div class="err" id="err"></div>
   <button>Connect</button>
 </form>
 <script>
   const params = new URLSearchParams(location.search);
   document.getElementById("url").value = params.get("url") || "";
+  document.getElementById("store").value = SessionNotesApp.bookstoreUrl();
   if (params.get("error")) document.getElementById("err").textContent = "Couldn't reach the server: " + params.get("error");
   document.getElementById("f").onsubmit = (e) => {
     e.preventDefault();
     let url = document.getElementById("url").value.trim().replace(/\/+$/, "");
     if (!url) return;
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    let store = document.getElementById("store").value.trim().replace(/\/+$/, "");
+    if (store && !/^https?:\/\//i.test(store)) store = "https://" + store;
+    SessionNotesApp.setBookstore(store);
     SessionNotesApp.setServer(url);
   };
 </script>

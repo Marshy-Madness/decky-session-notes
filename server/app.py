@@ -14,6 +14,7 @@ import secrets
 import shutil
 import threading
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -30,6 +31,7 @@ HISTORY_KEEP = int(os.environ.get("HISTORY_KEEP", "30"))
 SESSION_DAYS = int(os.environ.get("SESSION_DAYS", "30"))
 OWNER_WEBHOOKS = [u.strip() for u in os.environ.get("WEBHOOK_URLS", "").split(",") if u.strip()]
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
+BOOKSTORE_URL = (os.environ.get("BOOKSTORE_URL") or "https://bookstore.marshymadness.com").rstrip("/")
 MAX_BODY = 60 * 1024 * 1024
 SAFE = re.compile(r"^[A-Za-z0-9._-]+$")
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -136,6 +138,59 @@ def resolve_share(share: dict):
         return None, None
     note = next((n for n in game.get("notes", []) if n["id"] == share["noteId"]), None)
     return game, note
+
+
+# ---------- Bookstore import ----------
+
+def bookstore_get(path: str) -> bytes:
+    req = urllib.request.Request(BOOKSTORE_URL + path, headers={"User-Agent": "SessionNotes-Server"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return r.read()
+
+
+def import_from_bookstore(store: "Store", entry_id: str, source: str) -> dict:
+    """Copy a public Bookstore entry into this user's notes (same shape as the Deck plugin's copy)."""
+    if not SAFE.match(entry_id):
+        raise ValueError("bad id")
+    try:
+        e = json.loads(bookstore_get(f"/api/entries/{urllib.parse.quote(entry_id)}"))
+    except urllib.error.HTTPError as err:
+        raise LookupError("That Bookstore post doesn't exist anymore" if err.code == 404 else f"Bookstore error {err.code}")
+    if not e.get("allowCopy"):
+        raise PermissionError("The poster turned off copying for this one")
+    appid = safe(str(e["appId"]))
+    stored, _ = store.read(appid)
+    existing = next((n for n in (stored or {}).get("notes", []) if (n.get("source") or {}).get("id") == e["id"]), None)
+    if existing:
+        return {"note": existing, "appId": appid, "gameName": stored.get("name"), "existing": True}
+
+    os.makedirs(store.media_path(appid), exist_ok=True)
+
+    def fetch(name: str, thumb: bool = False) -> str:
+        ext = safe(name).rsplit(".", 1)[-1]
+        new = f"{uuid.uuid4()}{'.thumb' if thumb else ''}.{ext}"
+        with open(store.media_path(appid, new), "wb") as f:
+            f.write(bookstore_get(f"/api/media/{urllib.parse.quote(name)}"))
+        return new
+
+    now = now_ms()
+    shots = []
+    for s in e.get("screenshots", []):
+        item = {"id": str(uuid.uuid4()), "file": fetch(s["file"]), "takenAt": e["createdAt"]}
+        if s.get("thumb"):
+            item["thumb"] = fetch(s["thumb"], True)
+        shots.append(item)
+    recs = [{"id": str(uuid.uuid4()), "file": fetch(r["file"]), "createdAt": e["createdAt"],
+             **({"durationSec": r["durationSec"]} if r.get("durationSec") else {})} for r in e.get("recordings", [])]
+    note = {"id": str(uuid.uuid4()), "folderId": None, "title": e["title"], "body": e.get("body", ""), "tags": e.get("tags", []),
+            "screenshots": shots, "recordings": recs, "pinned": False, "createdAt": now, "updatedAt": now, "launchNumber": None,
+            "kind": e.get("kind", "note"), "spoiler": bool(e.get("spoiler")),
+            "source": {"type": "bookstore", "id": e["id"], "author": e["author"]["name"]}}
+    if e.get("checklist"):
+        note["checklist"] = [{"id": str(uuid.uuid4()), "text": c["text"], "done": False} for c in e["checklist"]]
+    name = (stored or {}).get("name") or e.get("gameName") or appid
+    store.sync(appid, {"appId": appid, "name": name, "notes": [note]}, source)
+    return {"note": note, "appId": appid, "gameName": name, "existing": False}
 
 
 # ---------- webhooks ----------
@@ -327,7 +382,7 @@ class Handler(BaseHTTPRequestHandler):
         if p[1:] == ["me"]:
             u = accounts.session_user(self.session_id())
             return self.send(200, {"loggedIn": bool(u), "user": accounts.public(u) if u else None,
-                                   "androidApp": os.path.exists(APK_PATH)})
+                                   "androidApp": os.path.exists(APK_PATH), "bookstoreUrl": BOOKSTORE_URL})
 
         user = self.current_user()
         if not user:
@@ -463,6 +518,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, store.sync(safe(p[2]), self.json_body(), self.source()))
         if len(p) == 4 and p[:2] == ["api", "games"] and p[3] == "notes":
             return self.add_note(store, safe(p[2]), self.json_body())
+        if p == ["api", "import", "bookstore"]:
+            try:
+                return self.send(200, import_from_bookstore(store, str(self.json_body().get("id", "")), self.source()))
+            except (LookupError, PermissionError) as err:
+                return self.send(404 if isinstance(err, LookupError) else 403, {"error": str(err)})
+            except (urllib.error.URLError, OSError) as err:
+                return self.send(502, {"error": f"Couldn't reach the Bookstore: {err}"})
         if p == ["api", "devices", "code"]:
             return self.send(200, accounts.new_pairing_code(user["id"]))
         if p == ["api", "shares"]:

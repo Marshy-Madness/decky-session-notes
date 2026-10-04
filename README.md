@@ -136,6 +136,8 @@ A separate public container (`bookstore/`) where players publish notes for every
   in the post's history.
 - **Allow copies:** let people copy a post into their own notes, where their copy is private (e.g. to tick off a
   checklist). Copies go to their own notes and sync server, never back into the Bookstore.
+  On the website, **📥 Save to my notes** opens your Session Notes site at `/?import=bookstore:<id>`, which does the
+  copy (it asks for your Session Notes address once). The Android app does this from its Bookstore tab.
 - **Spoiler tag:** hide a post until readers choose to reveal it, with a label like "Beat the first boss" so they
   know when it's safe.
 - **Likes and comments.**
@@ -169,6 +171,8 @@ The plugin points at `https://bookstore.marshymadness.com` by default. Change it
 - **Microphone** access for voice notes, and the **photo/file picker** for screenshots.
 - **"Add to Session Notes"** in Android's share menu: share photos, recordings or text from any app into a new note.
 - The **back button** closes dialogs first.
+- A **Bookstore** tab (bottom bar) with Steam sign-in inside the app. **📥 Save to my notes** on a post copies it
+  into your notes and opens it on the Notes tab. The Bookstore address is under "Bookstore address" on the setup screen.
 
 Download the APK from [Releases](../../releases), or from your server at `/download/android`.
 To build it: `cd android && ./gradlew dist`, which needs JDK 17 or newer and the Android SDK.

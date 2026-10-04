@@ -106,6 +106,7 @@
     <h1>📝 Session Notes</h1>
     <select id="gamePicker" aria-label="Game"></select>
     <input id="search" placeholder="Search notes…">
+    <a id="bookstoreLink" class="hidden" target="_blank" rel="noopener"><button>📚 Bookstore</button></a>
     <a id="getApp" class="hidden" href="/download/android"><button>📱 Android app</button></a>
     <button id="changeServer" class="hidden">Server</button>
     <button id="account">Account</button>
@@ -152,6 +153,9 @@ if (window.SessionNotesApp) {
 }
 const loginError = new URLSearchParams(location.search).get("error");
 if (loginError) { $("#loginErr").textContent = loginError; history.replaceState(null, "", "/"); }
+// "Save to my notes" from the Bookstore links here as /?import=bookstore:<entryId>. Kept across a sign-in.
+const importParam = new URLSearchParams(location.search).get("import");
+if (importParam?.startsWith("bookstore:")) { sessionStorage.setItem("sn-import", importParam.slice(10)); history.replaceState(null, "", "/"); }
 
 // ---------- state ----------
 let games = [], game = null, folderFilter = "all", kindFilter = "all", sortMode = localStorage.getItem("sn-sort") || "edited";
@@ -169,6 +173,7 @@ async function start() {
   $("#account").innerHTML = `${me.avatar ? `<img src="${esc(me.avatar)}">` : "👤"}<span class="hide-sm">${esc(me.name)}</span>`;
   $("#account").onclick = accountDialog;
   if (info.androidApp && !window.SessionNotesApp && /Android/i.test(navigator.userAgent)) $("#getApp").classList.remove("hidden");
+  if (info.bookstoreUrl && !window.SessionNotesApp?.openBookstore) { $("#bookstoreLink").href = info.bookstoreUrl; $("#bookstoreLink").classList.remove("hidden"); }
   $("#login").classList.add("hidden");
   $("#app").classList.remove("hidden");
   await loadGames();
@@ -176,6 +181,7 @@ async function start() {
   if (last && games.some((g) => g.appId === last)) await openGame(last);
   else if (games.length) await openGame(games[0].appId); // most recently played
   checkPwaShare();
+  await checkBookstoreImport();
   window.SessionNotesApp?.ready?.(); // native Android app: deliver any pending share
 }
 
@@ -719,6 +725,21 @@ window.snReceiveShare = async (items) => {
   }));
   dlg.showModal();
 };
+
+/** Copy a Bookstore post into my notes (server downloads it), then open it. */
+async function checkBookstoreImport() {
+  const id = sessionStorage.getItem("sn-import");
+  if (!id) return;
+  sessionStorage.removeItem("sn-import");
+  try {
+    const r = await api("/api/import/bookstore", { method: "POST", json: { id } });
+    await loadGames();
+    await openGame(r.appId);
+    const note = game.notes.find((n) => n.id === r.note.id);
+    if (note) editNote(note);
+    if (r.existing) alert(`You already have "${r.note.title}" in your notes for ${r.gameName}.`);
+  } catch (err) { alert("Couldn't copy from the Bookstore: " + err.message); }
+}
 
 async function checkPwaShare() {
   if (!new URLSearchParams(location.search).has("shared") || !window.caches) return;

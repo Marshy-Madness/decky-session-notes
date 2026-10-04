@@ -182,7 +182,7 @@ async function openEntry(id, revealed = false, prefetched = null) {
       <button id="like" class="${e.liked ? "on" : ""}">♥ ${e.likes}</button>
       ${e.canEdit ? '<button id="edit">✏️ Edit</button>' : ""}<button id="history">🕘 History</button>
       ${e.canDelete ? '<button id="del" class="danger">Delete</button>' : ""}
-      <span style="flex:1"></span><span class="meta">Copy it to your own notes from the Session Notes plugin on your Deck.</span>
+      <span style="flex:1"></span>${e.allowCopy ? `<button class="primary" id="save">📥 Save to my notes</button>${window.SessionNotesApp ? "" : '<button id="saveWhere" title="Change your Session Notes address">⚙️</button>'}` : ""}
     </div>
     <h3>Comments (${e.commentList.length})</h3>
     ${e.commentList.map((c) => `<div class="comment">${who(c.author)} <small>${date(c.createdAt)}</small> ${c.canDelete ? `<button class="danger" data-delc="${esc(c.id)}" style="float:right">✕</button>` : ""}<p>${esc(c.text)}</p></div>`).join("") || '<p class="meta">No comments yet.</p>'}
@@ -197,6 +197,8 @@ async function openEntry(id, revealed = false, prefetched = null) {
   $("#like", dlg).onclick = async () => { if (!me) return (location.href = signIn()); await api(`/api/entries/${id}/like`, { method: "POST" }); openEntry(id, revealed); };
   if ($("#edit", dlg)) $("#edit", dlg).onclick = () => editEntry(e);
   $("#history", dlg).onclick = () => showHistory(e);
+  if ($("#save", dlg)) $("#save", dlg).onclick = () => saveToNotes(e.id);
+  if ($("#saveWhere", dlg)) $("#saveWhere", dlg).onclick = () => notesUrl(true);
   if ($("#del", dlg)) $("#del", dlg).onclick = async () => { if (!confirm("Delete this post for everyone?")) return; await api(`/api/entries/${id}`, { method: "DELETE" }); dlg.close(); view.appId ? renderGame() : home(); };
   if ($("#postComment", dlg)) $("#postComment", dlg).onclick = async () => {
     const text = $("#comment", dlg).value.trim(); if (!text) return;
@@ -204,6 +206,27 @@ async function openEntry(id, revealed = false, prefetched = null) {
   };
   dlg.querySelectorAll("[data-delc]").forEach((b) => (b.onclick = async () => { await api(`/api/comments/${b.dataset.delc}`, { method: "DELETE" }); openEntry(id, revealed); }));
   if (!dlg.open) dlg.showModal();
+}
+
+// ---------- copy into your own Session Notes ----------
+/** Your Session Notes server address (asked once, remembered in this browser). */
+function notesUrl(ask = false) {
+  let url = localStorage.getItem("bs-notes-url") || "";
+  if (ask || !url) {
+    const typed = prompt("Address of your Session Notes server (the website you edit your notes on):", url || "https://");
+    if (!typed) return null;
+    url = typed.trim().replace(/\/+$/, "");
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    localStorage.setItem("bs-notes-url", url);
+  }
+  return url;
+}
+
+/** The Session Notes site does the copy (it downloads the post and its media into your notes). */
+function saveToNotes(id) {
+  if (window.SessionNotesApp?.saveToNotes) return window.SessionNotesApp.saveToNotes(id); // Android app: switches to the Notes tab
+  const url = notesUrl();
+  if (url) window.open(`${url}/?import=bookstore:${encodeURIComponent(id)}`, "_blank", "noopener");
 }
 
 async function showHistory(e) {
@@ -325,6 +348,11 @@ function linkPage() {
 
 $("#home").onclick = () => home();
 $("#gameSearch").onchange = (e) => home(e.target.value.trim());
+/** Android back button (Session Notes app): close the top dialog if one is open. */
+window.snBack = () => {
+  for (const d of [$("#dlg2"), $("#dlg")]) if (d.open) { d.close(); return true; }
+  return false;
+};
 start();
 </script>
 </body>

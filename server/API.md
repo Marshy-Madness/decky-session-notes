@@ -56,6 +56,12 @@ curl -X POST https://steamnotes.marshymadness.com/api/games/1245620/notes \
   -d '{"title":"Try the bleed build","tags":["idea"]}'
 ```
 
+### Copy a Bookstore post into your notes
+`POST /api/import/bookstore` with `{"id": "<entry id>"}`. The server downloads the post and its media from
+`BOOKSTORE_URL` and adds it to the post's game. Returns `{note, appId, gameName, existing}`. If you already copied that
+post, `existing` is `true` and nothing new is added. It returns 403 if the poster turned off copying.
+The website runs this when you open `/?import=bookstore:<id>`, which is where the Bookstore's "Save to my notes" button links.
+
 ### Full sync (what the Deck and website use)
 `POST /api/sync/{appId}` with a whole game record. The server merges it with its copy and returns `{game, rev}`:
 - Notes, folders and counters merge by `id`. The one with the newer `updatedAt` (ms since epoch) wins.
