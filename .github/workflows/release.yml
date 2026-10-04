@@ -1,5 +1,5 @@
 # Bump "version" in package.json, commit, then either push tag v<version>
-# (git tag v1.2.0 && git push --follow-tags) or run this workflow by hand.
+# (git tag -a v1.2.0 -m v1.2.0 && git push --follow-tags) or run this workflow by hand.
 # It builds the zip, publishes a GitHub release, and the Madness Decky Store
 # lists it. Packaging lives in the store repo so every plugin stays the same.
 name: Release
