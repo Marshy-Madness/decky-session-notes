@@ -159,6 +159,7 @@ export interface SteamScreenshot {
 
 export type SortMode = "alpha" | "created" | "edited" | "recent";
 export type PanelWidth = "normal" | "wide" | "extra";
+export type OpenChord = "l4r4" | "l5r5" | "l3r3" | "off";
 
 export interface Settings {
   sort?: SortMode;
@@ -179,6 +180,12 @@ export interface Settings {
   overlayHideStats?: boolean;
   /** Pin to screen: where the overlay sits; unset = wherever Steam puts it (top left). */
   overlayPosition?: OverlayPosition;
+  /** Button combo that opens the full-screen notes page; unset = L4 + R4. */
+  openChord?: OpenChord;
+  /** Add "Session Notes" to the main Steam-button menu. */
+  mainMenuEntry?: boolean;
+  /** Give Session Notes its own Quick Access tab, next to Decky's. */
+  qamTab?: boolean;
 }
 
 export type OverlayPosition =

@@ -2,7 +2,7 @@ import { FC, useEffect, useState } from "react";
 import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
-import { BackupStatus, OverlayPosition, PanelWidth } from "../types";
+import { BackupStatus, OpenChord, OverlayPosition, PanelWidth } from "../types";
 import { LinkPanel } from "./Bookstore";
 import { formatDateTime } from "../utils/format";
 import { errText } from "../utils/errors";
@@ -11,6 +11,13 @@ const WIDTH_OPTIONS: { label: string; data: PanelWidth }[] = [
   { label: "Normal (Steam default)", data: "normal" },
   { label: "Wide", data: "wide" },
   { label: "Extra wide", data: "extra" },
+];
+
+const CHORD_OPTIONS: { label: string; data: OpenChord }[] = [
+  { label: "L4 + R4 (upper back grips)", data: "l4r4" },
+  { label: "L5 + R5 (lower back grips)", data: "l5r5" },
+  { label: "L3 + R3 (click both sticks)", data: "l3r3" },
+  { label: "Off", data: "off" },
 ];
 
 const POSITION_OPTIONS: { label: string; data: OverlayPosition }[] = [
@@ -101,6 +108,33 @@ export const SettingsView: FC = () => {
           rgOptions={WIDTH_OPTIONS}
           selectedOption={settings.panelWidth ?? "extra"}
           onChange={(o) => updateSettings({ panelWidth: o.data })}
+        />
+      </PanelSectionRow>
+
+      <Heading>Opening Session Notes</Heading>
+      <PanelSectionRow>
+        <ToggleField
+          label="Show in the Steam menu"
+          description="Add Session Notes to the main Steam-button menu. It opens the full-screen notes page."
+          checked={settings.mainMenuEntry ?? false}
+          onChange={(v) => updateSettings({ mainMenuEntry: v })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ToggleField
+          label="Own Quick Access tab"
+          description="Give Session Notes its own tab in the Quick Access menu, so you don't have to go through Decky. Takes effect the next time you open the menu."
+          checked={settings.qamTab ?? false}
+          onChange={(v) => updateSettings({ qamTab: v })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <DropdownItem
+          label="Button combo"
+          description="Press it any time, even in a game, to open the full-screen notes page. Press it again to close it."
+          rgOptions={CHORD_OPTIONS}
+          selectedOption={settings.openChord ?? "l4r4"}
+          onChange={(o) => updateSettings({ openChord: o.data })}
         />
       </PanelSectionRow>
 

@@ -137,12 +137,20 @@ const TabButton: FC<{ active: boolean; onClick: () => void; children: React.Reac
 );
 
 export const QuickAccessPanel: FC = () => {
-  const running = useRunningGame();
   const settings = useSettings();
+  const panelRef = useWidePanel(WIDTHS[settings.panelWidth ?? "extra"]);
+  return (
+    <div ref={panelRef} style={{ padding: "0 12px 16px" }}>
+      <NotesBrowser />
+    </div>
+  );
+};
+
+/** The tabs and their contents; shared by the Quick Access panel and the full-screen page. */
+export const NotesBrowser: FC = () => {
+  const running = useRunningGame();
   const [tab, setTabState] = useState<Tab>(lastTab ?? (running ? "current" : "all"));
   const [openGame, setOpenGameState] = useState<string | null>(lastOpenedGame);
-
-  const panelRef = useWidePanel(WIDTHS[settings.panelWidth ?? "extra"]);
 
   const setTab = (t: Tab) => {
     lastTab = t;
@@ -154,8 +162,7 @@ export const QuickAccessPanel: FC = () => {
   };
 
   return (
-    <div ref={panelRef} style={{ padding: "0 12px 16px" }}>
-
+    <>
       <Focusable style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
         <TabButton active={tab === "current"} onClick={() => setTab("current")}>
           Current
@@ -193,6 +200,6 @@ export const QuickAccessPanel: FC = () => {
 
       {tab === "bookstore" && <BookstoreView />}
       {tab === "settings" && <SettingsView />}
-    </div>
+    </>
   );
 };

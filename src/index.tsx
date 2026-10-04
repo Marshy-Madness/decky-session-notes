@@ -6,6 +6,7 @@ import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { SessionSummaryModal } from "./components/SessionSummaryModal";
 import { AttachScreenshotsModal } from "./components/AttachScreenshotsModal";
 import { getRunningGame, startLifetimeTracking } from "./hooks/useAppLifetime";
+import { startIntegrations } from "./integrations";
 import { emitDataChanged, getSettings, loadSettings } from "./state/notesStore";
 import { addPendingScreenshot, getPendingScreenshots } from "./state/pendingScreenshots";
 
@@ -50,6 +51,7 @@ export default definePlugin(() => {
     }
   });
   const stopScreenshots = startScreenshotWatch();
+  const stopIntegrations = startIntegrations();
   // The backend emits this after a sync pulls in edits made on the website.
   const onRemoteChange = () => emitDataChanged();
   addEventListener("data_changed", onRemoteChange);
@@ -62,6 +64,7 @@ export default definePlugin(() => {
     onDismount() {
       stopTracking();
       stopScreenshots();
+      stopIntegrations();
       removeEventListener("data_changed", onRemoteChange);
     },
   };
