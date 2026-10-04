@@ -264,18 +264,28 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
         </Focusable>
       )}
 
-      <Focusable style={s.toolbar}>
-        <DialogButton style={s.smallButton} onClick={() => openEditor(null)}>
-          <FaPlus /> Create note
+      <Focusable flow-children="row" style={{ ...s.toolbar, marginTop: "4px" }}>
+        <DialogButton style={s.primaryButton} onClick={() => openEditor(null)}>
+          <FaPlus /> New note
         </DialogButton>
         <DialogButton style={s.smallButton} onClick={newFolder}>
-          <FaFolderPlus /> Create folder
+          <FaFolderPlus /> New folder
         </DialogButton>
         <DialogButton style={s.smallButton} onClick={() => addCounter(appId)}>
           <FaSkull /> Add counter
         </DialogButton>
-        <div style={{ flex: 1 }} />
-        <div style={{ minWidth: "170px" }}>
+      </Focusable>
+
+      <Focusable flow-children="row" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
+        <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+          <TextField
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            bShowClearAction
+            {...({ placeholder: "🔍  Search titles, text and transcripts" } as any)}
+          />
+        </div>
+        <div style={{ flex: "0 0 auto", minWidth: "190px" }}>
           <Dropdown
             rgOptions={SORT_OPTIONS}
             selectedOption={sort}
@@ -285,14 +295,6 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
           />
         </div>
       </Focusable>
-
-      <TextField
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        bShowClearAction
-        label="Search notes"
-      />
-      <div style={{ height: "6px" }} />
       {presentKinds.length > 0 && (
         <Focusable flow-children="row" style={{ ...s.toolbar, flexWrap: "wrap" }}>
           {presentKinds.map((k) => {
@@ -300,7 +302,7 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
             return (
               <DialogButton
                 key={k.kind}
-                style={{ ...s.smallButton, padding: "2px 10px", fontSize: "12px", opacity: on ? 1 : 0.7 }}
+                style={{ ...s.smallButton, padding: "3px 12px", fontSize: "13px", opacity: on ? 1 : 0.7 }}
                 onClick={() => setActiveKinds(on ? activeKinds.filter((x) => x !== k.kind) : [...activeKinds, k.kind])}
               >
                 {on ? "✓ " : ""}
@@ -311,6 +313,12 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
         </Focusable>
       )}
       <TagFilterBar allTags={allTags} activeTags={activeTags} onChange={setActiveTags} />
+
+      {searching ? (
+        <div style={s.sectionLabel}>{notes.length === 1 ? "1 match" : `${notes.length} matches`}</div>
+      ) : (
+        !currentFolder && !inGuides && !inShared && <div style={s.sectionLabel}>Notes & folders</div>
+      )}
 
       {(inGuides || inShared) && !searching && (
         <Focusable style={s.toolbar}>
@@ -392,13 +400,13 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
 
       {subFolders.length === 0 && notes.length === 0 && !(inShared && shared.length) && (
         <div style={{ opacity: 0.7, padding: "12px 0" }}>
-          {searching ? "No notes match." : currentFolder ? "This folder is empty." : "No notes yet. Create your first one!"}
+          {searching ? "No notes match." : currentFolder ? "This folder is empty." : "No notes yet. Press New note to write your first one."}
         </div>
       )}
 
-      <Focusable style={{ ...s.toolbar, marginTop: "10px" }}>
+      <Focusable style={{ ...s.toolbar, marginTop: "16px" }}>
         <DialogButton
-          style={{ ...s.smallButton, fontSize: "12px", opacity: 0.8 }}
+          style={{ ...s.smallButton, fontSize: "13px", opacity: 0.75 }}
           onClick={() => showModal(<DeletedNotesModal appId={appId} />)}
         >
           <FaTrashRestore size={11} /> Recently deleted

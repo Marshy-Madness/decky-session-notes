@@ -16,6 +16,23 @@ export function formatDateTime(ms: number | null | undefined): string {
   });
 }
 
+/** "3:43 PM" today, "Yesterday", "Oct 4" this year, otherwise the full date. */
+export function formatWhen(ms: number | null | undefined): string {
+  if (!ms) return "—";
+  const d = new Date(ms);
+  const now = new Date();
+  const day = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diffDays = Math.round((day(now) - day(d)) / 86400000);
+  if (diffDays === 0) return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (diffDays === 1) return "Yesterday";
+  if (d.getFullYear() === now.getFullYear()) return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return formatDate(ms);
+}
+
+export function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
 export function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);

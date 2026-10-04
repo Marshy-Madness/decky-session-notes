@@ -1,6 +1,6 @@
 import { FC, useState } from "react";
 import { DialogButton, Focusable } from "@decky/ui";
-import { FaCog, FaExpand, FaStore } from "react-icons/fa";
+import { FaCog, FaExpand, FaGamepad, FaStore, FaThList } from "react-icons/fa";
 import { openNotesPage } from "../opening";
 import { useRunningGame } from "../hooks/useAppLifetime";
 import { NotesProvider } from "../state/NotesProvider";
@@ -15,23 +15,34 @@ type Tab = "current" | "all" | "bookstore" | "settings";
 let lastTab: Tab | null = null;
 let lastOpenedGame: string | null = null;
 
-const TabButton: FC<{ active: boolean; onClick: () => void; children: React.ReactNode; grow?: boolean }> = ({
+const TabButton: FC<{ active: boolean; onClick: () => void; children: React.ReactNode; grow?: boolean; label?: string }> = ({
   active,
   onClick,
   children,
   grow = true,
+  label,
 }) => (
   <DialogButton
     onClick={onClick}
+    aria-label={label}
     style={{
-      flex: grow ? "1 1 0" : "0 0 40px",
-      width: grow ? "auto" : "40px",
-      minWidth: grow ? 0 : "40px",
-      padding: grow ? "6px 4px" : "6px 0",
+      // Every box property is pinned so Steam/theme DialogButton rules can't stagger the row.
+      flex: grow ? "1 1 0" : "0 0 44px",
+      width: grow ? "auto" : "44px",
+      minWidth: grow ? 0 : "44px",
+      height: "40px",
+      minHeight: "40px",
+      margin: 0,
+      alignSelf: "stretch",
+      padding: grow ? "0 8px" : 0,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
+      gap: "8px",
       whiteSpace: "nowrap",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      fontWeight: active ? "bold" : undefined,
       background: active ? "#1a9fff" : undefined,
       color: active ? "white" : undefined,
     }}
@@ -66,21 +77,24 @@ export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false 
 
   return (
     <>
-      <Focusable style={{ display: "flex", gap: "6px", marginBottom: "12px" }}>
+      <Focusable
+        flow-children="row"
+        style={{ display: "flex", flexWrap: "nowrap", alignItems: "stretch", gap: "6px", marginBottom: "14px", width: "100%" }}
+      >
         <TabButton active={tab === "current"} onClick={() => setTab("current")}>
-          Current
+          {fullScreen ? <><FaGamepad /> This game</> : "Current"}
         </TabButton>
         <TabButton active={tab === "all"} onClick={() => setTab("all")}>
-          All
+          {fullScreen ? <><FaThList /> All games</> : "All"}
         </TabButton>
-        <TabButton active={tab === "bookstore"} onClick={() => setTab("bookstore")} grow={false}>
-          <FaStore />
+        <TabButton active={tab === "bookstore"} onClick={() => setTab("bookstore")} grow={fullScreen} label="Bookstore">
+          <FaStore /> {fullScreen && "Bookstore"}
         </TabButton>
-        <TabButton active={tab === "settings"} onClick={() => setTab("settings")} grow={false}>
-          <FaCog />
+        <TabButton active={tab === "settings"} onClick={() => setTab("settings")} grow={fullScreen} label="Settings">
+          <FaCog /> {fullScreen && "Settings"}
         </TabButton>
         {!fullScreen && (
-          <TabButton active={false} onClick={openNotesPage} grow={false}>
+          <TabButton active={false} onClick={openNotesPage} grow={false} label="Open full screen">
             <FaExpand />
           </TabButton>
         )}
@@ -93,7 +107,7 @@ export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false 
           </NotesProvider>
         ) : (
           <div style={{ opacity: 0.8, padding: "8px 0" }}>
-            No game is running. Launch one to take notes for it, or check the <b>All</b> tab.
+            No game is running. Launch one to take notes for it, or check <b>{fullScreen ? "All games" : "All"}</b>.
           </div>
         ))}
 

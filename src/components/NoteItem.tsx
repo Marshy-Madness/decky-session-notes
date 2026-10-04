@@ -2,7 +2,7 @@ import { FC } from "react";
 import { Focusable } from "@decky/ui";
 import { FaThumbtack, FaMicrophone, FaCamera, FaCheckSquare, FaEyeSlash } from "react-icons/fa";
 import { Note } from "../types";
-import { firstLine, formatDate, formatDateTime } from "../utils/format";
+import { firstLine, formatWhen } from "../utils/format";
 import { MediaImage } from "./MediaImage";
 import { kindInfo } from "../utils/kinds";
 import * as s from "./styles";
@@ -34,7 +34,7 @@ export const NoteItem: FC<{
           {note.spoiler && <FaEyeSlash size={11} style={{ marginRight: "6px" }} />}
           {note.title || "Untitled"}
         </div>
-        <div style={s.subline}>{note.spoiler ? "Spoiler · open to reveal" : firstLine(note.body) || "\u00a0"}</div>
+        <div style={s.subline}>{note.spoiler ? "Spoiler · open to reveal" : firstLine(note.body) || <i style={{ opacity: 0.7 }}>No text yet</i>}</div>
         <div style={s.chipRow}>
           {from && <span style={{ ...s.chip, background: "#1f5c45" }}>👥 {from}</span>}
           {note.kind && note.kind !== "note" && (
@@ -43,8 +43,7 @@ export const NoteItem: FC<{
             </span>
           )}
           {note.source?.type === "bookstore" && <span style={s.chip}>📚 from {note.source.author}</span>}
-          <span style={s.chip}>Created {formatDate(note.createdAt)}</span>
-          <span style={s.chip}>Edited {formatDateTime(note.updatedAt)}</span>
+          <span style={{ ...s.chip, background: "none", padding: "2px 0" }}>Edited {formatWhen(note.updatedAt)}</span>
           {note.launchNumber != null && <span style={s.chip}>Launch #{note.launchNumber}</span>}
           {note.checklist && note.checklist.length > 0 && (
             <span style={s.chip}>

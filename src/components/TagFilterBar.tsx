@@ -18,7 +18,7 @@ export const TagFilterBar: FC<{
       {allTags.map((tag) => (
         <DialogButton
           key={tag}
-          style={{ ...s.smallButton, padding: "2px 10px", fontSize: "12px", opacity: activeTags.includes(tag) ? 1 : 0.7 }}
+          style={{ ...s.smallButton, padding: "3px 12px", fontSize: "13px", opacity: activeTags.includes(tag) ? 1 : 0.7 }}
           onClick={() => toggle(tag)}
         >
           {activeTags.includes(tag) ? `✓ #${tag}` : `#${tag}`}

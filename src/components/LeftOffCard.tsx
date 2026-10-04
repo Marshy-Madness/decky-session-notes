@@ -34,24 +34,26 @@ export const LeftOffCard: FC<{ game: Game }> = ({ game }) => {
       onClick={() => editLeftOff(game.appId, leftOff?.text ?? "")}
       onOKActionDescription="Edit"
     >
-      <FaMapMarkerAlt style={{ marginTop: "3px", color: "#1a9fff" }} />
+      <FaMapMarkerAlt size={18} style={{ marginTop: "2px", color: "#1a9fff", flex: "0 0 auto" }} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "12px", opacity: 0.75 }}>Where I left off</div>
+        <div style={{ fontSize: "15px", fontWeight: "bold" }}>Where I left off</div>
         {leftOff ? (
           <>
-            <div style={{ fontSize: "14px", whiteSpace: "pre-wrap" }}>{leftOff.text}</div>
-            <div style={{ fontSize: "11px", opacity: 0.6, marginTop: "2px" }}>
+            <div style={{ fontSize: "15px", whiteSpace: "pre-wrap", marginTop: "2px" }}>{leftOff.text}</div>
+            <div style={{ fontSize: "12px", opacity: 0.65, marginTop: "4px" }}>
               {formatDateTime(leftOff.updatedAt)}
               {leftOff.launchNumber != null && ` · Launch #${leftOff.launchNumber}`}
             </div>
           </>
         ) : (
-          <div style={{ fontSize: "14px", opacity: 0.6 }}>Nothing pinned yet. Select to add.</div>
+          <div style={{ fontSize: "14px", opacity: 0.75, marginTop: "2px" }}>
+            Jot down where you stopped so you can pick up fast next time. Press A to add it.
+          </div>
         )}
       </div>
       {leftOff && (
         <DialogButton
-          style={{ ...s.smallButton, padding: "2px 10px", fontSize: "12px" }}
+          style={{ ...s.smallButton, padding: "4px 12px", fontSize: "13px" }}
           onClick={async (e: any) => {
             e?.stopPropagation?.();
             await backend.setLeftOff(game.appId, "");

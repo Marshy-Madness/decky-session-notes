@@ -2,7 +2,7 @@ import { FC, useState } from "react";
 import { DialogButton, Focusable } from "@decky/ui";
 import { FaChevronDown, FaChevronUp } from "react-icons/fa";
 import { Game } from "../types";
-import { formatDate, formatDuration } from "../utils/format";
+import { formatDuration, formatWhen, plural } from "../utils/format";
 import { SessionList } from "./SessionList";
 import * as s from "./styles";
 
@@ -11,22 +11,26 @@ export const StatsView: FC<{ game: Game; live?: boolean }> = ({ game, live }) =>
   const [showSessions, setShowSessions] = useState(false);
   const sum = game.summary;
 
+  const stats = [
+    `Played ${formatDuration(sum.playtimeSeconds)}`,
+    `${sum.launchCount}× launched`,
+    `Last played ${formatWhen(sum.lastLaunched)}`,
+    plural(sum.noteCount, "note"),
+  ];
+
   return (
-    <div style={{ marginBottom: "10px" }}>
+    <div style={{ marginBottom: "12px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        <div style={{ ...s.title, fontSize: "18px", flex: 1 }}>{game.name}</div>
-        {live && <span style={{ ...s.chip, background: "#2d7d2d" }}>● Playing</span>}
+        <div style={{ ...s.title, fontSize: "20px", flex: 1 }}>{game.name}</div>
+        {live && <span style={{ ...s.chip, background: "#2d7d2d", opacity: 1 }}>● Playing now</span>}
       </div>
-      <Focusable style={{ ...s.chipRow, alignItems: "center" }}>
-        <span style={s.chip}>Launched {sum.launchCount}×</span>
-        <span style={s.chip}>Played {formatDuration(sum.playtimeSeconds)}</span>
-        <span style={s.chip}>Last played {formatDate(sum.lastLaunched)}</span>
-        <span style={s.chip}>{sum.noteCount} notes</span>
+      <Focusable style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "4px 12px", marginTop: "4px" }}>
+        <div style={{ fontSize: "14px", opacity: 0.8 }}>{stats.join("  ·  ")}</div>
         <DialogButton
-          style={{ ...s.smallButton, padding: "0 8px", fontSize: "11px", minHeight: 0, height: "20px", lineHeight: "20px" }}
+          style={{ ...s.smallButton, padding: "2px 10px", fontSize: "13px", minHeight: 0 }}
           onClick={() => setShowSessions((v) => !v)}
         >
-          Sessions {showSessions ? <FaChevronUp size={9} /> : <FaChevronDown size={9} />}
+          {showSessions ? "Hide sessions" : "Session history"} {showSessions ? <FaChevronUp size={10} /> : <FaChevronDown size={10} />}
         </DialogButton>
       </Focusable>
       {showSessions && (
