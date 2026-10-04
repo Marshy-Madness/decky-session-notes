@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sticky note, drawn inside the 66dp safe zone of a 108dp adaptive icon -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path android:fillColor="#FFFFFFFF"
+        android:pathData="M34,30h40a4,4 0,0 1,4 4v28l-16,16H34a4,4 0,0 1,-4 -4V34a4,4 0,0 1,4 -4z" />
+    <path android:fillColor="#FFCFE9FF" android:pathData="M62,78v-12a4,4 0,0 1,4 -4h12z" />
+    <path android:fillColor="#FF1A9FFF" android:pathData="M39,41h30a2,2 0,0 1,0 4H39a2,2 0,0 1,0 -4z" />
+    <path android:fillColor="#FF1A9FFF" android:pathData="M39,50h24a2,2 0,0 1,0 4H39a2,2 0,0 1,0 -4z" />
+    <path android:fillColor="#FF1A9FFF" android:pathData="M39,59h16a2,2 0,0 1,0 4H39a2,2 0,0 1,0 -4z" />
+</vector>

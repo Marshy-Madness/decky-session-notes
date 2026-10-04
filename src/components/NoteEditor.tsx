@@ -1,63 +1,320 @@
-import { FC, useState } from "react";
-import { PanelSectionRow, ButtonItem, TextField, Dropdown, DropdownOption } from "@decky/ui";
-import { useNotesContext } from "../state/notesStore";
+import { FC, useRef, useState } from "react";
+import { ModalRoot, DialogButton, Dropdown, Focusable, TextField, ToggleField, showModal, ConfirmModal } from "@decky/ui";
+import { FaCamera, FaMicrophone, FaStop, FaTrash, FaParagraph, FaPlus, FaCheckSquare, FaRegSquare } from "react-icons/fa";
+import { toaster } from "@decky/api";
 import { backend } from "../api/backend";
-import { Note, NoteType } from "../types";
+import { ChecklistItem, Folder, Note, Recording, Screenshot } from "../types";
+import { formatClock, newId } from "../utils/format";
+import { useSessionTimer } from "../hooks/useSessionTimer";
+import { MediaImage } from "./MediaImage";
+import { AudioButton } from "./AudioButton";
+import { ScreenshotPicker } from "./ScreenshotPicker";
+import * as s from "./styles";
 
-const TYPE_OPTIONS: DropdownOption[] = [
-  { label: "Quick Note", data: "quick" },
-  { label: "Checklist", data: "checklist" },
-  { label: "Death", data: "death" },
-  { label: "Milestone", data: "milestone" },
-  { label: "Hint", data: "hint" },
-];
+/** Drop the marker for screenshot `index` (1-based) and renumber the ones after it. */
+function removeImageMarker(body: string, index: number): string {
+  return body
+    .replace(new RegExp(`\\n?\\[img:${index}\\]\\n?`, "g"), "\n")
+    .replace(/\[img:(\d+)\]/g, (m, n) => (Number(n) > index ? `[img:${Number(n) - 1}]` : m));
+}
 
-export const NoteEditor: FC<{ note: Note | null; onClose: () => void }> = ({ note, onClose }) => {
-  const { appId, activeRunProfile, refreshNotes } = useNotesContext();
+export function folderPath(folders: Folder[], id: string | null): string {
+  const parts: string[] = [];
+  let cur = folders.find((f) => f.id === id);
+  while (cur) {
+    parts.unshift(cur.name);
+    cur = folders.find((f) => f.id === cur!.parentId);
+  }
+  return parts.join(" / ");
+}
+
+export const NoteEditor: FC<{
+  appId: string;
+  note: Note | null;
+  folderId: string | null;
+  folders: Folder[];
+  /** Already-attached screenshots to start a new note with (e.g. from the screenshot prompt). */
+  initialScreenshots?: Screenshot[];
+  onSaved: (note: Note) => void;
+  closeModal?: () => void;
+}> = ({ appId, note, folderId: initialFolder, folders, initialScreenshots = [], onSaved, closeModal }) => {
+  const [title, setTitle] = useState(note?.title ?? "");
   const [body, setBody] = useState(note?.body ?? "");
-  const [type, setType] = useState<NoteType>(note?.type ?? "quick");
   const [tags, setTags] = useState(note?.tags.join(", ") ?? "");
+  const [folderId, setFolderId] = useState<string | null>(note?.folderId ?? initialFolder);
+  const [screenshots, setScreenshots] = useState<Screenshot[]>(note?.screenshots ?? initialScreenshots);
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(note?.checklist ?? []);
+  const [newItem, setNewItem] = useState("");
+  const [spoiler, setSpoiler] = useState(note?.spoiler ?? false);
+  const [recordings, setRecordings] = useState<Recording[]>(note?.recordings ?? []);
+  const [recordStart, setRecordStart] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const elapsed = useSessionTimer(recordStart);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
 
-  const save = async () => {
-    if (!appId || !activeRunProfile) return;
-    const payload: Note = {
-      id: note?.id ?? crypto.randomUUID(),
-      runProfileId: activeRunProfile.id,
-      type,
-      tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-      body,
-      pinned: note?.pinned ?? false,
-      archived: false,
-      timestamp: note?.timestamp ?? Date.now(),
-    };
-    await backend.saveNote(appId, activeRunProfile.id, payload);
-    await refreshNotes();
-    onClose();
+  // Media added in this editor session is deleted again on cancel. Media removed from the note is
+  // kept on disk so older versions of the note can still be restored with it.
+  const added = useRef<(Screenshot | Recording)[]>([...initialScreenshots]);
+
+  const stopRecording = async () => {
+    setRecordStart(null);
+    const rec = await backend.stopRecording();
+    if (rec) {
+      added.current.push(rec);
+      setRecordings((r) => [...r, rec]);
+    } else {
+      toaster.toast({ title: "Session Notes", body: "No audio was captured. Is a microphone available?" });
+    }
   };
 
+  const toggleRecording = async () => {
+    if (recordStart) return stopRecording();
+    try {
+      await backend.startRecording(appId);
+      setRecordStart(Date.now());
+    } catch (e) {
+      toaster.toast({ title: "Couldn't start recording", body: String(e) });
+    }
+  };
+
+  const dropMedia = (item: Screenshot | Recording) => {
+    if (added.current.includes(item)) {
+      added.current = added.current.filter((i) => i !== item);
+      backend.deleteMedia(appId, item);
+    }
+  };
+
+  const removeScreenshot = (index: number) => {
+    dropMedia(screenshots[index]);
+    setScreenshots((list) => list.filter((_, i) => i !== index));
+    setBody((b) => removeImageMarker(b, index + 1));
+  };
+
+  const removeRecording = (rec: Recording) => {
+    dropMedia(rec);
+    setRecordings((list) => list.filter((r) => r !== rec));
+  };
+
+  const insertImage = (index: number) => {
+    setBody((b) => `${b}${b && !b.endsWith("\n") ? "\n" : ""}[img:${index + 1}]\n`);
+  };
+
+  const addChecklistItem = () => {
+    if (!newItem.trim()) return;
+    setChecklist((list) => [...list, { id: newId(), text: newItem.trim(), done: false }]);
+    setNewItem("");
+  };
+
+  const cancel = async () => {
+    if (recordStart) await stopRecording();
+    added.current.forEach((item) => backend.deleteMedia(appId, item));
+    closeModal?.();
+  };
+
+  const save = async () => {
+    if (recordStart) await stopRecording();
+    setSaving(true);
+    const payload: Note = {
+      id: note?.id ?? newId(),
+      folderId,
+      title: title.trim() || "Untitled",
+      body,
+      tags: tags.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean),
+      screenshots,
+      recordings,
+      pinned: note?.pinned ?? false,
+      createdAt: note?.createdAt ?? 0,
+      updatedAt: 0,
+      launchNumber: note?.launchNumber ?? null,
+      checklist: checklist.length ? checklist : undefined,
+      spoiler,
+    };
+    const saved = await backend.saveNote(appId, payload);
+    onSaved(saved);
+    closeModal?.();
+  };
+
+  const confirmCancel = () => {
+    const dirty =
+      title !== (note?.title ?? "") ||
+      body !== (note?.body ?? "") ||
+      added.current.length > 0 ||
+      checklist.length !== (note?.checklist?.length ?? 0);
+    if (!dirty) {
+      cancel();
+      return;
+    }
+    showModal(
+      <ConfirmModal
+        strTitle="Discard changes?"
+        strDescription="Your edits to this note will be lost."
+        strOKButtonText="Discard"
+        onOK={cancel}
+      />
+    );
+  };
+
+  const folderOptions = [
+    { label: "No folder", data: null },
+    ...folders.map((f) => ({ label: folderPath(folders, f.id), data: f.id })),
+  ];
+
   return (
-    <>
-      <PanelSectionRow>
-        <Dropdown
-          rgOptions={TYPE_OPTIONS}
-          selectedOption={type}
-          onChange={(o) => setType(o.data as NoteType)}
+    <ModalRoot onCancel={confirmCancel} bAllowFullSize bDisableBackgroundDismiss>
+      <h2 style={{ marginTop: 0 }}>{note ? "Edit note" : "New note"}</h2>
+
+      <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} focusOnMount={!note} />
+
+      <div style={{ margin: "10px 0 4px", fontSize: "13px", opacity: 0.8 }}>Information</div>
+      <Focusable
+        onActivate={() => bodyRef.current?.focus()}
+        onOKActionDescription="Type"
+        style={{ borderRadius: "4px" }}
+      >
+        <textarea
+          ref={bodyRef}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          rows={7}
+          placeholder="What happened, what to remember, where you left off…"
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            resize: "vertical",
+            background: "rgba(0,0,0,0.35)",
+            color: "white",
+            border: "1px solid rgba(255,255,255,0.15)",
+            borderRadius: "4px",
+            padding: "8px",
+            fontSize: "14px",
+            fontFamily: "inherit",
+          }}
         />
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <TextField label="Note" value={body} onChange={(e) => setBody(e.target.value)} />
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <TextField label="Tags (comma separated)" value={tags} onChange={(e) => setTags(e.target.value)} />
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <ButtonItem layout="below" onClick={save}>
-          Save
-        </ButtonItem>
-        <ButtonItem layout="below" onClick={onClose}>
-          Cancel
-        </ButtonItem>
-      </PanelSectionRow>
-    </>
+      </Focusable>
+      {screenshots.length > 0 && (
+        <div style={{ fontSize: "11px", opacity: 0.6, marginTop: "2px" }}>
+          Tip: [img:1] in the text shows screenshot 1 at that spot.
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+        <div style={{ flex: 1 }}>
+          <TextField label="Tags (comma separated)" value={tags} onChange={(e) => setTags(e.target.value)} />
+        </div>
+        {folders.length > 0 && (
+          <div style={{ flex: 1, paddingTop: "18px" }}>
+            <Dropdown
+              rgOptions={folderOptions}
+              selectedOption={folderId}
+              onChange={(o) => setFolderId(o.data)}
+              menuLabel="Folder"
+            />
+          </div>
+        )}
+      </div>
+
+      <div style={{ margin: "12px 0 4px", fontSize: "13px", opacity: 0.8 }}>Checklist</div>
+      {checklist.map((item) => (
+        <Focusable key={item.id} style={{ ...s.toolbar, marginBottom: "4px" }}>
+          <DialogButton
+            style={s.smallButton}
+            onClick={() => setChecklist((list) => list.map((i) => (i.id === item.id ? { ...i, done: !i.done } : i)))}
+          >
+            {item.done ? <FaCheckSquare /> : <FaRegSquare />}
+          </DialogButton>
+          <div style={{ flex: 1, textDecoration: item.done ? "line-through" : "none", opacity: item.done ? 0.6 : 1 }}>
+            {item.text}
+          </div>
+          <DialogButton style={s.smallButton} onClick={() => setChecklist((list) => list.filter((i) => i.id !== item.id))}>
+            <FaTrash size={11} />
+          </DialogButton>
+        </Focusable>
+      ))}
+      <Focusable style={s.toolbar}>
+        <div style={{ flex: 1 }}>
+          <TextField label="Add checklist item" value={newItem} onChange={(e) => setNewItem(e.target.value)} />
+        </div>
+        <DialogButton style={{ ...s.smallButton, marginTop: "18px" }} onClick={addChecklistItem} disabled={!newItem.trim()}>
+          <FaPlus /> Add
+        </DialogButton>
+      </Focusable>
+
+      <ToggleField
+        label="Spoiler"
+        description="Hide this note's contents until you choose to reveal them."
+        checked={spoiler}
+        onChange={setSpoiler}
+      />
+
+      <div style={{ margin: "12px 0 4px", fontSize: "13px", opacity: 0.8 }}>Attachments</div>
+      <Focusable style={s.toolbar}>
+        <DialogButton
+          style={s.smallButton}
+          onClick={() =>
+            showModal(
+              <ScreenshotPicker
+                appId={appId}
+                onAttach={(shots) => {
+                  added.current.push(...shots);
+                  setScreenshots((list) => [...list, ...shots]);
+                }}
+              />
+            )
+          }
+        >
+          <FaCamera /> Add screenshots
+        </DialogButton>
+        <DialogButton style={{ ...s.smallButton, color: recordStart ? "#ff5a5a" : undefined }} onClick={toggleRecording}>
+          {recordStart ? (
+            <>
+              <FaStop /> Stop {formatClock(elapsed / 1000)}
+            </>
+          ) : (
+            <>
+              <FaMicrophone /> Record voice note
+            </>
+          )}
+        </DialogButton>
+      </Focusable>
+
+      {recordings.length > 0 && (
+        <Focusable style={{ ...s.toolbar, flexWrap: "wrap" }}>
+          {recordings.map((rec, i) => (
+            <Focusable key={rec.id} style={{ display: "flex", gap: "4px" }}>
+              <AudioButton appId={appId} recording={rec} label={`Voice ${i + 1}`} />
+              <DialogButton style={s.smallButton} onClick={() => removeRecording(rec)}>
+                <FaTrash size={11} />
+              </DialogButton>
+            </Focusable>
+          ))}
+        </Focusable>
+      )}
+
+      {screenshots.length > 0 && (
+        <Focusable flow-children="row" style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }}>
+          {screenshots.map((shot, i) => (
+            <Focusable key={shot.id} style={{ flex: "0 0 auto", width: "180px" }}>
+              <MediaImage appId={appId} file={shot.thumb ?? shot.file} style={{ width: "180px", height: "101px" }} />
+              <div style={{ fontSize: "11px", opacity: 0.7, margin: "2px 0" }}>Screenshot {i + 1}</div>
+              <Focusable style={{ display: "flex", gap: "4px" }}>
+                <DialogButton style={s.smallButton} onClick={() => insertImage(i)}>
+                  <FaParagraph size={10} /> In text
+                </DialogButton>
+                <DialogButton style={s.smallButton} onClick={() => removeScreenshot(i)}>
+                  <FaTrash size={10} />
+                </DialogButton>
+              </Focusable>
+            </Focusable>
+          ))}
+        </Focusable>
+      )}
+
+      <Focusable style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+        <DialogButton onClick={save} disabled={saving}>
+          {saving ? "Saving…" : "Save"}
+        </DialogButton>
+        <DialogButton onClick={confirmCancel}>Cancel</DialogButton>
+      </Focusable>
+    </ModalRoot>
   );
 };

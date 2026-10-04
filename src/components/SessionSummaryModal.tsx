@@ -1,43 +1,51 @@
 import { FC, useState } from "react";
-import { ModalRoot, DialogButton, TextField } from "@decky/ui";
+import { ModalRoot, DialogButton, Focusable, TextField } from "@decky/ui";
 import { backend } from "../api/backend";
-import { Session } from "../types";
+import { emitDataChanged } from "../state/notesStore";
+import { formatDate, newId } from "../utils/format";
 
-export const SessionSummaryModal: FC<{
-  appId: string;
-  runProfileId: string;
-  start: number;
-  closeModal?: () => void;
-}> = ({ appId, runProfileId, start, closeModal }) => {
-  const [summary, setSummary] = useState("");
-  const [mood, setMood] = useState(3);
+/** Optional end-of-session prompt; saves the answer as a regular note tagged #recap. */
+export const SessionSummaryModal: FC<{ appId: string; gameName: string; closeModal?: () => void }> = ({
+  appId,
+  gameName,
+  closeModal,
+}) => {
+  const [body, setBody] = useState("");
 
   const save = async () => {
-    const session: Session = {
-      id: crypto.randomUUID(),
-      runProfileId,
-      start,
-      end: Date.now(),
-      moodRating: mood,
-      summary,
-    };
-    await backend.saveSession(appId, runProfileId, session);
+    if (body.trim()) {
+      await backend.setLeftOff(appId, body.trim());
+      await backend.saveNote(appId, {
+        id: newId(),
+        folderId: null,
+        title: `Session recap — ${formatDate(Date.now())}`,
+        body,
+        tags: ["recap"],
+        screenshots: [],
+        recordings: [],
+        pinned: false,
+        createdAt: 0,
+        updatedAt: 0,
+        launchNumber: null,
+      });
+      emitDataChanged();
+    }
     closeModal?.();
   };
 
   return (
     <ModalRoot onCancel={closeModal}>
-      <h3>Session Summary</h3>
-      <TextField label="How'd it go?" value={summary} onChange={(e) => setSummary(e.target.value)} />
-      <div>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <span key={n} onClick={() => setMood(n)} style={{ cursor: "pointer" }}>
-            {n <= mood ? "⭐" : "☆"}
-          </span>
-        ))}
-      </div>
-      <DialogButton onClick={save}>Save</DialogButton>
-      <DialogButton onClick={closeModal}>Skip</DialogButton>
+      <h3 style={{ marginTop: 0 }}>Done with {gameName}?</h3>
+      <TextField
+        label="Where did you leave off / what's next? (pinned for next time)"
+        value={body}
+        onChange={(e) => setBody(e.target.value)}
+        focusOnMount
+      />
+      <Focusable style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
+        <DialogButton onClick={save}>Save</DialogButton>
+        <DialogButton onClick={closeModal}>Skip</DialogButton>
+      </Focusable>
     </ModalRoot>
   );
 };

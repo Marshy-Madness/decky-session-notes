@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; background: #14171c; color: #e6e9ee; display: flex; min-height: 100vh; align-items: center; justify-content: center; }
+  form { width: min(420px, 90vw); background: #1d2129; padding: 24px; border-radius: 12px; }
+  h1 { margin: 0 0 6px; font-size: 22px; } p { opacity: .7; font-size: 14px; line-height: 1.4; }
+  input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 12px; border-radius: 8px; border: 1px solid #39404c; background: #262b35; color: inherit; margin: 10px 0; }
+  button { width: 100%; font-size: 16px; padding: 12px; border-radius: 8px; border: 0; background: #1a9fff; color: #fff; }
+  .err { color: #e5484d; font-size: 14px; min-height: 18px; }
+</style>
+</head>
+<body>
+<form id="f">
+  <h1>📝 Session Notes</h1>
+  <p>Enter the address of your Session Notes server. You'll log in with the website password next.</p>
+  <input id="url" type="url" inputmode="url" autocapitalize="off" autocorrect="off" placeholder="https://steamnotes.example.com">
+  <div class="err" id="err"></div>
+  <button>Connect</button>
+</form>
+<script>
+  const params = new URLSearchParams(location.search);
+  document.getElementById("url").value = params.get("url") || "";
+  if (params.get("error")) document.getElementById("err").textContent = "Couldn't reach the server: " + params.get("error");
+  document.getElementById("f").onsubmit = (e) => {
+    e.preventDefault();
+    let url = document.getElementById("url").value.trim().replace(/\/+$/, "");
+    if (!url) return;
+    if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+    SessionNotesApp.setServer(url);
+  };
+</script>
+</body>
+</html>

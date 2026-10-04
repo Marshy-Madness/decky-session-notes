@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d2129">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/icon.svg">
+<title>Session Notes</title>
+<style>
+  :root { color-scheme: dark; --bg: #14171c; --panel: #1d2129; --line: #2a2f38; --chip: #2c323d; --accent: #1a9fff; --danger: #e5484d; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: var(--bg); color: #e6e9ee; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { background: #2b313c; border: 1px solid #3a414e; border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  button:hover { background: #343b48; } button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.danger { color: var(--danger); } button.icon { padding: 2px 8px; }
+  input, select, textarea { background: #262b35; border: 1px solid #39404c; border-radius: 6px; padding: 6px 10px; }
+  textarea { width: 100%; resize: vertical; line-height: 1.45; }
+  header { padding: 12px 20px; background: var(--panel); display: flex; gap: 12px; align-items: center; position: sticky; top: 0; z-index: 2; }
+  header h1 { font-size: 18px; margin: 0; flex: 1; }
+  main { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 56px); }
+  nav { border-right: 1px solid var(--line); overflow-y: auto; }
+  nav button { display: block; width: 100%; text-align: left; padding: 10px 16px; background: none; border: 0; border-radius: 0; border-bottom: 1px solid #22262e; }
+  nav button.active, nav button:hover { background: #262b35; }
+  small, .meta { opacity: .65; font-size: 12px; }
+  section#content { padding: 20px; max-width: 1100px; }
+  .toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 12px 0; }
+  .card { background: var(--panel); border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; display: flex; gap: 12px; cursor: pointer; }
+  .card:hover { background: #232833; } .card .text { flex: 1; min-width: 0; }
+  .card h3 { margin: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card .first { opacity: .75; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .card img { width: 140px; height: 79px; object-fit: cover; border-radius: 6px; }
+  .chip { display: inline-block; font-size: 11px; background: var(--chip); border-radius: 8px; padding: 1px 7px; margin: 4px 4px 0 0; }
+  .box { background: #1e2a38; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
+  .counter { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .counter .n { min-width: 40px; text-align: center; font-size: 18px; font-weight: bold; }
+  .counter .name { flex: 1; } .defeated { opacity: .6; }
+  .spoiler { filter: blur(5px); }
+  dialog { background: var(--panel); color: inherit; border: 1px solid var(--line); border-radius: 10px; width: min(860px, 95vw); max-height: 92vh; padding: 20px; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog label { display: block; font-size: 12px; opacity: .75; margin: 12px 0 4px; }
+  .row { display: flex; gap: 10px; } .row > * { flex: 1; }
+  .shots { display: flex; gap: 10px; flex-wrap: wrap; } .shot { width: 180px; font-size: 11px; }
+  .shot img { width: 180px; height: 101px; object-fit: cover; border-radius: 6px; display: block; }
+  .check { display: flex; gap: 8px; align-items: center; padding: 3px 0; } .check input[type=text] { flex: 1; }
+  #login { max-width: 340px; margin: 18vh auto; background: var(--panel); padding: 24px; border-radius: 10px; }
+  #login input { width: 100%; margin: 12px 0; } .err { color: var(--danger); font-size: 13px; min-height: 18px; }
+  .hidden { display: none !important; }
+  .version { background: #262b35; border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; display: flex; gap: 10px; align-items: center; }
+  .version:hover { background: #2e3440; } .version .text { flex: 1; min-width: 0; }
+  .preview { background: #171a20; border-radius: 8px; padding: 12px; white-space: pre-wrap; max-height: 45vh; overflow-y: auto; margin: 10px 0; }
+  button.recording { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .saving { position: fixed; bottom: 16px; right: 16px; background: var(--panel); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); }
+  #gamePicker, .mobile-only { display: none; }
+  /* ---- phones ---- */
+  @media (max-width: 760px) {
+    header { flex-wrap: wrap; padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top)); gap: 8px; }
+    header h1 { font-size: 16px; }
+    #gamePicker { display: block; flex: 1 1 100%; order: 3; }
+    #search { flex: 1 1 100%; order: 4; }
+    .mobile-only { display: inline-block; }
+    main { grid-template-columns: 1fr; }
+    nav { display: none; }
+    section#content { padding: 12px; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+    button, select, input:not([type=checkbox]) { min-height: 42px; }
+    button.icon { min-width: 42px; }
+    input, select, textarea { font-size: 16px; } /* stops iOS zooming into fields */
+    .card { padding: 10px 12px; } .card img { width: 96px; height: 54px; }
+    .counter { flex-wrap: wrap; } .counter .name { flex: 1 1 100%; }
+    .toolbar > select, .toolbar > input { flex: 1 1 auto; }
+    dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; border: 0;
+      padding: 16px; padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+    .row { flex-direction: column; gap: 0; }
+    .shot, .shot img { width: calc(50vw - 24px); } .shot img { height: calc((50vw - 24px) * 0.5625); }
+    audio { max-width: 100%; }
+    .saving { left: 12px; right: 12px; text-align: center; }
+  }
+</style>
+</head>
+<body>
+<form id="login" class="hidden">
+  <h2 style="margin-top:0">📝 Session Notes</h2>
+  <input id="password" type="password" placeholder="Password" autocomplete="current-password" autofocus>
+  <div class="err" id="loginErr"></div>
+  <button class="primary" style="width:100%">Log in</button>
+</form>
+
+<div id="app" class="hidden">
+  <header>
+    <h1>📝 Session Notes</h1>
+    <select id="gamePicker" aria-label="Game"></select>
+    <input id="search" placeholder="Search notes…">
+    <a id="getApp" class="hidden" href="/download/android"><button>📱 Android app</button></a>
+    <button id="changeServer" class="hidden">Server</button>
+    <button id="logout">Log out</button>
+  </header>
+  <main><nav id="games"></nav><section id="content"><p class="meta">Pick a game.</p></section></main>
+</div>
+
+<dialog id="editor"></dialog>
+<dialog id="panel"></dialog>
+<div id="saving" class="saving hidden">Saving…</div>
+
+<script>
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+const date = (ms) => (ms ? new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—");
+const day = (ms) => (ms ? new Date(ms).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—");
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }));
+const mediaUrl = (appId, file) => `/api/media/${encodeURIComponent(appId)}/${encodeURIComponent(file)}`;
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: { "X-Requested-With": "session-notes", ...(opts.json ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) }, body: opts.json ? JSON.stringify(opts.json) : opts.body });
+  if (r.status === 401) { showLogin(); throw new Error("unauthorized"); }
+  const data = await r.json().catch(() => null);
+  if (!r.ok) throw new Error(data?.error || r.statusText);
+  return data;
+}
+
+// ---------- login ----------
+function showLogin() { $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); $("#password").focus(); }
+$("#login").onsubmit = async (e) => {
+  e.preventDefault();
+  $("#loginErr").textContent = "";
+  try {
+    const r = await fetch("/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ password: $("#password").value }) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error);
+    $("#password").value = "";
+    start();
+  } catch (err) { $("#loginErr").textContent = err.message; }
+};
+if (window.SessionNotesApp) {
+  $("#changeServer").classList.remove("hidden");
+  $("#changeServer").onclick = () => window.SessionNotesApp.changeServer();
+}
+$("#logout").onclick = async () => { await fetch("/api/logout", { method: "POST" }); showLogin(); };
+
+// ---------- state ----------
+let games = [], game = null, folderFilter = "all", sortMode = localStorage.getItem("sn-sort") || "edited";
+
+async function start() {
+  const me = await (await fetch("/api/me")).json();
+  if (!me.loggedIn) return showLogin();
+  if (me.androidApp && !window.SessionNotesApp && /Android/i.test(navigator.userAgent)) $("#getApp").classList.remove("hidden");
+  $("#login").classList.add("hidden");
+  $("#app").classList.remove("hidden");
+  await loadGames();
+  const last = localStorage.getItem("sn-game");
+  if (last && games.some((g) => g.appId === last)) await openGame(last);
+  else if (games.length) await openGame(games[0].appId); // most recently played
+  checkPwaShare();
+  window.SessionNotesApp?.ready?.(); // native Android app: deliver any pending share
+}
+
+async function loadGames() {
+  games = (await api("/api/games")).sort((a, b) => (b.lastLaunched ?? 0) - (a.lastLaunched ?? 0));
+  $("#games").innerHTML = games.map((g) => `<button data-id="${esc(g.appId)}" class="${g.appId === game?.appId ? "active" : ""}">${esc(g.name)}<br><small>${g.noteCount} notes · last played ${day(g.lastLaunched)}</small></button>`).join("") || '<p class="meta" style="padding:16px">Nothing synced yet. Turn on sync in the Deck plugin.</p>';
+  $("#games").querySelectorAll("button").forEach((b) => (b.onclick = () => openGame(b.dataset.id)));
+  $("#gamePicker").innerHTML = (game ? "" : '<option value="">Pick a game…</option>') +
+    games.map((g) => `<option value="${esc(g.appId)}">${esc(g.name)} (${g.noteCount})</option>`).join("");
+  if (game) $("#gamePicker").value = game.appId;
+}
+
+async function openGame(appId) {
+  localStorage.setItem("sn-game", appId);
+  folderFilter = "all";
+  game = (await api(`/api/games/${encodeURIComponent(appId)}`)).game;
+  $("#games").querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.id === appId));
+  if (!$("#gamePicker").querySelector(`option[value="${CSS.escape(appId)}"]`)) loadGames(); else $("#gamePicker").value = appId;
+  render();
+}
+
+/** Send the whole game; the server merges it (newest edit wins) and returns the result. */
+async function save() {
+  $("#saving").classList.remove("hidden");
+  try {
+    game = (await api(`/api/sync/${encodeURIComponent(game.appId)}`, { method: "POST", json: game })).game;
+    render();
+    loadGames();
+  } catch (err) { alert("Couldn't save: " + err.message); }
+  finally { $("#saving").classList.add("hidden"); }
+}
+
+const tombstone = (id) => ((game.deleted ??= {})[id] = Date.now());
+const folderPath = (id) => { const p = []; let f = game.folders.find((x) => x.id === id); while (f) { p.unshift(f.name); f = game.folders.find((x) => x.id === f.parentId); } return p.join(" / "); };
+const firstLine = (body) => (body || "").split("\n").map((l) => l.replace(/\[img:\d+\]/g, "").trim()).find(Boolean) || "";
+
+// ---------- game view ----------
+function render() {
+  if (!game) return;
+  const q = $("#search").value.toLowerCase();
+  game.notes ??= []; game.folders ??= []; game.counters ??= [];
+  const sorters = { alpha: (a, b) => a.title.localeCompare(b.title), created: (a, b) => b.createdAt - a.createdAt, edited: (a, b) => b.updatedAt - a.updatedAt };
+  const notes = game.notes
+    .filter((n) => folderFilter === "all" || (folderFilter === "none" ? !n.folderId : n.folderId === folderFilter))
+    .filter((n) => !q || (n.title + "\n" + n.body + "\n" + (n.tags || []).join(" ")).toLowerCase().includes(q))
+    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || (sorters[sortMode] || sorters.edited)(a, b));
+  const lo = game.leftOff?.text ? game.leftOff : null;
+  const counters = [...game.counters].sort((a, b) => (a.defeated ? 1 : 0) - (b.defeated ? 1 : 0) || a.createdAt - b.createdAt);
+  const icon = { death: "💀", boss: "⚔️", custom: "#" };
+
+  $("#content").innerHTML = `
+    <h2 style="margin:0">${esc(game.name)}</h2>
+    <div class="meta">Launched ${game.launchCount ?? 0}× · ${Math.round((game.playtimeSeconds ?? 0) / 60)} min played · last played ${date(game.lastLaunched)}</div>
+
+    <div class="box" style="margin-top:14px">
+      <b>📍 Where I left off</b> ${lo ? `<span class="meta">· ${date(lo.updatedAt)}</span>` : ""}
+      <textarea id="leftOff" rows="2" placeholder="Shown on the Deck every time you launch this game">${esc(lo?.text ?? "")}</textarea>
+      <div class="toolbar" style="margin:6px 0 0"><button id="saveLeftOff" class="primary">Save pin</button>${lo ? '<button id="clearLeftOff">Clear</button>' : ""}</div>
+    </div>
+
+    <div class="box">
+      <b>Counters</b>
+      ${counters.map((c) => `<div class="counter ${c.defeated ? "defeated" : ""}" data-id="${esc(c.id)}">
+          <span>${icon[c.kind] || "#"}</span><span class="name">${esc(c.name)} ${c.defeated ? '<span class="chip">✓ defeated</span>' : ""} ${c.sessionCount ? `<small>+${c.sessionCount} this session</small>` : ""}</span>
+          <button class="icon" data-act="dec">−</button><span class="n">${c.count}</span><button class="icon" data-act="inc">+</button>
+          ${c.kind === "boss" ? `<button class="icon" data-act="defeat">${c.defeated ? "Undo defeat" : "Defeated"}</button>` : ""}
+          <button class="icon" data-act="rename">Rename</button><button class="icon danger" data-act="del">✕</button></div>`).join("") || '<div class="meta">No counters yet.</div>'}
+      <div class="toolbar" style="margin:8px 0 0">
+        <select id="counterKind"><option value="death">💀 Death counter</option><option value="boss">⚔️ Boss attempts</option><option value="custom"># Custom</option></select>
+        <input id="counterName" placeholder="Name (e.g. Malenia)"><button id="addCounter">Add counter</button>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="primary" id="newNote">+ New note</button>
+      <button id="newFolder">+ New folder</button>
+      <select id="folderFilter"><option value="all">All folders</option><option value="none">No folder</option>
+        ${game.folders.map((f) => `<option value="${esc(f.id)}">📁 ${esc(folderPath(f.id))}</option>`).join("")}</select>
+      ${folderFilter !== "all" && folderFilter !== "none" ? '<button id="renameFolder">Rename folder</button><button id="deleteFolder" class="danger">Delete folder</button>' : ""}
+      <span style="flex:1"></span>
+      <button id="showDeleted">🗑 Recently deleted</button>
+      <select id="sort"><option value="edited">Sort: Last Edited</option><option value="created">Sort: Created</option><option value="alpha">Sort: Alphabetical</option></select>
+    </div>
+
+    ${notes.map((n) => {
+      const shot = n.screenshots?.[0];
+      const done = (n.checklist || []).filter((c) => c.done).length;
+      const chips = [`Created ${day(n.createdAt)}`, `Edited ${date(n.updatedAt)}`, n.launchNumber ? `Launch #${n.launchNumber}` : "", n.folderId ? `📁 ${folderPath(n.folderId)}` : "",
+        n.checklist?.length ? `☑ ${done}/${n.checklist.length}` : "", n.recordings?.length ? `🎙 ${n.recordings.length}` : "", ...(n.tags || []).map((t) => "#" + t)].filter(Boolean);
+      return `<div class="card" data-id="${esc(n.id)}"><div class="text">
+          <h3>${n.pinned ? "📌 " : ""}${n.spoiler ? "🙈 " : ""}${esc(n.title)}</h3>
+          <div class="first ${n.spoiler ? "spoiler" : ""}">${esc(firstLine(n.body)) || "&nbsp;"}</div>
+          ${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>
+          ${shot ? `<img class="${n.spoiler ? "spoiler" : ""}" loading="lazy" src="${mediaUrl(game.appId, shot.thumb || shot.file)}">` : ""}</div>`;
+    }).join("") || '<p class="meta">No notes here.</p>'}`;
+
+  $("#folderFilter").value = folderFilter;
+  $("#sort").value = sortMode;
+  $("#folderFilter").onchange = (e) => { folderFilter = e.target.value; render(); };
+  $("#sort").onchange = (e) => { sortMode = e.target.value; localStorage.setItem("sn-sort", sortMode); render(); };
+  $("#saveLeftOff").onclick = () => { game.leftOff = { text: $("#leftOff").value.trim(), updatedAt: Date.now(), launchNumber: null }; save(); };
+  if ($("#clearLeftOff")) $("#clearLeftOff").onclick = () => { game.leftOff = { text: "", updatedAt: Date.now(), launchNumber: null }; save(); };
+  $("#addCounter").onclick = () => {
+    const kind = $("#counterKind").value;
+    const name = $("#counterName").value.trim() || { death: "Deaths", boss: "Boss", custom: "Counter" }[kind];
+    game.counters.push({ id: uid(), name, kind, count: 0, sessionCount: 0, createdAt: Date.now(), updatedAt: Date.now() });
+    save();
+  };
+  $("#content").querySelectorAll(".counter").forEach((row) => row.querySelectorAll("button").forEach((b) => (b.onclick = () => {
+    const c = game.counters.find((x) => x.id === row.dataset.id);
+    const act = b.dataset.act;
+    if (act === "del") { if (!confirm(`Delete "${c.name}"?`)) return; game.counters = game.counters.filter((x) => x !== c); tombstone(c.id); }
+    else if (act === "rename") { const name = prompt("Counter name", c.name); if (!name) return; c.name = name; }
+    else if (act === "defeat") c.defeated = !c.defeated;
+    else c.count = Math.max(0, c.count + (act === "inc" ? 1 : -1));
+    c.updatedAt = Date.now();
+    save();
+  })));
+  $("#newNote").onclick = () => editNote(null);
+  $("#showDeleted").onclick = showDeleted;
+  $("#newFolder").onclick = () => {
+    const name = prompt("Folder name"); if (!name) return;
+    const parent = folderFilter !== "all" && folderFilter !== "none" ? folderFilter : null;
+    game.folders.push({ id: uid(), name, parentId: parent, createdAt: Date.now(), updatedAt: Date.now() });
+    save();
+  };
+  if ($("#renameFolder")) $("#renameFolder").onclick = () => {
+    const f = game.folders.find((x) => x.id === folderFilter); const name = prompt("Folder name", f.name); if (!name) return;
+    f.name = name; f.updatedAt = Date.now(); save();
+  };
+  if ($("#deleteFolder")) $("#deleteFolder").onclick = () => {
+    const f = game.folders.find((x) => x.id === folderFilter);
+    if (!confirm(`Delete folder "${f.name}"? Notes inside move up one level.`)) return;
+    const now = Date.now();
+    game.notes.forEach((n) => { if (n.folderId === f.id) { n.folderId = f.parentId ?? null; n.updatedAt = now; } });
+    game.folders.forEach((x) => { if (x.parentId === f.id) { x.parentId = f.parentId ?? null; x.updatedAt = now; } });
+    game.folders = game.folders.filter((x) => x !== f); tombstone(f.id);
+    folderFilter = "all"; save();
+  };
+  $("#content").querySelectorAll(".card").forEach((c) => (c.onclick = () => editNote(game.notes.find((n) => n.id === c.dataset.id))));
+}
+
+// ---------- version history / recently deleted ----------
+function previewHtml(note) {
+  const check = (note.checklist || []).map((c) => `${c.done ? "☑" : "☐"} ${esc(c.text)}`).join("\n");
+  const chips = [`Edited ${date(note.updatedAt)}`, ...(note.tags || []).map((t) => "#" + t),
+    note.screenshots?.length ? `📷 ${note.screenshots.length}` : "", note.recordings?.length ? `🎙 ${note.recordings.length}` : ""].filter(Boolean);
+  return `<h3 style="margin:0">${esc(note.title)}</h3>${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}
+    <div class="preview">${esc(note.body) || '<span class="meta">(no information)</span>'}${check ? "\n\n" + check : ""}</div>`;
+}
+
+/** Bring back an older or deleted version; it becomes the newest edit so it syncs to the Deck. */
+function restoreVersion(note) {
+  const restored = { ...structuredClone(note), updatedAt: Date.now() };
+  const i = game.notes.findIndex((x) => x.id === restored.id);
+  if (i >= 0) game.notes[i] = restored; else game.notes.push(restored);
+  $("#panel").close(); $("#editor").close();
+  save();
+}
+
+function showVersionList({ title, empty, items, label, restoreText }) {
+  const dlg = $("#panel");
+  const list = () => {
+    dlg.innerHTML = `<h2 style="margin-top:0">${esc(title)}</h2>
+      ${items.length ? items.map((it, i) => `<div class="version" data-i="${i}"><div class="text"><b>${esc(it.note.title)}</b><div class="meta">${esc(firstLine(it.note.body))}</div></div><span class="chip">${esc(label(it))}</span></div>`).join("") : `<p class="meta">${esc(empty)}</p>`}
+      <div class="toolbar"><button id="pClose">Close</button></div>`;
+    dlg.querySelectorAll(".version").forEach((el) => (el.onclick = () => detail(items[+el.dataset.i])));
+    $("#pClose", dlg).onclick = () => dlg.close();
+  };
+  const detail = (it) => {
+    dlg.innerHTML = `<p class="meta">${esc(label(it))}</p>${previewHtml(it.note)}
+      <div class="toolbar"><button class="primary" id="pRestore">${esc(restoreText)}</button><button id="pBack">Back to list</button></div>`;
+    $("#pRestore", dlg).onclick = () => { if (confirm("Restore this version? What the note says now is kept in its history.")) restoreVersion(it.note); };
+    $("#pBack", dlg).onclick = list;
+  };
+  list();
+  dlg.showModal();
+}
+
+async function showHistory(note) {
+  const items = await api(`/api/history/${encodeURIComponent(game.appId)}/${encodeURIComponent(note.id)}`);
+  showVersionList({ title: `Version history · ${note.title}`, empty: "No earlier versions yet. They appear after the note is edited.",
+    items, label: (v) => `${v.reason === "deleted" ? "Before delete" : "Saved"} ${date(v.savedAt)}`, restoreText: "Restore this version" });
+}
+
+async function showDeleted() {
+  const items = await api(`/api/deleted/${encodeURIComponent(game.appId)}`);
+  showVersionList({ title: "Recently deleted", empty: "Nothing deleted.", items, label: (d) => `Deleted ${date(d.deletedAt)}`, restoreText: "Restore note" });
+}
+
+// ---------- note editor ----------
+function editNote(original, draft = {}) {
+  const n = original ? structuredClone(original) : { id: uid(), folderId: folderFilter !== "all" && folderFilter !== "none" ? folderFilter : null, title: "", body: "", tags: [], screenshots: [], recordings: [], checklist: [], pinned: false, spoiler: false, createdAt: 0, updatedAt: 0, launchNumber: null, ...draft };
+  n.checklist ??= [];
+  n.recordings ??= [];
+  const dlg = $("#editor");
+  let recorder = null, recStart = 0, recTimer = null, discardRecording = false;
+
+  const uploadAudio = async (blob, ext, durationSec) => {
+    const id = uid();
+    await api(mediaUrl(game.appId, `${id}.${ext}`), { method: "PUT", body: blob, headers: { "Content-Type": "application/octet-stream" } });
+    n.recordings.push({ id, file: `${id}.${ext}`, createdAt: Date.now(), ...(durationSec ? { durationSec } : {}) });
+  };
+
+  const toggleRecording = async () => {
+    if (recorder) { recorder.stop(); return; }
+    if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+      alert("Recording needs the secure (https) address, e.g. https://steamnotes.marshymadness.com. You can still upload an audio file.");
+      return;
+    }
+    let stream;
+    try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+    catch (err) { alert("Microphone not available: " + err.message); return; }
+    // Opus in WebM/Ogg plays on the Deck; AAC (Safari's mp4) may not.
+    const mime = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm", "audio/mp4"].find((m) => MediaRecorder.isTypeSupported(m)) || "";
+    const mr = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
+    const chunks = [];
+    mr.ondataavailable = (e) => e.data.size && chunks.push(e.data);
+    mr.onstop = async () => {
+      stream.getTracks().forEach((t) => t.stop());
+      clearInterval(recTimer);
+      recorder = null;
+      if (discardRecording) return;
+      collect();
+      const type = mr.mimeType || mime;
+      const ext = type.includes("ogg") ? "ogg" : type.includes("mp4") ? "m4a" : "webm";
+      await uploadAudio(new Blob(chunks, { type }), ext, Math.round((Date.now() - recStart) / 100) / 10);
+      draw();
+    };
+    collect();
+    recorder = mr; recStart = Date.now(); mr.start();
+    draw();
+    recTimer = setInterval(() => {
+      const s = Math.floor((Date.now() - recStart) / 1000);
+      const b = $("#eRecord", dlg); if (b) b.textContent = `⏹ Stop recording (${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")})`;
+    }, 500);
+  };
+  dlg.onclose = () => { if (recorder) { discardRecording = true; recorder.stop(); } };
+
+  const draw = () => {
+    dlg.innerHTML = `
+      <h2 style="margin-top:0">${original ? "Edit note" : "New note"}</h2>
+      <label>Title</label><input id="eTitle" style="width:100%" value="${esc(n.title)}">
+      <label>Information <span class="meta">— put [img:1] on its own line to show screenshot 1 there</span></label>
+      <textarea id="eBody" rows="9">${esc(n.body)}</textarea>
+      <div class="row">
+        <div><label>Tags (comma separated)</label><input id="eTags" style="width:100%" value="${esc((n.tags || []).join(", "))}"></div>
+        <div><label>Folder</label><select id="eFolder" style="width:100%"><option value="">No folder</option>${game.folders.map((f) => `<option value="${esc(f.id)}">${esc(folderPath(f.id))}</option>`).join("")}</select></div>
+      </div>
+      <div class="toolbar"><label style="margin:0"><input type="checkbox" id="ePinned"> Pin to top</label><label style="margin:0"><input type="checkbox" id="eSpoiler"> Spoiler (hidden until revealed)</label></div>
+      <label>Checklist</label>
+      <div id="eChecklist">${n.checklist.map((c, i) => `<div class="check"><input type="checkbox" data-i="${i}" ${c.done ? "checked" : ""}><input type="text" data-i="${i}" value="${esc(c.text)}"><button class="icon danger" data-del="${i}">✕</button></div>`).join("")}</div>
+      <div class="check"><input type="text" id="eNewItem" placeholder="Add an item and press Enter"><button class="icon" id="eAddItem">Add</button></div>
+      <label>Screenshots</label>
+      <div class="shots">${n.screenshots.map((s, i) => `<div class="shot"><img src="${mediaUrl(game.appId, s.thumb || s.file)}">Screenshot ${i + 1}
+          <div class="toolbar" style="margin:4px 0"><button class="icon" data-insert="${i}">In text</button><button class="icon danger" data-rmshot="${i}">Remove</button></div></div>`).join("")}</div>
+      <div class="toolbar"><input type="file" id="eUpload" accept="image/*" multiple></div>
+      <label>Voice notes</label>
+      ${(n.recordings || []).map((r, i) => `<div class="toolbar" style="margin:4px 0"><audio controls preload="none" src="${mediaUrl(game.appId, r.file)}"></audio><span class="meta">${r.durationSec ? Math.round(r.durationSec) + "s · " : ""}${date(r.createdAt)}</span><button class="icon danger" data-rmrec="${i}">Remove</button></div>`).join("")}
+      <div class="toolbar"><button id="eRecord" class="${recorder ? "recording" : ""}">${recorder ? "⏹ Stop recording" : "🎙 Record voice note"}</button>
+        <span class="meta">or upload:</span><input type="file" id="eAudio" accept="audio/*"></div>
+      <div class="toolbar" style="margin-top:18px">
+        <button class="primary" id="eSave" ${recorder ? "disabled title=\"Stop the recording first\"" : ""}>Save</button><button id="eCancel">Cancel</button><span style="flex:1"></span>
+        ${original ? '<button id="eHistory">🕘 Version history</button><button class="danger" id="eDelete">Delete note</button>' : ""}
+      </div>`;
+    $("#eFolder", dlg).value = n.folderId || "";
+    $("#ePinned", dlg).checked = !!n.pinned;
+    $("#eSpoiler", dlg).checked = !!n.spoiler;
+    wire();
+  };
+
+  const collect = () => {
+    n.title = $("#eTitle", dlg).value.trim() || "Untitled";
+    n.body = $("#eBody", dlg).value;
+    n.tags = $("#eTags", dlg).value.split(",").map((t) => t.trim().replace(/^#/, "")).filter(Boolean);
+    n.folderId = $("#eFolder", dlg).value || null;
+    n.pinned = $("#ePinned", dlg).checked;
+    n.spoiler = $("#eSpoiler", dlg).checked;
+    dlg.querySelectorAll("#eChecklist input[type=text]").forEach((el) => (n.checklist[el.dataset.i].text = el.value));
+    dlg.querySelectorAll("#eChecklist input[type=checkbox]").forEach((el) => (n.checklist[el.dataset.i].done = el.checked));
+  };
+
+  const wire = () => {
+    const addItem = () => { collect(); const t = $("#eNewItem", dlg).value.trim(); if (!t) return; n.checklist.push({ id: uid(), text: t, done: false }); draw(); $("#eNewItem", dlg).focus(); };
+    $("#eAddItem", dlg).onclick = addItem;
+    $("#eNewItem", dlg).onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); addItem(); } };
+    dlg.querySelectorAll("[data-del]").forEach((b) => (b.onclick = () => { collect(); n.checklist.splice(+b.dataset.del, 1); draw(); }));
+    dlg.querySelectorAll("[data-insert]").forEach((b) => (b.onclick = () => { collect(); n.body += `${n.body && !n.body.endsWith("\n") ? "\n" : ""}[img:${+b.dataset.insert + 1}]\n`; draw(); }));
+    dlg.querySelectorAll("[data-rmshot]").forEach((b) => (b.onclick = () => {
+      collect(); const idx = +b.dataset.rmshot + 1;
+      n.screenshots.splice(idx - 1, 1);
+      n.body = n.body.replace(new RegExp(`\\n?\\[img:${idx}\\]\\n?`, "g"), "\n").replace(/\[img:(\d+)\]/g, (m, k) => (+k > idx ? `[img:${k - 1}]` : m));
+      draw();
+    }));
+    $("#eRecord", dlg).onclick = toggleRecording;
+    $("#eAudio", dlg).onchange = async (e) => {
+      collect();
+      for (const file of e.target.files) {
+        const ext = (file.name.split(".").pop() || "webm").toLowerCase().replace(/[^a-z0-9]/g, "") || "webm";
+        await uploadAudio(file, ext);
+      }
+      draw();
+    };
+    if ($("#eHistory", dlg)) $("#eHistory", dlg).onclick = () => showHistory(original);
+    dlg.querySelectorAll("[data-rmrec]").forEach((b) => (b.onclick = () => { collect(); n.recordings.splice(+b.dataset.rmrec, 1); draw(); }));
+    $("#eUpload", dlg).onchange = async (e) => {
+      collect();
+      for (const file of e.target.files) {
+        const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+        const id = uid();
+        await api(mediaUrl(game.appId, `${id}.${ext}`), { method: "PUT", body: file, headers: { "Content-Type": "application/octet-stream" } });
+        n.screenshots.push({ id, file: `${id}.${ext}`, takenAt: Date.now() });
+      }
+      draw();
+    };
+    $("#eCancel", dlg).onclick = () => dlg.close();
+    $("#eSave", dlg).onclick = () => {
+      collect();
+      if (!n.checklist.length) delete n.checklist;
+      const now = Date.now();
+      n.updatedAt = now; if (!n.createdAt) n.createdAt = now;
+      const i = game.notes.findIndex((x) => x.id === n.id);
+      if (i >= 0) game.notes[i] = n; else game.notes.push(n);
+      dlg.close(); save();
+    };
+    if ($("#eDelete", dlg)) $("#eDelete", dlg).onclick = () => {
+      if (!confirm(`Delete "${n.title}"?`)) return;
+      game.notes = game.notes.filter((x) => x.id !== n.id); tombstone(n.id);
+      dlg.close(); save();
+    };
+  };
+
+  draw();
+  dlg.showModal();
+}
+
+// ---------- receiving shares (Android share sheet, PWA or native app) ----------
+async function uploadShared(files) {
+  const screenshots = [], recordings = [];
+  for (const f of files) {
+    const isAudio = (f.type || "").startsWith("audio/");
+    const ext = ((f.name || "").split(".").pop() || (isAudio ? "webm" : "jpg")).toLowerCase().replace(/[^a-z0-9]/g, "") || (isAudio ? "webm" : "jpg");
+    const id = uid(), file = `${id}.${ext}`;
+    await api(mediaUrl(game.appId, file), { method: "PUT", body: f.blob, headers: { "Content-Type": "application/octet-stream" } });
+    (isAudio ? recordings : screenshots).push(isAudio ? { id, file, createdAt: Date.now() } : { id, file, takenAt: Date.now() });
+  }
+  return { screenshots, recordings };
+}
+
+/** items: { title, text, files: [{ name, type, blob }] } — asks which game, then opens a prefilled new note. */
+window.snReceiveShare = async (items) => {
+  if (!games.length) await loadGames();
+  const dlg = $("#panel");
+  dlg.innerHTML = `<h2 style="margin-top:0">Add to which game?</h2>
+    <p class="meta">${items.files.length ? `${items.files.length} file(s)` : ""}${items.text ? ` · "${esc(items.text.slice(0, 80))}"` : ""}</p>
+    ${games.map((g) => `<div class="version" data-id="${esc(g.appId)}"><div class="text"><b>${esc(g.name)}</b></div><span class="chip">${g.noteCount} notes</span></div>`).join("") || '<p class="meta">No games yet. Launch a game on the Deck with sync turned on.</p>'}
+    <div class="toolbar"><button id="pClose">Cancel</button></div>`;
+  $("#pClose", dlg).onclick = () => dlg.close();
+  dlg.querySelectorAll(".version").forEach((el) => (el.onclick = async () => {
+    dlg.innerHTML = '<p>Uploading…</p>';
+    await openGame(el.dataset.id);
+    const media = await uploadShared(items.files);
+    dlg.close();
+    const lines = (items.text || "").trim();
+    editNote(null, { title: items.title || "", body: lines, ...media });
+  }));
+  dlg.showModal();
+};
+
+async function checkPwaShare() {
+  if (!new URLSearchParams(location.search).has("shared") || !window.caches) return;
+  history.replaceState(null, "", "/");
+  const cache = await caches.open("sn-share");
+  const metaRes = await cache.match("/share-meta");
+  if (!metaRes) return;
+  const meta = await metaRes.json();
+  const files = [];
+  for (const f of meta.files) files.push({ name: f.name, type: f.type, blob: await (await cache.match(f.key)).blob() });
+  await Promise.all((await cache.keys()).map((k) => cache.delete(k)));
+  window.snReceiveShare({ title: meta.title, text: meta.text, files });
+}
+
+/** Native app hands shared files over as base64. */
+window.snReceiveShareNative = (payload) => {
+  const files = (payload.files || []).map((f) => {
+    const bin = atob(f.data), bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return { name: f.name, type: f.type, blob: new Blob([bytes], { type: f.type }) };
+  });
+  window.snReceiveShare({ title: payload.title || "", text: payload.text || "", files });
+};
+
+/** Android back button (native app): close the top dialog if one is open. */
+window.snBack = () => {
+  for (const d of [$("#panel"), $("#editor")]) if (d.open) { d.close(); return true; }
+  return false;
+};
+
+$("#search").oninput = render;
+$("#gamePicker").onchange = (e) => e.target.value && openGame(e.target.value);
+if ("serviceWorker" in navigator && window.isSecureContext) navigator.serviceWorker.register("/sw.js").catch(() => {});
+start();
+</script>
+</body>
+</html>

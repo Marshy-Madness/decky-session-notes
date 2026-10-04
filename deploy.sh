@@ -22,6 +22,7 @@ rsync -az --delete \
   --exclude 'pnpm-workspace.yaml' \
   --exclude '.gitignore' \
   --exclude 'deploy.sh' \
+  --exclude 'server' \
   ./ "${DECK_HOST}:${REMOTE_DIR}/"
 
 echo "Restarting plugin_loader..."

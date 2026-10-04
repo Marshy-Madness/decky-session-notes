@@ -1,5 +1,6 @@
 import { FC } from "react";
-import { PanelSectionRow, ButtonItem, Focusable } from "@decky/ui";
+import { DialogButton, Focusable } from "@decky/ui";
+import * as s from "./styles";
 
 export const TagFilterBar: FC<{
   allTags: string[];
@@ -13,14 +14,16 @@ export const TagFilterBar: FC<{
   };
 
   return (
-    <PanelSectionRow>
-      <Focusable style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-        {allTags.map((tag) => (
-          <ButtonItem key={tag} layout="below" onClick={() => toggle(tag)}>
-            {activeTags.includes(tag) ? `✓ #${tag}` : `#${tag}`}
-          </ButtonItem>
-        ))}
-      </Focusable>
-    </PanelSectionRow>
+    <Focusable flow-children="row" style={{ ...s.toolbar, flexWrap: "wrap" }}>
+      {allTags.map((tag) => (
+        <DialogButton
+          key={tag}
+          style={{ ...s.smallButton, padding: "2px 10px", fontSize: "12px", opacity: activeTags.includes(tag) ? 1 : 0.7 }}
+          onClick={() => toggle(tag)}
+        >
+          {activeTags.includes(tag) ? `✓ #${tag}` : `#${tag}`}
+        </DialogButton>
+      ))}
+    </Focusable>
   );
 };

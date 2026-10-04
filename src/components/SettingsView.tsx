@@ -1,38 +1,150 @@
 import { FC, useEffect, useState } from "react";
-import { PanelSectionRow, TextField, ButtonItem } from "@decky/ui";
+import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
-import { Settings } from "../types";
+import { emitDataChanged, updateSettings, useSettings } from "../state/notesStore";
+import { BackupStatus, PanelWidth } from "../types";
+import { formatDateTime } from "../utils/format";
+
+const WIDTH_OPTIONS: { label: string; data: PanelWidth }[] = [
+  { label: "Normal (Steam default)", data: "normal" },
+  { label: "Wide", data: "wide" },
+  { label: "Extra wide", data: "extra" },
+];
+
+const INTERVAL_OPTIONS = [
+  { label: "Every minute", data: 1 },
+  { label: "Every 5 minutes", data: 5 },
+  { label: "Every 10 minutes", data: 10 },
+  { label: "Every 30 minutes", data: 30 },
+  { label: "Every 60 minutes", data: 60 },
+  { label: "Manual only", data: 0 },
+];
+
+const Heading: FC<{ children: string }> = ({ children }) => (
+  <div style={{ fontSize: "12px", textTransform: "uppercase", opacity: 0.6, margin: "14px 0 4px", letterSpacing: "0.05em" }}>
+    {children}
+  </div>
+);
 
 export const SettingsView: FC = () => {
-  const [settings, setSettings] = useState<Settings>({});
+  const settings = useSettings();
+  const interval = settings.syncInterval ?? (settings.autoBackup ? 1 : 0);
+  const [url, setUrl] = useState(settings.syncUrl ?? "");
+  const [token, setToken] = useState(settings.syncToken ?? "");
+  const [status, setStatus] = useState<BackupStatus | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
+  const refreshStatus = () => backend.backupStatus().then(setStatus);
   useEffect(() => {
-    backend.getSettings().then(setSettings);
+    refreshStatus();
   }, []);
+  useEffect(() => {
+    setUrl(settings.syncUrl ?? "");
+    setToken(settings.syncToken ?? "");
+  }, [settings.syncUrl, settings.syncToken]);
 
-  const save = () => backend.saveSettings(settings);
+  const run = async (label: string, fn: () => Promise<string>) => {
+    setBusy(true);
+    setMessage(`${label}…`);
+    try {
+      await updateSettings({ syncUrl: url.trim(), syncToken: token.trim() });
+      setMessage(await fn());
+    } catch (e) {
+      setMessage(`⚠️ ${String(e).replace(/^Error: /, "")}`);
+    } finally {
+      setBusy(false);
+      refreshStatus();
+    }
+  };
+
+  const test = () => run("Checking", async () => {
+    await backend.testBackupServer();
+    return "✅ Connected";
+  });
+  const syncNow = () =>
+    run("Syncing", async () => {
+      const r = await backend.syncNow();
+      emitDataChanged();
+      return `✅ Synced: sent ${r.pushed} game(s), received changes for ${r.pulled}`;
+    });
 
   return (
     <>
+      <Heading>Display</Heading>
       <PanelSectionRow>
-        <TextField
-          label="Break reminder (minutes)"
-          value={settings.breakReminderMinutes ? String(settings.breakReminderMinutes) : ""}
-          onChange={(e) => setSettings({ ...settings, breakReminderMinutes: Number(e.target.value) })}
+        <DropdownItem
+          label="Panel width"
+          description="How wide the Quick Access menu gets while Session Notes is open."
+          rgOptions={WIDTH_OPTIONS}
+          selectedOption={settings.panelWidth ?? "extra"}
+          onChange={(o) => updateSettings({ panelWidth: o.data })}
+        />
+      </PanelSectionRow>
+
+      <Heading>While playing</Heading>
+      <PanelSectionRow>
+        <ToggleField
+          label="Screenshot prompt"
+          description="After you take a screenshot (STEAM + R1), offer to attach it to a note."
+          checked={settings.screenshotPrompt ?? true}
+          onChange={(v) => updateSettings({ screenshotPrompt: v })}
         />
       </PanelSectionRow>
       <PanelSectionRow>
+        <ToggleField
+          label="Session recap"
+          description="When you quit a game, ask where you left off. Your answer is pinned for next time."
+          checked={settings.sessionRecap ?? false}
+          onChange={(v) => updateSettings({ sessionRecap: v })}
+        />
+      </PanelSectionRow>
+
+      <Heading>Sync</Heading>
+      <PanelSectionRow>
         <TextField
-          label="Sync path"
-          value={settings.syncPath ?? ""}
-          onChange={(e) => setSettings({ ...settings, syncPath: e.target.value })}
+          label="Server address"
+          description="e.g. https://steamnotes.example.com"
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
         />
       </PanelSectionRow>
       <PanelSectionRow>
-        <ButtonItem layout="below" onClick={save}>
-          Save Settings
-        </ButtonItem>
+        <TextField label="Token" value={token} onChange={(e) => setToken(e.target.value)} bIsPassword />
       </PanelSectionRow>
+      <PanelSectionRow>
+        <DropdownItem
+          label="Check website for changes"
+          description={
+            interval === 0
+              ? "Nothing syncs until you press Sync now."
+              : "Your Deck edits are sent ~20 seconds after you make them."
+          }
+          rgOptions={INTERVAL_OPTIONS}
+          selectedOption={interval}
+          disabled={!settings.syncUrl}
+          onChange={(o) => updateSettings({ syncInterval: o.data })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <div style={{ display: "flex", gap: "6px" }}>
+          <ButtonItem layout="below" onClick={test} disabled={busy || !url.trim()}>
+            Test
+          </ButtonItem>
+          <ButtonItem layout="below" onClick={syncNow} disabled={busy || !url.trim()}>
+            Sync now
+          </ButtonItem>
+        </div>
+      </PanelSectionRow>
+      <div style={{ fontSize: "12px", opacity: 0.75, padding: "4px 0" }}>
+        {message && <div>{message}</div>}
+        {status && (
+          <div>
+            Last sync: {formatDateTime(status.lastBackup)}
+            {status.lastError && !message && <div>⚠️ Last attempt failed: {status.lastError}</div>}
+          </div>
+        )}
+      </div>
     </>
   );
 };

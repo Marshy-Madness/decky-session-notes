@@ -1,32 +1,24 @@
 import { FC } from "react";
-import { PanelSectionRow } from "@decky/ui";
-import { useNotesContext } from "../state/notesStore";
+import { Session } from "../types";
+import { formatDateTime, formatDuration } from "../utils/format";
+import * as s from "./styles";
 
-export const SessionList: FC = () => {
-  const { sessions, notes } = useNotesContext();
-
-  if (sessions.length === 0) {
-    return <PanelSectionRow>No sessions logged yet.</PanelSectionRow>;
-  }
+export const SessionList: FC<{ sessions: Session[]; limit?: number }> = ({ sessions, limit = 10 }) => {
+  const recent = [...sessions].sort((a, b) => b.start - a.start).slice(0, limit);
+  if (recent.length === 0) return <div style={{ opacity: 0.7 }}>No play sessions logged yet.</div>;
 
   return (
-    <>
-      {[...sessions]
-        .sort((a, b) => b.start - a.start)
-        .map((session) => {
-          const durationMinutes = ((session.end ?? Date.now()) - session.start) / 60000;
-          const sessionNotes = notes.filter((n) => n.sessionId === session.id);
-          return (
-            <PanelSectionRow key={session.id}>
-              <div>
-                {new Date(session.start).toLocaleDateString()} — {durationMinutes.toFixed(0)}m
-              </div>
-              {session.moodRating && <div>{"⭐".repeat(session.moodRating)}</div>}
-              {session.summary && <div style={{ opacity: 0.8 }}>{session.summary}</div>}
-              <div style={{ fontSize: "0.8em", opacity: 0.6 }}>{sessionNotes.length} notes</div>
-            </PanelSectionRow>
-          );
-        })}
-    </>
+    <div style={{ fontSize: "13px" }}>
+      {recent.map((session, i) => (
+        <div key={session.id} style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", opacity: 0.85 }}>
+          <span>
+            #{sessions.length - i} · {formatDateTime(session.start)}
+          </span>
+          <span style={s.chip}>
+            {session.end ? formatDuration((session.end - session.start) / 1000) : "playing now"}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 };
