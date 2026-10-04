@@ -4,6 +4,7 @@ import { FaCheckSquare, FaHistory, FaEdit, FaEye, FaRegSquare, FaThumbtack, FaTr
 import { Note } from "../types";
 import { formatDateTime } from "../utils/format";
 import { MediaImage } from "./MediaImage";
+import { kindInfo } from "../utils/kinds";
 import { AudioButton } from "./AudioButton";
 import * as s from "./styles";
 
@@ -56,6 +57,12 @@ export const NoteViewer: FC<{
         {note.title}
       </h2>
       <div style={s.chipRow}>
+        {note.kind && note.kind !== "note" && (
+          <span style={s.chip}>
+            {kindInfo(note.kind).icon} {kindInfo(note.kind).label}
+          </span>
+        )}
+        {note.source && <span style={s.chip}>{note.source.type === "bookstore" ? "📚" : "👥"} from {note.source.author}</span>}
         <span style={s.chip}>Created {formatDateTime(note.createdAt)}</span>
         <span style={s.chip}>Edited {formatDateTime(note.updatedAt)}</span>
         {note.launchNumber != null && <span style={s.chip}>Launch #{note.launchNumber}</span>}

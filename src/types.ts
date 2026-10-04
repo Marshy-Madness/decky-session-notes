@@ -18,6 +18,18 @@ export interface ChecklistItem {
   done: boolean;
 }
 
+export type NoteKind =
+  | "note"
+  | "guide"
+  | "tip"
+  | "walkthrough"
+  | "boss"
+  | "build"
+  | "collectibles"
+  | "secret"
+  | "settings"
+  | "achievement";
+
 export interface Note {
   id: string;
   folderId: string | null;
@@ -34,6 +46,12 @@ export interface Note {
   checklist?: ChecklistItem[];
   /** Hidden behind a "reveal" until you choose to look. */
   spoiler?: boolean;
+  /** What sort of note this is; "note" when missing. Guides also show in the virtual Guides folder. */
+  kind?: NoteKind;
+  /** Set when the note was copied from the Bookstore or a shared note. */
+  source?: { type: "bookstore" | "shared"; id: string; author: string };
+  /** Bookstore entry this note was published as. */
+  bookstoreId?: string;
 }
 
 export type CounterKind = "death" | "boss" | "custom";
@@ -79,6 +97,14 @@ export interface Session {
   end: number | null;
 }
 
+/** A note another user on your sync server shared with you (read-only). */
+export interface SharedNote {
+  shareId: string;
+  fromId: string;
+  fromName: string;
+  note: Note;
+}
+
 export interface GameSummary {
   appId: string;
   name: string;
@@ -91,6 +117,22 @@ export interface GameSummary {
   lastEdited: number | null;
   firstNoteCreated: number | null;
   leftOff: LeftOff | null;
+  /** Notes other users shared with you for this game. */
+  sharedCount?: number;
+}
+
+export interface ServerUser {
+  id: string;
+  name: string;
+  avatar: string;
+  steamId: string | null;
+}
+
+export interface Share {
+  id: string;
+  to: string;
+  toName: string;
+  noteId: string;
 }
 
 export interface Game {
@@ -104,6 +146,8 @@ export interface Game {
   sessions: Session[];
   counters?: Counter[];
   leftOff?: LeftOff | null;
+  /** Notes shared with you, cached from the sync server. */
+  shared?: SharedNote[];
   summary: GameSummary;
 }
 
@@ -121,6 +165,8 @@ export interface Settings {
   panelWidth?: PanelWidth;
   sessionRecap?: boolean;
   screenshotPrompt?: boolean;
+  /** After a screenshot is attached to a note, delete it from Steam's screenshot library. */
+  removeFromSteam?: boolean;
   syncUrl?: string;
   syncToken?: string;
   /** @deprecated replaced by syncInterval */

@@ -3,10 +3,15 @@ import { DialogButton } from "@decky/ui";
 import { FaPlay, FaStop } from "react-icons/fa";
 import { Recording } from "../types";
 import { formatClock } from "../utils/format";
-import { loadMedia } from "./MediaImage";
+import { loadMedia, MediaLoader } from "./MediaImage";
 import * as s from "./styles";
 
-export const AudioButton: FC<{ appId: string; recording: Recording; label?: string }> = ({ appId, recording, label }) => {
+export const AudioButton: FC<{ appId: string; recording: Recording; label?: string; loader?: MediaLoader }> = ({
+  appId,
+  recording,
+  label,
+  loader,
+}) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [playing, setPlaying] = useState(false);
 
@@ -19,7 +24,7 @@ export const AudioButton: FC<{ appId: string; recording: Recording; label?: stri
       return;
     }
     if (!audioRef.current) {
-      const src = await loadMedia(appId, recording.file);
+      const src = await (loader ? loader(recording.file) : loadMedia(appId, recording.file));
       if (!src) return;
       audioRef.current = new Audio(src);
       audioRef.current.onended = () => setPlaying(false);

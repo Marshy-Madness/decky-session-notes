@@ -7,6 +7,8 @@ import { emitDataChanged } from "../state/notesStore";
 import { Game, Screenshot } from "../types";
 import { sortNotes } from "../utils/format";
 import { NoteEditor } from "./NoteEditor";
+import { removeFromSteam } from "../utils/steamScreenshots";
+import { getSettings } from "../state/notesStore";
 import * as s from "./styles";
 
 /** "You took a screenshot" prompt: put it in a new note or add it to an existing one. */
@@ -26,6 +28,7 @@ export const AttachScreenshotsModal: FC<{ pending: PendingShots; closeModal?: ()
     setBusy(true);
     const out: Screenshot[] = [];
     for (const path of pending.paths) out.push(await backend.attachScreenshot(pending.appId, path));
+    if (getSettings().removeFromSteam) await removeFromSteam(pending.appId, pending.paths).catch(() => 0);
     clearPendingScreenshots();
     return out;
   };

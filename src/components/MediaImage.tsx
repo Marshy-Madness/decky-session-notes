@@ -9,12 +9,19 @@ export function loadMedia(appId: string, file: string): Promise<string | null> {
   return cache.get(key)!;
 }
 
-export const MediaImage: FC<{ appId: string; file: string; style?: CSSProperties }> = ({ appId, file, style }) => {
+export type MediaLoader = (file: string) => Promise<string | null>;
+
+export const MediaImage: FC<{ appId: string; file: string; style?: CSSProperties; loader?: MediaLoader }> = ({
+  appId,
+  file,
+  style,
+  loader,
+}) => {
   const [src, setSrc] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    loadMedia(appId, file).then((url) => alive && setSrc(url));
+    (loader ? loader(file) : loadMedia(appId, file)).then((url) => alive && setSrc(url));
     return () => {
       alive = false;
     };

@@ -1,14 +1,16 @@
 import { FC, useRef, useState } from "react";
 import { ModalRoot, DialogButton, Dropdown, Focusable, TextField, ToggleField, showModal, ConfirmModal } from "@decky/ui";
-import { FaCamera, FaMicrophone, FaStop, FaTrash, FaParagraph, FaPlus, FaCheckSquare, FaRegSquare } from "react-icons/fa";
+import { FaCrop, FaCamera, FaMicrophone, FaStop, FaTrash, FaParagraph, FaPlus, FaCheckSquare, FaRegSquare } from "react-icons/fa";
 import { toaster } from "@decky/api";
 import { backend } from "../api/backend";
-import { ChecklistItem, Folder, Note, Recording, Screenshot } from "../types";
+import { ChecklistItem, Folder, Note, NoteKind, Recording, Screenshot } from "../types";
+import { KINDS } from "../utils/kinds";
 import { formatClock, newId } from "../utils/format";
 import { useSessionTimer } from "../hooks/useSessionTimer";
 import { MediaImage } from "./MediaImage";
 import { AudioButton } from "./AudioButton";
 import { ScreenshotPicker } from "./ScreenshotPicker";
+import { CropModal } from "./CropModal";
 import * as s from "./styles";
 
 /** Drop the marker for screenshot `index` (1-based) and renumber the ones after it. */
@@ -35,9 +37,10 @@ export const NoteEditor: FC<{
   folders: Folder[];
   /** Already-attached screenshots to start a new note with (e.g. from the screenshot prompt). */
   initialScreenshots?: Screenshot[];
+  defaultKind?: NoteKind;
   onSaved: (note: Note) => void;
   closeModal?: () => void;
-}> = ({ appId, note, folderId: initialFolder, folders, initialScreenshots = [], onSaved, closeModal }) => {
+}> = ({ appId, note, folderId: initialFolder, folders, initialScreenshots = [], defaultKind, onSaved, closeModal }) => {
   const [title, setTitle] = useState(note?.title ?? "");
   const [body, setBody] = useState(note?.body ?? "");
   const [tags, setTags] = useState(note?.tags.join(", ") ?? "");
@@ -46,6 +49,7 @@ export const NoteEditor: FC<{
   const [checklist, setChecklist] = useState<ChecklistItem[]>(note?.checklist ?? []);
   const [newItem, setNewItem] = useState("");
   const [spoiler, setSpoiler] = useState(note?.spoiler ?? false);
+  const [kind, setKind] = useState<NoteKind>(note?.kind ?? defaultKind ?? "note");
   const [recordings, setRecordings] = useState<Recording[]>(note?.recordings ?? []);
   const [recordStart, setRecordStart] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -128,6 +132,9 @@ export const NoteEditor: FC<{
       launchNumber: note?.launchNumber ?? null,
       checklist: checklist.length ? checklist : undefined,
       spoiler,
+      kind,
+      source: note?.source,
+      bookstoreId: note?.bookstoreId,
     };
     const saved = await backend.saveNote(appId, payload);
     onSaved(saved);
@@ -163,7 +170,19 @@ export const NoteEditor: FC<{
     <ModalRoot onCancel={confirmCancel} bAllowFullSize bDisableBackgroundDismiss>
       <h2 style={{ marginTop: 0 }}>{note ? "Edit note" : "New note"}</h2>
 
-      <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} focusOnMount={!note} />
+      <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>
+        <div style={{ flex: 2 }}>
+          <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} focusOnMount={!note} />
+        </div>
+        <div style={{ flex: 1, paddingBottom: "2px" }}>
+          <Dropdown
+            rgOptions={KINDS.map((k) => ({ label: `${k.icon} ${k.label}`, data: k.kind }))}
+            selectedOption={kind}
+            onChange={(o) => setKind(o.data)}
+            menuLabel="Type"
+          />
+        </div>
+      </div>
 
       <div style={{ margin: "10px 0 4px", fontSize: "13px", opacity: 0.8 }}>Information</div>
       <Focusable
@@ -297,6 +316,23 @@ export const NoteEditor: FC<{
               <MediaImage appId={appId} file={shot.thumb ?? shot.file} style={{ width: "180px", height: "101px" }} />
               <div style={{ fontSize: "11px", opacity: 0.7, margin: "2px 0" }}>Screenshot {i + 1}</div>
               <Focusable style={{ display: "flex", gap: "4px" }}>
+                <DialogButton
+                  style={s.smallButton}
+                  onClick={() =>
+                    showModal(
+                      <CropModal
+                        appId={appId}
+                        shot={shot}
+                        onCropped={(cropped) => {
+                          added.current.push(cropped);
+                          setScreenshots((list) => list.map((x, j) => (j === i ? cropped : x)));
+                        }}
+                      />
+                    )
+                  }
+                >
+                  <FaCrop size={10} />
+                </DialogButton>
                 <DialogButton style={s.smallButton} onClick={() => insertImage(i)}>
                   <FaParagraph size={10} /> In text
                 </DialogButton>

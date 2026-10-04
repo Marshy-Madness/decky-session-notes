@@ -11,12 +11,15 @@ import {
   showContextMenu,
   showModal,
 } from "@decky/ui";
-import { FaArrowLeft, FaTrashRestore, FaCamera, FaFolder, FaFolderPlus, FaPlus, FaSkull } from "react-icons/fa";
+import { FaBook, FaUserFriends, FaArrowLeft, FaTrashRestore, FaCamera, FaFolder, FaFolderPlus, FaPlus, FaSkull } from "react-icons/fa";
 import { backend } from "../api/backend";
 import { useGame } from "../state/NotesProvider";
 import { emitDataChanged, updateSettings, useSettings } from "../state/notesStore";
 import { Folder, Note, SortMode } from "../types";
 import { SORT_LABELS, newId, sortNotes } from "../utils/format";
+import { KINDS, isGuide } from "../utils/kinds";
+import { SharedNoteViewer } from "./SharedNotes";
+import { ShareModal } from "./ShareModal";
 import { NoteItem } from "./NoteItem";
 import { NoteEditor, folderPath } from "./NoteEditor";
 import { NoteViewer } from "./NoteViewer";
@@ -30,6 +33,9 @@ import { DeletedNotesModal, VersionHistoryModal } from "./VersionHistory";
 import { usePendingScreenshots } from "../state/pendingScreenshots";
 import * as s from "./styles";
 
+const GUIDES = "__guides";
+const SHARED = "__shared";
+
 const SORT_OPTIONS = (Object.keys(SORT_LABELS) as SortMode[]).map((k) => ({ label: SORT_LABELS[k], data: k }));
 
 /** All folders and notes for one game (the game comes from NotesProvider). */
@@ -40,15 +46,20 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
   const [folderId, setFolderId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
+  const [activeKinds, setActiveKinds] = useState<string[]>([]);
   const pending = usePendingScreenshots();
 
   if (!game) return <Spinner style={{ width: "32px" }} />;
 
   const folders = game.folders;
-  const searching = search.trim().length > 0 || activeTags.length > 0;
+  const searching = search.trim().length > 0 || activeTags.length > 0 || activeKinds.length > 0;
   const q = search.trim().toLowerCase();
+  const inGuides = folderId === GUIDES;
+  const inShared = folderId === SHARED;
+  const shared = game.shared ?? [];
+  const guideCount = game.notes.filter((n) => isGuide(n.kind)).length;
 
-  const subFolders = searching
+  const subFolders = searching || inGuides || inShared
     ? []
     : folders
         .filter((f) => f.parentId === folderId)
@@ -56,19 +67,40 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
 
   const notes = sortNotes(
     game.notes
-      .filter((n) => searching || n.folderId === folderId)
+      .filter((n) =>
+        searching
+          ? true
+          : inGuides
+            ? isGuide(n.kind)
+            : inShared
+              ? false
+              : folderId === null
+                ? !n.folderId && !isGuide(n.kind) // root guides live in the Guides folder
+                : n.folderId === folderId
+      )
+      .filter((n) => activeKinds.length === 0 || activeKinds.includes(n.kind ?? "note"))
       .filter((n) => !q || n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q))
       .filter((n) => activeTags.every((t) => n.tags.includes(t))),
     sort
   );
   const allTags = Array.from(new Set(game.notes.flatMap((n) => n.tags))).sort();
+  const presentKinds = KINDS.filter((k) => k.kind !== "note" && game.notes.some((n) => n.kind === k.kind));
 
   const countIn = (id: string) => game.notes.filter((n) => n.folderId === id).length;
 
   // ---- actions ----
 
   const openEditor = (note: Note | null) =>
-    showModal(<NoteEditor appId={appId} note={note} folderId={folderId} folders={folders} onSaved={emitDataChanged} />);
+    showModal(
+      <NoteEditor
+        appId={appId}
+        note={note}
+        folderId={inGuides || inShared ? null : folderId}
+        defaultKind={inGuides ? "guide" : undefined}
+        folders={folders}
+        onSaved={emitDataChanged}
+      />
+    );
 
   const saveNote = async (note: Note) => {
     await backend.saveNote(appId, note);
@@ -122,6 +154,7 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
         <MenuItem onSelected={() => saveNote({ ...note, pinned: !note.pinned })}>{note.pinned ? "Unpin" : "Pin to top"}</MenuItem>
         {folders.length > 0 && <MenuItem onSelected={() => moveNote(note)}>Move to folder…</MenuItem>}
         <MenuItem onSelected={() => showModal(<VersionHistoryModal appId={appId} note={note} />)}>Version history…</MenuItem>
+        {settings.syncUrl && <MenuItem onSelected={() => showModal(<ShareModal appId={appId} note={note} />)}>Share with…</MenuItem>}
         <MenuItem tone="destructive" onSelected={() => deleteNote(note)}>
           Delete
         </MenuItem>
@@ -236,7 +269,54 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
         label="Search notes"
       />
       <div style={{ height: "6px" }} />
+      {presentKinds.length > 0 && (
+        <Focusable flow-children="row" style={{ ...s.toolbar, flexWrap: "wrap" }}>
+          {presentKinds.map((k) => {
+            const on = activeKinds.includes(k.kind);
+            return (
+              <DialogButton
+                key={k.kind}
+                style={{ ...s.smallButton, padding: "2px 10px", fontSize: "12px", opacity: on ? 1 : 0.7 }}
+                onClick={() => setActiveKinds(on ? activeKinds.filter((x) => x !== k.kind) : [...activeKinds, k.kind])}
+              >
+                {on ? "✓ " : ""}
+                {k.icon} {k.label}
+              </DialogButton>
+            );
+          })}
+        </Focusable>
+      )}
       <TagFilterBar allTags={allTags} activeTags={activeTags} onChange={setActiveTags} />
+
+      {(inGuides || inShared) && !searching && (
+        <Focusable style={s.toolbar}>
+          <DialogButton style={s.smallButton} onClick={() => setFolderId(null)}>
+            <FaArrowLeft /> Back
+          </DialogButton>
+          <div style={{ ...s.title, opacity: 0.85 }}>{inGuides ? "📘 Guides" : "👥 Shared Notes"}</div>
+        </Focusable>
+      )}
+
+      {folderId === null && !searching && guideCount > 0 && (
+        <Focusable style={s.row} onActivate={() => setFolderId(GUIDES)} onClick={() => setFolderId(GUIDES)}>
+          <FaBook size={18} style={{ opacity: 0.8, color: "#1a9fff" }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={s.title}>Guides</div>
+            <div style={s.subline}>{guideCount} guides & walkthroughs</div>
+          </div>
+        </Focusable>
+      )}
+      {folderId === null && !searching && shared.length > 0 && (
+        <Focusable style={s.row} onActivate={() => setFolderId(SHARED)} onClick={() => setFolderId(SHARED)}>
+          <FaUserFriends size={18} style={{ opacity: 0.8, color: "#2db37d" }} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={s.title}>Shared Notes</div>
+            <div style={s.subline}>
+              {shared.length} from {Array.from(new Set(shared.map((x) => x.fromName))).join(", ")}
+            </div>
+          </div>
+        </Focusable>
+      )}
 
       {currentFolder && !searching && (
         <Focusable style={s.toolbar}>
@@ -273,7 +353,20 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
         <NoteItem key={note.id} appId={appId} note={note} onOpen={() => openNote(note)} onOptions={() => noteOptions(note)} />
       ))}
 
-      {subFolders.length === 0 && notes.length === 0 && (
+      {inShared &&
+        !searching &&
+        shared.map((sh) => (
+          <NoteItem
+            key={sh.shareId}
+            appId={appId}
+            note={sh.note}
+            from={sh.fromName}
+            onOpen={() => showModal(<SharedNoteViewer appId={appId} shared={sh} />)}
+            onOptions={() => showModal(<SharedNoteViewer appId={appId} shared={sh} />)}
+          />
+        ))}
+
+      {subFolders.length === 0 && notes.length === 0 && !(inShared && shared.length) && (
         <div style={{ opacity: 0.7, padding: "12px 0" }}>
           {searching ? "No notes match." : currentFolder ? "This folder is empty." : "No notes yet. Create your first one!"}
         </div>

@@ -1,7 +1,7 @@
 import { FC, useEffect, useState } from "react";
 import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
-import { emitDataChanged, updateSettings, useSettings } from "../state/notesStore";
+import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
 import { BackupStatus, PanelWidth } from "../types";
 import { formatDateTime } from "../utils/format";
 
@@ -10,6 +10,8 @@ const WIDTH_OPTIONS: { label: string; data: PanelWidth }[] = [
   { label: "Wide", data: "wide" },
   { label: "Extra wide", data: "extra" },
 ];
+
+const PAIR_CODE = /^[A-Z0-9]{3}-?[A-Z0-9]{3}$/i;
 
 const INTERVAL_OPTIONS = [
   { label: "Every minute", data: 1 },
@@ -49,6 +51,12 @@ export const SettingsView: FC = () => {
     setMessage(`${label}…`);
     try {
       await updateSettings({ syncUrl: url.trim(), syncToken: token.trim() });
+      if (PAIR_CODE.test(token.trim())) {
+        // A pairing code from the website: swap it for a device token.
+        const user = await backend.pairDevice(token.trim());
+        await loadSettings();
+        setMessage(`🔗 Linked to ${user.name}'s account`);
+      }
       setMessage(await fn());
     } catch (e) {
       setMessage(`⚠️ ${String(e).replace(/^Error: /, "")}`);
@@ -93,6 +101,14 @@ export const SettingsView: FC = () => {
       </PanelSectionRow>
       <PanelSectionRow>
         <ToggleField
+          label="Remove from Steam screenshots"
+          description="After a screenshot is attached to a note, delete it from Steam's screenshot library. The note keeps its own copy."
+          checked={settings.removeFromSteam ?? false}
+          onChange={(v) => updateSettings({ removeFromSteam: v })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ToggleField
           label="Session recap"
           description="When you quit a game, ask where you left off. Your answer is pinned for next time."
           checked={settings.sessionRecap ?? false}
@@ -110,7 +126,13 @@ export const SettingsView: FC = () => {
         />
       </PanelSectionRow>
       <PanelSectionRow>
-        <TextField label="Token" value={token} onChange={(e) => setToken(e.target.value)} bIsPassword />
+        <TextField
+          label="Pairing code or token"
+          description="On the website: your name → Devices → Connect a device. Type the code shown there (like K7P-4QX)."
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+          bIsPassword={!PAIR_CODE.test(token.trim())}
+        />
       </PanelSectionRow>
       <PanelSectionRow>
         <DropdownItem

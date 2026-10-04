@@ -33,7 +33,7 @@ export const Library: FC<{ onOpen: (appId: string) => void; runningAppId?: strin
 
   const q = search.trim().toLowerCase();
   const visible = sortGames(
-    games.filter((g) => g.noteCount > 0 || g.launchCount > 0).filter((g) => !q || g.name.toLowerCase().includes(q)),
+    games.filter((g) => g.noteCount > 0 || g.launchCount > 0 || (g.sharedCount ?? 0) > 0).filter((g) => !q || g.name.toLowerCase().includes(q)),
     sort
   );
 
@@ -71,6 +71,7 @@ export const Library: FC<{ onOpen: (appId: string) => void; runningAppId?: strin
               </div>
               <div style={s.subline}>
                 {g.noteCount} notes{g.folderCount > 0 && ` · ${g.folderCount} folders`}
+                {(g.sharedCount ?? 0) > 0 && ` · ${g.sharedCount} shared with you`}
               </div>
               <div style={s.chipRow}>
                 <span style={s.chip}>Launched {g.launchCount}×</span>

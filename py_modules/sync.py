@@ -113,10 +113,65 @@ class Sync:
             known[appid] = {"hash": self._file_hash(appid), "rev": resp["rev"]}
             self._sync_media(appid, resp["game"], state)
 
+        if self._sync_shared():
+            pulled += 1
         state["lastSync"] = int(time.time() * 1000)
         state["lastError"] = None
         self._save_state(state)
         return {"pushed": pushed, "pulled": pulled}
+
+    def _sync_shared(self) -> bool:
+        """Cache notes shared with you (and their media) so they can be read offline."""
+        try:
+            incoming = self._request("GET", "/api/shared") or []
+        except RuntimeError as e:
+            if "404" in str(e):  # older server without sharing
+                return False
+            raise
+        cache = {}
+        for item in incoming:
+            appid = str(item["appId"])
+            note = item["note"]
+            local_dir = storage.media_dir(appid)
+            for media in note.get("screenshots", []) + note.get("recordings", []):
+                for key in ("file", "thumb"):
+                    name = media.get(key)
+                    if not name:
+                        continue
+                    local = f"sh-{item['shareId']}-{os.path.basename(name)}"
+                    dest = os.path.join(local_dir, local)
+                    if not os.path.exists(dest):
+                        data = self._request("GET", f"/api/shared/media/{_q(item['shareId'])}/{_q(name)}")
+                        with open(dest, "wb") as f:
+                            f.write(data)
+                    media[key] = local
+            cache.setdefault(appid, []).append({k: item[k] for k in ("shareId", "fromId", "fromName", "gameName", "note")})
+        if cache == storage.load_shared():
+            return False
+        storage.save_shared(cache)
+        return True
+
+    # ---- pairing & sharing (blocking helpers) ----
+
+    def pair(self, code: str) -> dict:
+        resp = self._request("POST", "/api/pair", {"code": code, "label": "Steam Deck"})
+        settings = storage.get_settings()
+        settings["syncToken"] = resp["token"]
+        storage.save_settings(settings)
+        return resp["user"]
+
+    def users(self) -> list:
+        return self._request("GET", "/api/users") or []
+
+    def note_shares(self, appid: str, note_id: str) -> list:
+        return [s for s in self._request("GET", f"/api/shares?appId={_q(appid)}") or [] if s["noteId"] == note_id]
+
+    def share(self, appid: str, note_id: str, to: str) -> dict:
+        self._sync()  # the server needs the latest copy of the note first
+        return self._request("POST", "/api/shares", {"appId": appid, "noteId": note_id, "to": to})
+
+    def unshare(self, share_id: str):
+        return self._request("DELETE", f"/api/shares/{_q(share_id)}")
 
     def _sync_media(self, appid: str, game: dict, state: dict):
         local_dir = storage.media_dir(appid)

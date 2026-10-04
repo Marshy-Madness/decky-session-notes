@@ -4,6 +4,8 @@ import { FaCheckCircle } from "react-icons/fa";
 import { backend } from "../api/backend";
 import { Screenshot, SteamScreenshot } from "../types";
 import { formatDateTime } from "../utils/format";
+import { removeFromSteam } from "../utils/steamScreenshots";
+import { getSettings } from "../state/notesStore";
 
 export const ScreenshotPicker: FC<{
   appId: string;
@@ -25,6 +27,7 @@ export const ScreenshotPicker: FC<{
     setBusy(true);
     const attached: Screenshot[] = [];
     for (const path of selected) attached.push(await backend.attachScreenshot(appId, path));
+    if (getSettings().removeFromSteam) await removeFromSteam(appId, selected).catch(() => 0);
     onAttach(attached);
     closeModal?.();
   };

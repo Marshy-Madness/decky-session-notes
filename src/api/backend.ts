@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import { BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot } from "../types";
+import { ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot } from "../types";
 
 export const backend = {
   listGames: () => call<[], GameSummary[]>("list_games"),
@@ -29,6 +29,9 @@ export const backend = {
   listSteamScreenshots: (appId: string, limit = 30) =>
     call<[string, number], SteamScreenshot[]>("list_steam_screenshots", appId, limit),
   attachScreenshot: (appId: string, path: string) => call<[string, string], Screenshot>("attach_screenshot", appId, path),
+  saveMediaData: (appId: string, base64: string, ext: string) =>
+    call<[string, string, string], string>("save_media_data", appId, base64, ext),
+  copySharedNote: (appId: string, shareId: string) => call<[string, string], Note>("copy_shared_note", appId, shareId),
   getMedia: (appId: string, file: string) => call<[string, string], string | null>("get_media", appId, file),
   deleteMedia: (appId: string, item: Screenshot | Recording) =>
     call<[string, Screenshot | Recording], void>("delete_media", appId, item),
@@ -36,6 +39,11 @@ export const backend = {
   stopRecording: () => call<[], Recording | null>("stop_recording"),
 
   syncNow: () => call<[], { pushed: number; pulled: number }>("sync_now"),
+  pairDevice: (code: string) => call<[string], ServerUser>("pair_device", code),
+  serverUsers: () => call<[], ServerUser[]>("server_users"),
+  noteShares: (appId: string, noteId: string) => call<[string, string], Share[]>("note_shares", appId, noteId),
+  shareNote: (appId: string, noteId: string, to: string) => call<[string, string, string], Share>("share_note", appId, noteId, to),
+  unshareNote: (shareId: string) => call<[string], void>("unshare_note", shareId),
   testBackupServer: () => call<[], { ok: boolean }>("test_backup_server"),
   backupStatus: () => call<[], BackupStatus>("backup_status"),
 

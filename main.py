@@ -71,6 +71,9 @@ class Plugin:
     async def attach_screenshot(self, appid: str, path: str):
         return storage.attach_screenshot(appid, path)
 
+    async def save_media_data(self, appid: str, b64: str, ext: str):
+        return storage.save_media_data(appid, b64, ext)
+
     async def get_media(self, appid: str, filename: str):
         return storage.get_media(appid, filename)
 
@@ -93,6 +96,24 @@ class Plugin:
     # two-way sync with the server container
     async def sync_now(self):
         return await self.sync.sync()
+
+    async def pair_device(self, code: str):
+        return await asyncio.to_thread(self.sync.pair, code)
+
+    async def server_users(self):
+        return await asyncio.to_thread(self.sync.users)
+
+    async def note_shares(self, appid: str, note_id: str):
+        return await asyncio.to_thread(self.sync.note_shares, appid, note_id)
+
+    async def share_note(self, appid: str, note_id: str, to: str):
+        return await asyncio.to_thread(self.sync.share, appid, note_id, to)
+
+    async def unshare_note(self, share_id: str):
+        return await asyncio.to_thread(self.sync.unshare, share_id)
+
+    async def copy_shared_note(self, appid: str, share_id: str):
+        return storage.copy_shared_note(appid, share_id)
 
     async def test_backup_server(self):
         return await self.sync.test()

@@ -12,6 +12,7 @@ import merge
 DATA_DIR = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "games")
 MEDIA_DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "media")
 SETTINGS_PATH = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "settings.json")
+SHARED_PATH = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "shared_cache.json")
 SCHEMA_VERSION = 2
 history = merge.NoteHistory(os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "note_history"))
 
@@ -126,9 +127,33 @@ def _summary(game: dict) -> dict:
 
 # ---------- games / launches ----------
 
+def load_shared() -> dict:
+    """Notes other users shared with you, cached by the last sync: {appid: [SharedNote]}."""
+    if not os.path.exists(SHARED_PATH):
+        return {}
+    with open(SHARED_PATH) as f:
+        return json.load(f)
+
+
+def save_shared(cache: dict):
+    with open(SHARED_PATH + ".tmp", "w") as f:
+        json.dump(cache, f)
+    os.replace(SHARED_PATH + ".tmp", SHARED_PATH)
+
+
 def list_games() -> list:
-    if not os.path.isdir(DATA_DIR):
-        return []
+    shared = load_shared()
+    out = {}
+    if os.path.isdir(DATA_DIR):
+        out = {s["appId"]: s for s in _list_local_games()}
+    for appid, items in shared.items():
+        if appid not in out:
+            out[appid] = _summary(_empty_game(appid) | {"name": items[0].get("gameName") or appid, "firstSeen": None})
+        out[appid]["sharedCount"] = len(items)
+    return list(out.values())
+
+
+def _list_local_games() -> list:
     appids = set()
     for entry in os.listdir(DATA_DIR):
         if entry.endswith(".json"):
@@ -140,6 +165,9 @@ def list_games() -> list:
 
 def get_game(appid: str) -> dict:
     game = load_game(appid)
+    game["shared"] = load_shared().get(str(appid), [])
+    if game["name"] == str(appid) and game["shared"]:
+        game["name"] = game["shared"][0].get("gameName") or game["name"]
     game["summary"] = _summary(game)
     return game
 
@@ -380,6 +408,15 @@ def attach_screenshot(appid: str, path: str) -> dict:
     return item
 
 
+def save_media_data(appid: str, b64: str, ext: str) -> str:
+    """Store an image made in the UI (e.g. a cropped screenshot). Returns the new file name."""
+    ext = "".join(c for c in ext.lower() if c.isalnum())[:5] or "jpg"
+    name = f"{uuid.uuid4()}.{ext}"
+    with open(os.path.join(media_dir(appid), name), "wb") as f:
+        f.write(base64.b64decode(b64))
+    return name
+
+
 def get_media(appid: str, filename: str):
     path = os.path.join(media_dir(appid), os.path.basename(filename))
     return _data_url(path) if os.path.exists(path) else None
@@ -431,6 +468,30 @@ def restore_note(appid: str, note: dict) -> dict:
     """Bring back an older or deleted version; it becomes the newest edit so it syncs everywhere."""
     note = dict(note)
     note["updatedAt"] = 0
+    return save_note(appid, note)
+
+
+def copy_shared_note(appid: str, share_id: str) -> dict:
+    """Copy a note someone shared with you into your own notes (with its own copies of the media)."""
+    item = next((s for s in load_shared().get(str(appid), []) if s["shareId"] == share_id), None)
+    if not item:
+        raise ValueError("That shared note is no longer available")
+    src = item["note"]
+    note = json.loads(json.dumps(src))
+    for media in note.get("screenshots", []) + note.get("recordings", []):
+        new_id = str(uuid.uuid4())
+        for key in ("file", "thumb"):
+            if media.get(key):
+                ext = os.path.splitext(media[key])[1]
+                name = f"{new_id}{'.thumb' if key == 'thumb' else ''}{ext}"
+                old = os.path.join(media_dir(appid), os.path.basename(media[key]))
+                if os.path.exists(old):
+                    shutil.copy2(old, os.path.join(media_dir(appid), name))
+                media[key] = name
+        media["id"] = new_id
+    note.update({"id": str(uuid.uuid4()), "folderId": None, "pinned": False, "createdAt": 0, "launchNumber": None,
+                 "source": {"type": "shared", "id": share_id, "author": item.get("fromName", "?")}})
+    note.pop("bookstoreId", None)
     return save_note(appid, note)
 
 
