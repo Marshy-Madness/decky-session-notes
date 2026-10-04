@@ -1,6 +1,7 @@
 import { FC, useLayoutEffect, useRef, useState } from "react";
 import { DialogButton, Focusable, findSP, quickAccessMenuClasses } from "@decky/ui";
-import { FaCog } from "react-icons/fa";
+import { FaCog, FaExpand } from "react-icons/fa";
+import { openNotesPage } from "../opening";
 import { useRunningGame } from "../hooks/useAppLifetime";
 import { NotesProvider } from "../state/NotesProvider";
 import { useSettings } from "../state/notesStore";
@@ -147,7 +148,7 @@ export const QuickAccessPanel: FC = () => {
 };
 
 /** The tabs and their contents; shared by the Quick Access panel and the full-screen page. */
-export const NotesBrowser: FC = () => {
+export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false }) => {
   const running = useRunningGame();
   const [tab, setTabState] = useState<Tab>(lastTab ?? (running ? "current" : "all"));
   const [openGame, setOpenGameState] = useState<string | null>(lastOpenedGame);
@@ -176,6 +177,11 @@ export const NotesBrowser: FC = () => {
         <TabButton active={tab === "settings"} onClick={() => setTab("settings")} grow={false}>
           <FaCog />
         </TabButton>
+        {!fullScreen && (
+          <TabButton active={false} onClick={openNotesPage} grow={false}>
+            <FaExpand />
+          </TabButton>
+        )}
       </Focusable>
 
       {tab === "current" &&

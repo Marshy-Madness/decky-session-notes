@@ -5,6 +5,7 @@ import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../s
 import { BackupStatus, DictateTarget, OpenChord, OverlayPosition, PanelWidth } from "../types";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Bookstore";
+import { useSeenButtons } from "../opening";
 import { formatDateTime } from "../utils/format";
 import { errText } from "../utils/errors";
 
@@ -147,11 +148,14 @@ export const SettingsView: FC = () => {
       <PanelSectionRow>
         <DropdownItem
           label="Button combo"
-          description="Press it any time, even in a game, to open the full-screen notes page. Press it again to close it."
+          description="Press it any time, even in a game, to open the full-screen notes page. B closes it."
           rgOptions={CHORD_OPTIONS}
           selectedOption={settings.openChord ?? "l4r4"}
           onChange={(o) => updateSettings({ openChord: o.data })}
         />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ButtonsSeen />
       </PanelSectionRow>
 
       <Heading>While playing</Heading>
@@ -306,5 +310,19 @@ export const SettingsView: FC = () => {
         )}
       </div>
     </>
+  );
+};
+
+/** Live check for the button combo: hold the buttons and their names should show up here. */
+const ButtonsSeen: FC = () => {
+  const seen = useSeenButtons();
+  return (
+    <div style={{ fontSize: "12px", opacity: 0.8, padding: "4px 0" }}>
+      Buttons held: {seen || "none"}
+      <div style={{ opacity: 0.7 }}>
+        Hold your combo; if nothing shows here, Steam isn't passing the buttons to Session Notes (another plugin
+        that listens for buttons can take this over).
+      </div>
+    </div>
   );
 };

@@ -1,19 +1,13 @@
 import { cloneElement, isValidElement, ReactElement, ReactNode } from "react";
 import { routerHook } from "@decky/api";
-import { afterPatch, beforePatch, ErrorBoundary, Focusable, Navigation, Patch } from "@decky/ui";
+import { afterPatch, beforePatch, ErrorBoundary, Focusable, Patch } from "@decky/ui";
 import { FaRegStickyNote } from "react-icons/fa";
-import { isNotesPageOpen, NotesPage } from "./components/NotesPage";
+import { NotesPage } from "./components/NotesPage";
 import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { getSettings } from "./state/notesStore";
 import { dictationChordEnabled, stopAnywhereDictation, toggleAnywhereDictation } from "./dictation";
+import { NOTES_ROUTE, openNotesPage, reportButtons } from "./opening";
 import { OpenChord } from "./types";
-
-export const NOTES_ROUTE = "/session-notes";
-
-export function openNotesPage() {
-  Navigation.CloseSideMenus();
-  Navigation.Navigate(NOTES_ROUTE);
-}
 
 // ---- button combo ----
 
@@ -27,9 +21,25 @@ const CHORDS: Record<OpenChord, { lo: number; hi: number } | null> = {
 const STEAM = 0x2000;
 const DICTATE = STEAM | 0x8000 | 0x10000; // STEAM + L5 + R5
 
+// Names for the live readout in Settings.
+const LO_NAMES: [number, string][] = [
+  [STEAM, "STEAM"],
+  [0x8000, "L5"],
+  [0x10000, "R5"],
+  [0x400000, "L3"],
+  [0x4000000, "R3"],
+];
+const HI_NAMES: [number, string][] = [
+  [0x200, "L4"],
+  [0x400, "R4"],
+];
+const buttonNames = (lo: number, hi: number) =>
+  [...LO_NAMES.filter(([b]) => lo & b), ...HI_NAMES.filter(([b]) => hi & b)].map(([, n]) => n).join(" + ");
+
 /**
- * Opens the full-screen page when the chosen combo is pressed (and closes it on a second press), and runs
- * speech to text on STEAM + L5 + R5 if that's turned on.
+ * Opens the full-screen page when the chosen combo is pressed, and runs speech to text on STEAM + L5 + R5 if
+ * that's turned on. (B closes the page; a second press used to, but the page stays mounted behind a game
+ * after you go back to it, so that press ended up doing nothing.)
  */
 function startChordWatch(): () => void {
   const held = new Set<number>();
@@ -39,6 +49,7 @@ function startChordWatch(): () => void {
       const dictate = dictationChordEnabled();
       const chord = CHORDS[getSettings().openChord ?? "l4r4"];
       for (const c of changes) {
+        reportButtons(buttonNames(c.ulButtons, c.ulUpperButtons));
         if (dictate) {
           if ((c.ulButtons & DICTATE) !== DICTATE) {
             dictateHeld.delete(c.unControllerIndex);
@@ -55,8 +66,7 @@ function startChordWatch(): () => void {
           held.delete(c.unControllerIndex);
         } else if (!held.has(c.unControllerIndex)) {
           held.add(c.unControllerIndex);
-          if (isNotesPageOpen()) Navigation.NavigateBack();
-          else openNotesPage();
+          openNotesPage();
         }
       }
     }
