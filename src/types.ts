@@ -175,7 +175,21 @@ export interface Settings {
   syncInterval?: number;
   bookstoreUrl?: string;
   bookstoreUser?: BookstoreUser;
+  /** Pin to screen: turn off Steam's own performance stats so only the to-do list shows. */
+  overlayHideStats?: boolean;
+  /** Pin to screen: where the overlay sits; unset = wherever Steam puts it (top left). */
+  overlayPosition?: OverlayPosition;
 }
+
+export type OverlayPosition =
+  | "top-left"
+  | "top-center"
+  | "top-right"
+  | "middle-left"
+  | "middle-right"
+  | "bottom-left"
+  | "bottom-center"
+  | "bottom-right";
 
 export interface BookstoreUser {
   steamId: string;

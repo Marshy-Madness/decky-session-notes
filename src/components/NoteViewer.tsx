@@ -49,7 +49,7 @@ export const NoteViewer: FC<{
     toaster.toast({
       title: "Pinned to screen",
       body: st.overlayRunning
-        ? "Shows in the performance overlay. Ticking items off updates it."
+        ? "Shows in the performance overlay. Ticking items off updates it. Move it or hide Steam's stats in Settings."
         : "Turn on the Performance Overlay (Quick Access → ⚡ → Level 1 or higher) to see it.",
     });
   };

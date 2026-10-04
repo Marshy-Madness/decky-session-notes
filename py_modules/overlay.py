@@ -14,6 +14,18 @@ import decky
 BEGIN = "# session-notes-begin"
 END = "# session-notes-end"
 
+POSITIONS = {"top-left", "top-center", "top-right", "middle-left", "middle-right", "bottom-left", "bottom-center",
+             "bottom-right"}
+
+# Everything Steam's levels can switch on. Later lines win in MangoHud's config, so `name=0` turns them off
+# and only our custom_text lines are left.
+STATS = ["fps", "fps_only", "frametime", "frame_timing", "histogram", "cpu_stats", "cpu_temp", "cpu_power",
+         "cpu_mhz", "core_load", "gpu_stats", "gpu_temp", "gpu_junction_temp", "gpu_mem_temp", "gpu_power",
+         "gpu_core_clock", "gpu_mem_clock", "gpu_voltage", "gpu_fan", "gpu_name", "vulkan_driver", "ram", "vram",
+         "swap", "procmem", "io_read", "io_write", "battery", "battery_time", "battery_watt", "throttling_status",
+         "fan", "engine_version", "wine", "arch", "resolution", "refresh_rate", "show_fps_limit", "present_mode",
+         "fsr", "hdr", "gamemode", "vkbasalt", "time", "version", "frame_count", "display_server", "horizontal"]
+
 
 def _config_path():
     for comm in glob.glob("/proc/[0-9]*/comm"):
@@ -39,6 +51,13 @@ class Overlay:
     def __init__(self):
         self.lines = []
         self.task = None
+        self.hide_stats = False
+        self.position = None
+
+    def set_style(self, hide_stats: bool, position):
+        self.hide_stats = bool(hide_stats)
+        self.position = position if position in POSITIONS else None
+        self._apply()
 
     def render(self, note: dict) -> list:
         items = note.get("checklist") or []
@@ -72,7 +91,11 @@ class Overlay:
             base = re.sub(rf"\n?{BEGIN}.*?{END}\n?", "\n", text, flags=re.S).rstrip("\n")
             new = base + "\n"
             if self.lines:
-                new += "\n".join([BEGIN] + [f"custom_text={line}" for line in self.lines] + [END]) + "\n"
+                block = [f"{name}=0" for name in STATS] if self.hide_stats else []
+                if self.position:
+                    block.append(f"position={self.position}")
+                block += [f"custom_text={line}" for line in self.lines]
+                new += "\n".join([BEGIN] + block + [END]) + "\n"
             if new != text:
                 with open(path, "w") as f:
                     f.write(new)

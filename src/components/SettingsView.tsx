@@ -2,7 +2,7 @@ import { FC, useEffect, useState } from "react";
 import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
-import { BackupStatus, PanelWidth } from "../types";
+import { BackupStatus, OverlayPosition, PanelWidth } from "../types";
 import { LinkPanel } from "./Bookstore";
 import { formatDateTime } from "../utils/format";
 
@@ -10,6 +10,17 @@ const WIDTH_OPTIONS: { label: string; data: PanelWidth }[] = [
   { label: "Normal (Steam default)", data: "normal" },
   { label: "Wide", data: "wide" },
   { label: "Extra wide", data: "extra" },
+];
+
+const POSITION_OPTIONS: { label: string; data: OverlayPosition }[] = [
+  { label: "Top left (Steam default)", data: "top-left" },
+  { label: "Top center", data: "top-center" },
+  { label: "Top right", data: "top-right" },
+  { label: "Middle left", data: "middle-left" },
+  { label: "Middle right", data: "middle-right" },
+  { label: "Bottom left", data: "bottom-left" },
+  { label: "Bottom center", data: "bottom-center" },
+  { label: "Bottom right", data: "bottom-right" },
 ];
 
 const PAIR_CODE = /^[A-Z0-9]{3}-?[A-Z0-9]{3}$/i;
@@ -115,6 +126,25 @@ export const SettingsView: FC = () => {
           description="When you quit a game, ask where you left off. Your answer is pinned for next time."
           checked={settings.sessionRecap ?? false}
           onChange={(v) => updateSettings({ sessionRecap: v })}
+        />
+      </PanelSectionRow>
+
+      <Heading>Pin to screen</Heading>
+      <PanelSectionRow>
+        <ToggleField
+          label="Hide Steam's performance stats"
+          description="Only show your pinned to-dos, not FPS, battery and the rest. The Performance Overlay still has to be on (Level 1 or higher)."
+          checked={settings.overlayHideStats ?? false}
+          onChange={(v) => updateSettings({ overlayHideStats: v })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <DropdownItem
+          label="Position"
+          description="Where the pin sits on screen. Steam's stats move with it if they're showing."
+          rgOptions={POSITION_OPTIONS}
+          selectedOption={settings.overlayPosition ?? "top-left"}
+          onChange={(o) => updateSettings({ overlayPosition: o.data })}
         />
       </PanelSectionRow>
 

@@ -124,7 +124,17 @@ class Plugin:
         return storage.get_settings()
 
     async def save_settings(self, settings: dict):
-        return storage.save_settings(settings)
+        # The panel doesn't track the on-screen pin; keep the one we stored.
+        pin = storage.get_settings().get("overlayPin")
+        settings = {k: v for k, v in settings.items() if k != "overlayPin"}
+        if pin:
+            settings["overlayPin"] = pin
+        result = storage.save_settings(settings)
+        self._style_overlay(settings)
+        return result
+
+    def _style_overlay(self, settings: dict):
+        self.overlay.set_style(settings.get("overlayHideStats", False), settings.get("overlayPosition"))
 
     # two-way sync with the server container
     async def sync_now(self):
@@ -196,6 +206,7 @@ class Plugin:
 
     async def _main(self):
         self.sync.task = asyncio.get_event_loop().create_task(self.sync.auto_loop())
+        self._style_overlay(storage.get_settings())
         self.overlay.task = asyncio.get_event_loop().create_task(self.overlay.loop())
         decky.logger.info("Session Notes plugin loaded")
 
