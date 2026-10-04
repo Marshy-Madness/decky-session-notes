@@ -2,9 +2,10 @@ import { FC, useEffect, useState } from "react";
 import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
-import { BackupStatus, DictateTarget, OpenChord, OverlayPosition } from "../types";
+import { BackupStatus, DictateTarget, OpenChord } from "../types";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Bookstore";
+import { PositionPicker } from "./PositionPicker";
 import { useSeenButtons } from "../opening";
 import { formatDateTime } from "../utils/format";
 import { errText } from "../utils/errors";
@@ -14,17 +15,6 @@ const CHORD_OPTIONS: { label: string; data: OpenChord }[] = [
   { label: "L5 + R5 (lower back grips)", data: "l5r5" },
   { label: "L3 + R3 (click both sticks)", data: "l3r3" },
   { label: "Off", data: "off" },
-];
-
-const POSITION_OPTIONS: { label: string; data: OverlayPosition }[] = [
-  { label: "Top left (Steam default)", data: "top-left" },
-  { label: "Top center", data: "top-center" },
-  { label: "Top right", data: "top-right" },
-  { label: "Middle left", data: "middle-left" },
-  { label: "Middle right", data: "middle-right" },
-  { label: "Bottom left", data: "bottom-left" },
-  { label: "Bottom center", data: "bottom-center" },
-  { label: "Bottom right", data: "bottom-right" },
 ];
 
 const DICTATE_TARGETS: { label: string; data: DictateTarget }[] = [
@@ -209,12 +199,9 @@ export const SettingsView: FC = () => {
         />
       </PanelSectionRow>
       <PanelSectionRow>
-        <DropdownItem
-          label="Position"
-          description="Where the pin sits on screen. Steam's stats move with it if they're showing."
-          rgOptions={POSITION_OPTIONS}
-          selectedOption={settings.overlayPosition ?? "top-left"}
-          onChange={(o) => updateSettings({ overlayPosition: o.data })}
+        <PositionPicker
+          value={settings.overlayPosition ?? "top-left"}
+          onChange={(p) => updateSettings({ overlayPosition: p })}
         />
       </PanelSectionRow>
 
@@ -299,13 +286,19 @@ export const SettingsView: FC = () => {
 /** Live check for the button combo: hold the buttons and their names should show up here. */
 const ButtonsSeen: FC = () => {
   const seen = useSeenButtons();
+  const [deck, setDeck] = useState<{ devices: number; error: string | null } | null>(null);
+  useEffect(() => {
+    backend.buttonsStatus().then(setDeck).catch(() => {});
+  }, []);
   return (
     <div style={{ fontSize: "12px", opacity: 0.8, padding: "4px 0" }}>
-      Buttons held: {seen === null ? "nothing reported by Steam yet" : seen || "none"}
-      <div style={{ opacity: 0.7 }}>
-        Hold your combo and its buttons should show up here. If it still says nothing was reported, Steam isn't
-        passing the buttons to Session Notes.
-      </div>
+      Buttons held: {seen === null ? "nothing reported yet" : seen.names ? `${seen.names} (from ${seen.source})` : "none"}
+      {deck && (
+        <div>
+          Deck controller: {deck.devices ? "listening" : `not connected${deck.error ? ` (${deck.error})` : ""}`}
+        </div>
+      )}
+      <div style={{ opacity: 0.7 }}>Hold your combo and its buttons should show up here.</div>
     </div>
   );
 };

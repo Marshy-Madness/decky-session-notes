@@ -8,7 +8,7 @@ import * as s from "./styles";
 
 const SORT_OPTIONS = (Object.keys(SORT_LABELS) as SortMode[]).map((k) => ({ label: SORT_LABELS[k], data: k }));
 
-function gameArt(appId: string): string | undefined {
+export function gameArt(appId: string): string | undefined {
   try {
     const store = (window as any).appStore;
     const overview = store?.GetAppOverviewByAppID?.(Number(appId));

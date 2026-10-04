@@ -26,16 +26,18 @@ export function openNotesPage() {
 
 // ---- what the button combo sees, shown live in Settings so you can tell whether Steam reports the buttons ----
 
-let seen: string | null = null; // null until Steam has reported anything at all
+export type SeenButtons = { names: string; source: string };
+
+let seen: SeenButtons | null = null; // null until something has reported buttons at all
 const seenListeners = new Set<() => void>();
 
-export function reportButtons(names: string) {
-  if (names === seen) return;
-  seen = names;
+export function reportButtons(names: string, source: string) {
+  if (seen && names === seen.names && (source === seen.source || !names)) return;
+  seen = { names, source };
   seenListeners.forEach((l) => l());
 }
 
-export function useSeenButtons(): string | null {
+export function useSeenButtons(): SeenButtons | null {
   return useSyncExternalStore(
     (l) => {
       seenListeners.add(l);

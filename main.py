@@ -7,6 +7,7 @@ from recorder import Recorder
 from sync import Sync
 from bookstore import Bookstore
 from overlay import Overlay
+from buttons import Buttons
 
 
 DICTATION_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "dictation.wav")
@@ -18,6 +19,7 @@ class Plugin:
     sync = Sync()
     bookstore = Bookstore()
     overlay = Overlay()
+    buttons = Buttons()
 
     # games / launches
     async def list_games(self):
@@ -240,10 +242,14 @@ class Plugin:
     async def bs_copy(self, entry_id: str, appid: str):
         return await asyncio.to_thread(self.bookstore.copy, entry_id, appid)
 
+    async def buttons_status(self):
+        return self.buttons.status()
+
     async def _main(self):
         self.sync.task = asyncio.get_event_loop().create_task(self.sync.auto_loop())
         self._style_overlay(storage.get_settings())
         self.overlay.task = asyncio.get_event_loop().create_task(self.overlay.loop())
+        self.buttons.task = asyncio.get_event_loop().create_task(self.buttons.loop())
         decky.logger.info("Session Notes plugin loaded")
 
     async def _unload(self):
@@ -251,6 +257,8 @@ class Plugin:
             self.sync.task.cancel()
         if self.overlay.task:
             self.overlay.task.cancel()
+        if self.buttons.task:
+            self.buttons.task.cancel()
         self.overlay.clear()
         await self.recorder.stop()
         await self.dictation.stop()

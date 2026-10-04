@@ -1,6 +1,6 @@
 import { FC, useState } from "react";
 import { DialogButton, Focusable } from "@decky/ui";
-import { FaCog, FaExpand } from "react-icons/fa";
+import { FaCog, FaExpand, FaStore } from "react-icons/fa";
 import { openNotesPage } from "../opening";
 import { useRunningGame } from "../hooks/useAppLifetime";
 import { NotesProvider } from "../state/NotesProvider";
@@ -73,8 +73,8 @@ export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false 
         <TabButton active={tab === "all"} onClick={() => setTab("all")}>
           All
         </TabButton>
-        <TabButton active={tab === "bookstore"} onClick={() => setTab("bookstore")}>
-          Bookstore
+        <TabButton active={tab === "bookstore"} onClick={() => setTab("bookstore")} grow={false}>
+          <FaStore />
         </TabButton>
         <TabButton active={tab === "settings"} onClick={() => setTab("settings")} grow={false}>
           <FaCog />

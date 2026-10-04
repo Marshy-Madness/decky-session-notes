@@ -1,6 +1,6 @@
 {
   "name": "decky-session-notes",
-  "version": "0.2.2-beta.5",
+  "version": "0.2.2-beta.6",
   "description": "Per-game session notes, run tracking, and stats for Steam Deck",
   "type": "module",
   "scripts": {
