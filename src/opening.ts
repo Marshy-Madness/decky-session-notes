@@ -27,25 +27,18 @@ export function openNotesPage() {
 
 // ---- putting the page away again ----
 
+// Steam's in-game page: showing it is how Steam hands the screen back to the game (it picks what's on
+// screen from the current page, and this one means "just the game").
+const APP_RUNNING_ROUTE = "/apprunning";
+
+// When Steam goes back to the game it navigates to that page, so the notes page unmounts; being mounted
+// means it's on screen.
 let pageMounted = false;
-let overlayActive = false;
 
 /** Called by the full-screen page as it mounts and unmounts. */
 export function setNotesPageMounted(mounted: boolean) {
   pageMounted = mounted;
 }
-
-/** Follows Steam's in-game overlay, so we know whether the page is actually on screen. Returns a cleanup. */
-export function trackOverlay(): () => void {
-  const reg = (window as any).SteamClient?.Overlay?.RegisterForOverlayActivated?.(
-    (_pid: unknown, _appId: unknown, active: boolean) => {
-      overlayActive = !!active;
-    }
-  );
-  return () => reg?.unregister();
-}
-
-const notesPageShowing = () => pageMounted && (!getRunningGame() || overlayActive);
 
 /**
  * Closes the page and goes back to the game (or wherever you were), keeping your place: the open note and
@@ -53,19 +46,17 @@ const notesPageShowing = () => pageMounted && (!getRunningGame() || overlayActiv
  */
 export function closeNotesPage() {
   putAwayNote();
-  const game = getRunningGame();
-  const gameId = game && (window as any).appStore?.GetAppOverviewByAppID?.(Number(game.appId))?.gameid;
-  if (gameId) {
-    // What Steam's own "Back to game" button does.
-    (window as any).SteamClient?.Overlay?.SetOverlayState?.(String(gameId), 0);
-  } else {
-    Navigation.NavigateBack();
-  }
+  Navigation.CloseSideMenus();
+  // Give the note's window a moment to close; an open window keeps Steam's UI on screen.
+  setTimeout(() => {
+    if (getRunningGame()) Navigation.Navigate(APP_RUNNING_ROUTE);
+    else Navigation.NavigateBack();
+  }, 50);
 }
 
 /** The button combo: opens the page, or puts it away if it's already showing. */
 export function toggleNotesPage() {
-  if (notesPageShowing()) closeNotesPage();
+  if (pageMounted) closeNotesPage();
   else openNotesPage();
 }
 

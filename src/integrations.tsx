@@ -6,7 +6,7 @@ import { NotesPage } from "./components/NotesPage";
 import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { getSettings } from "./state/notesStore";
 import { dictationChordEnabled, stopAnywhereDictation, toggleAnywhereDictation } from "./dictation";
-import { NOTES_ROUTE, reportButtons, toggleNotesPage, trackOverlay } from "./opening";
+import { NOTES_ROUTE, reportButtons, toggleNotesPage } from "./opening";
 import { OpenChord } from "./types";
 
 // ---- button combo ----
@@ -284,12 +284,10 @@ function patchQamTabs(): Patch | null {
 export function startIntegrations(): () => void {
   routerHook.addRoute(NOTES_ROUTE, NotesPage, { exact: true });
   const stopChord = startChordWatch();
-  const stopOverlay = trackOverlay();
   const patches = [patchQamTabs()];
   const unpatchMenu = patchMainMenu();
   return () => {
     stopChord();
-    stopOverlay();
     patches.forEach((p) => p?.unpatch());
     unpatchMenu?.();
     routerHook.removeRoute(NOTES_ROUTE);
