@@ -81,6 +81,9 @@ export const backend = {
   overlayStatus: () =>
     call<[], { overlayRunning: boolean; pinned: boolean; pin?: { appId: string; noteId: string } }>("overlay_status"),
 
+  overlayPreview: (appId: string) =>
+    call<[string], { lines: string[]; source: "pinned" | "note" | "sample" }>("overlay_preview", appId),
+
   getSettings: () => call<[], Settings>("get_settings"),
   saveSettings: (settings: Settings) => call<[Settings], void>("save_settings", settings),
 };

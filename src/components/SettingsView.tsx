@@ -1,12 +1,12 @@
 import { FC, useEffect, useState } from "react";
-import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
+import { ButtonItem, DropdownItem, PanelSectionRow, showModal, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
 import { BackupStatus, DictateTarget, VoiceFallback } from "../types";
 import { ComboRow, VoiceCommandList } from "./ComboSettings";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Bookstore";
-import { PositionPicker } from "./PositionPicker";
+import { OverlayModal } from "./OverlayModal";
 import { useSeenButtons } from "../opening";
 import { formatDateTime } from "../utils/format";
 import { errText } from "../utils/errors";
@@ -229,18 +229,15 @@ export const SettingsView: FC = () => {
 
       <Heading>Pin to screen</Heading>
       <PanelSectionRow>
-        <ToggleField
-          label="Hide Steam's performance stats"
-          description="Only show your pinned to-dos, not FPS, battery and the rest. The Performance Overlay still has to be on (Level 1 or higher)."
-          checked={settings.overlayHideStats ?? false}
-          onChange={(v) => updateSettings({ overlayHideStats: v })}
-        />
-      </PanelSectionRow>
-      <PanelSectionRow>
-        <PositionPicker
-          value={settings.overlayPosition ?? "top-left"}
-          onChange={(p) => updateSettings({ overlayPosition: p })}
-        />
+        <ButtonItem
+          layout="below"
+          description={`${settings.overlayX != null ? `${settings.overlayX}, ${settings.overlayY} px` : "Top left"} · text ${
+            settings.overlayTextSize ?? 13
+          }px · ${settings.overlayHideStats ? "Steam's stats hidden" : "with Steam's stats"}`}
+          onClick={() => showModal(<OverlayModal settings={settings} />)}
+        >
+          Position and look…
+        </ButtonItem>
       </PanelSectionRow>
 
       <Heading>Sync</Heading>

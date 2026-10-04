@@ -185,8 +185,17 @@ export interface Settings {
   bookstoreUser?: BookstoreUser;
   /** Pin to screen: turn off Steam's own performance stats so only the to-do list shows. */
   overlayHideStats?: boolean;
-  /** Pin to screen: where the overlay sits; unset = wherever Steam puts it (top left). */
+  /** Pin to screen: where the overlay sits; unset = wherever Steam puts it (top left). Older setting, used
+   * when overlayX/overlayY aren't set. */
   overlayPosition?: OverlayPosition;
+  /** Pin to screen: exact top-left corner of the list in screen pixels (1280 x 800). */
+  overlayX?: number;
+  overlayY?: number;
+  /** Pin to screen: text size in pixels; unset = 13 (MangoHud's small font). */
+  overlayTextSize?: number;
+  /** Pin to screen: background opacity, 0-100; unset = 50. */
+  overlayOpacity?: number;
+  overlayRounded?: boolean;
   /** @deprecated replaced by combos.open */
   openChord?: OpenChord;
   /** Buttons (1 to 4) for each combo; [] = off, unset = the default. */

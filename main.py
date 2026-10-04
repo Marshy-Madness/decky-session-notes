@@ -72,6 +72,20 @@ class Plugin:
     async def overlay_status(self):
         return {**self.overlay.status(), "pin": storage.get_settings().get("overlayPin")}
 
+    async def overlay_preview(self, appid: str = ""):
+        """The lines the overlay shows (or would show), for the placement preview: the pinned note, else the
+        game's most recently edited checklist, else an example."""
+        if self.overlay.lines:
+            return {"lines": self.overlay.lines, "source": "pinned"}
+        if appid:
+            notes = [n for n in storage.load_game(appid).get("notes", []) if n.get("checklist")]
+            if notes:
+                note = max(notes, key=lambda n: n.get("updatedAt", 0))
+                return {"lines": self.overlay.render(note), "source": "note"}
+        sample = {"title": "To do", "checklist": [{"text": "Find the key"}, {"text": "Beat the boss"},
+                                                 {"text": "Talk to the blacksmith", "done": True}]}
+        return {"lines": self.overlay.render(sample), "source": "sample"}
+
     async def delete_note(self, appid: str, note_id: str):
         return storage.delete_note(appid, note_id)
 
@@ -193,7 +207,7 @@ class Plugin:
         return result
 
     def _style_overlay(self, settings: dict):
-        self.overlay.set_style(settings.get("overlayHideStats", False), settings.get("overlayPosition"))
+        self.overlay.set_style(settings)
 
     # two-way sync with the server container
     async def sync_now(self):

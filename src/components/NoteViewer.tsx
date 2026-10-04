@@ -10,6 +10,8 @@ import { kindInfo } from "../utils/kinds";
 import { AudioButton } from "./AudioButton";
 import { Transcripts } from "./Transcripts";
 import * as s from "./styles";
+import { OverlayModal } from "./OverlayModal";
+import { getSettings } from "../state/notesStore";
 
 const ImageModal: FC<{ appId: string; file: string; closeModal?: () => void }> = ({ appId, file, closeModal }) => (
   <ModalRoot onCancel={closeModal} bAllowFullSize>
@@ -50,7 +52,7 @@ export const NoteViewer: FC<{
     toaster.toast({
       title: "Pinned to screen",
       body: st.overlayRunning
-        ? "Shows in the performance overlay. Ticking items off updates it. Move it or hide Steam's stats in Settings."
+        ? "Shows in the performance overlay. Ticking items off updates it. Use Move… to place it and change its look."
         : "Turn on the Performance Overlay (Quick Access → ⚡ → Level 1 or higher) to see it.",
     });
   };
@@ -142,6 +144,14 @@ export const NoteViewer: FC<{
             <DialogButton style={{ ...s.smallButton, padding: "2px 10px", fontSize: "12px" }} onClick={toggleScreenPin}>
               <FaPinScreen size={10} /> {onScreen ? "Unpin from screen" : "Pin to screen"}
             </DialogButton>
+            {onScreen && (
+              <DialogButton
+                style={{ ...s.smallButton, padding: "2px 10px", fontSize: "12px" }}
+                onClick={() => showModal(<OverlayModal settings={getSettings()} />)}
+              >
+                Move…
+              </DialogButton>
+            )}
           </div>
           {note.checklist.map((item) => (
             <Focusable

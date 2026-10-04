@@ -3,6 +3,10 @@
 Steam's gamescope session runs `mangoapp` with MANGOHUD_CONFIGFILE pointing at a config file Steam rewrites
 whenever you change the overlay level. We append `custom_text=` lines to that file (and re-append them if
 Steam rewrites it); MangoHud reloads the file on change. The overlay must be on (Level 1 or higher).
+
+Placement: MangoHud's own spots can't be nudged (offsets only push right/down, and centred spots ignore x),
+so a custom placement is written as top-left plus pixel offsets, with the box width set to fit the text.
+The size maths here is mirrored in src/components/OverlayModal.tsx (boxSize) so its preview matches.
 """
 import asyncio
 import glob
@@ -42,6 +46,20 @@ def _config_path():
     return None
 
 
+SCREEN_W, SCREEN_H = 1280, 800  # the Deck's screen; custom placements are stored in these pixels
+DEFAULT_TEXT = 13  # MangoHud's custom_text uses the small font: 0.55 x font_size (24)
+DEFAULT_ALPHA = 50
+
+
+def box_size(lines: list, text_size: int) -> tuple:
+    """Rough size in pixels of the overlay window showing just these lines (MangoHud's Unispace font is
+    monospaced; 5 px padding above, 11 below; rows are the text height minus the negative cell padding)."""
+    longest = max((len(line) for line in lines), default=10)
+    width = round(longest * text_size * 0.62) + 10
+    height = round(5 + len(lines) * (text_size - 2) + 11)
+    return width, height
+
+
 def _ascii(text: str) -> str:
     """The overlay font has no emoji; keep it to plain characters."""
     return re.sub(r"[^\x20-\x7E -ɏ]", "", text).strip()
@@ -53,10 +71,21 @@ class Overlay:
         self.task = None
         self.hide_stats = False
         self.position = None
+        self.xy = None
+        self.text_size = DEFAULT_TEXT
+        self.alpha = DEFAULT_ALPHA
+        self.rounded = False
 
-    def set_style(self, hide_stats: bool, position):
-        self.hide_stats = bool(hide_stats)
+    def set_style(self, settings: dict):
+        self.hide_stats = bool(settings.get("overlayHideStats", False))
+        position = settings.get("overlayPosition")
         self.position = position if position in POSITIONS else None
+        x, y = settings.get("overlayX"), settings.get("overlayY")
+        self.xy = (int(x), int(y)) if isinstance(x, (int, float)) and isinstance(y, (int, float)) else None
+        self.text_size = int(settings.get("overlayTextSize") or DEFAULT_TEXT)
+        alpha = settings.get("overlayOpacity")
+        self.alpha = int(alpha) if isinstance(alpha, (int, float)) else DEFAULT_ALPHA
+        self.rounded = bool(settings.get("overlayRounded", False))
         self._apply()
 
     def render(self, note: dict) -> list:
@@ -92,8 +121,20 @@ class Overlay:
             new = base + "\n"
             if self.lines:
                 block = [f"{name}=0" for name in STATS] if self.hide_stats else []
-                if self.position:
+                if self.xy:
+                    # Offsets of 0,0 bring back MangoHud's 10 px margin, so never write both as 0.
+                    x = max(0, min(SCREEN_W - 20, self.xy[0]))
+                    y = max(0, min(SCREEN_H - 20, self.xy[1]))
+                    block += ["position=top-left", f"offset_x={x or (0 if y else 1)}", f"offset_y={y}"]
+                elif self.position:
                     block.append(f"position={self.position}")
+                if self.hide_stats:
+                    # Steam's stats need MangoHud's own width; with just our text, fit the box to it.
+                    block.append(f"width={box_size(self.lines, self.text_size)[0]}")
+                if self.text_size > 24:
+                    block.append(f"font_size={self.text_size}")
+                block += [f"font_size_secondary={self.text_size}", f"background_alpha={self.alpha / 100:g}",
+                          f"round_corners={8 if self.rounded else 0}"]
                 block += [f"custom_text={line}" for line in self.lines]
                 new += "\n".join([BEGIN] + block + [END]) + "\n"
             if new != text:
