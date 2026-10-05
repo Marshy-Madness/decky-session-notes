@@ -32,7 +32,7 @@
   .card h3 { margin: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .card .first { opacity: .75; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
   .card img { width: 140px; height: 79px; object-fit: cover; border-radius: 6px; }
-  .chip { display: inline-block; font-size: 11px; background: var(--chip); border-radius: 8px; padding: 1px 7px; margin: 4px 4px 0 0; }
+  .chip { display: inline-block; font-size: 12px; background: var(--chip); border-radius: 8px; padding: 1px 7px; margin: 4px 4px 0 0; }
   .box { background: #1e2a38; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
   .counter { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
   .counter .n { min-width: 40px; text-align: center; font-size: 18px; font-weight: bold; }
@@ -74,26 +74,46 @@
   .said { font-size: 13px; background: #171a20; border-radius: 6px; padding: 6px 10px; margin: 0 0 8px; white-space: pre-wrap; }
   .said .meta { margin-right: 6px; }
   .saving { position: fixed; bottom: 16px; right: 16px; background: var(--panel); padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); }
-  #gamePicker, .mobile-only { display: none; }
+  #gamePicker, .mobile-only, .fab { display: none; }
+  .card .when { font-size: 12px; opacity: .6; margin-top: 4px; }
+  /* Save/Cancel stay in view at the bottom of long dialogs. */
+  dialog .actions { position: sticky; bottom: -20px; z-index: 1; background: var(--panel); border-top: 1px solid var(--line); margin: 18px -20px -20px; padding: 12px 20px; }
+  .counter-add summary { cursor: pointer; font-size: 13px; opacity: .8; padding: 8px 0 2px; }
+  .dlghead { display: flex; align-items: center; gap: 10px; } .dlghead .person { flex: 1; }
   /* ---- phones ---- */
   @media (max-width: 760px) {
     .hide-sm { display: none; }
     header { flex-wrap: wrap; padding: 10px 12px; padding-top: max(10px, env(safe-area-inset-top)); gap: 8px; }
-    header h1 { font-size: 16px; }
-    #gamePicker { display: block; flex: 1 1 100%; order: 3; }
+    header h1 { font-size: 18px; }
     #search { flex: 1 1 100%; order: 4; }
+    body:not(.ingame) #search { display: none; }
     .mobile-only { display: inline-block; }
-    main { grid-template-columns: 1fr; }
-    nav { display: none; }
-    section#content { padding: 12px; padding-bottom: max(24px, env(safe-area-inset-bottom)); }
-    button, select, input:not([type=checkbox]) { min-height: 42px; }
-    button.icon { min-width: 42px; }
+    main { grid-template-columns: minmax(0, 1fr); }
+    /* Phones: the game list is the home screen; opening a game swaps it for the notes. */
+    nav { display: none; border: 0; }
+    body:not(.ingame) nav { display: block; }
+    body:not(.ingame) section#content { display: none; }
+    nav button { padding: 12px 14px; font-size: 16px; } nav button small { font-size: 13px; }
+    nav .gicon { width: 46px; height: 46px; border-radius: 6px; }
+    section#content { padding: 12px; padding-bottom: max(96px, env(safe-area-inset-bottom)); }
+    button, select, input:not([type=checkbox]) { min-height: 44px; }
+    button.icon { min-width: 44px; }
     input, select, textarea { font-size: 16px; } /* stops iOS zooming into fields */
-    .card { padding: 10px 12px; } .card img { width: 96px; height: 54px; }
+    .gamehead h2 { font-size: 20px; } .gamehead .gicon { width: 40px; height: 40px; }
+    .card { padding: 12px; } .card img { width: 96px; height: 54px; align-self: center; }
+    .card h3 { font-size: 16px; } .card .first { font-size: 14px; }
     .counter { flex-wrap: wrap; } .counter .name { flex: 1 1 100%; }
-    .toolbar > select, .toolbar > input { flex: 1 1 auto; }
+    .toolbar > select, .toolbar > input { flex: 1 1 40%; min-width: 0; }
+    #newNote { display: none; }
+    .fab { display: flex; align-items: center; gap: 6px; position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 3;
+      background: var(--accent); color: #fff; border: 0; border-radius: 28px; padding: 0 22px; min-height: 56px; font-size: 16px; font-weight: 600; box-shadow: 0 6px 18px rgba(0,0,0,.45); }
+    body:not(.ingame) .fab { display: none; }
     dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; border: 0;
       padding: 16px; padding-top: max(16px, env(safe-area-inset-top)); padding-bottom: max(16px, env(safe-area-inset-bottom)); }
+    dialog .actions { bottom: calc(-1 * max(16px, env(safe-area-inset-bottom))); margin: 18px -16px calc(-1 * max(16px, env(safe-area-inset-bottom)));
+      padding: 10px 16px max(10px, env(safe-area-inset-bottom)); display: flex; gap: 10px; }
+    dialog .actions > button { flex: 1; }
+    dialog .actions > span[style*="flex:1"] { display: none; }
     .row { flex-direction: column; gap: 0; }
     .shot, .shot img { width: calc(50vw - 24px); } .shot img { height: calc((50vw - 24px) * 0.5625); }
     audio { max-width: 100%; }
@@ -128,6 +148,7 @@
     <button id="account">Account</button>
   </header>
   <main><nav id="games"></nav><section id="content"><p class="meta">Pick a game.</p></section></main>
+  <button class="fab" id="fabNote">＋ New note</button>
 </div>
 
 <dialog id="editor"></dialog>
@@ -179,9 +200,10 @@ $("#login").onsubmit = async (e) => {
     start();
   } catch (err) { $("#loginErr").textContent = err.message; }
 };
+// The Android app's "change server" lives in the Account dialog, and under the login form.
 if (window.SessionNotesApp) {
-  $("#changeServer").classList.remove("hidden");
-  $("#changeServer").onclick = () => window.SessionNotesApp.changeServer();
+  $("#login").insertAdjacentHTML("beforeend", '<p class="meta" style="text-align:center"><a href="#" id="loginServer">Use a different server</a></p>');
+  $("#loginServer").onclick = (e) => { e.preventDefault(); window.SessionNotesApp.changeServer(); };
 }
 const loginError = new URLSearchParams(location.search).get("error");
 if (loginError) { $(/approve/.test(loginError) ? "#loginOk" : "#loginErr").textContent = loginError; history.replaceState(null, "", "/"); }
@@ -250,9 +272,17 @@ async function openGame(appId) {
     const g = games.find((x) => x.appId === appId);
     game = { appId, name: g?.name || appId, notes: [], folders: [], counters: [], sessions: [] };
   }
+  document.body.classList.add("ingame");
   $("#games").querySelectorAll("button").forEach((b) => b.classList.toggle("active", b.dataset.id === appId));
   if (!$("#gamePicker").querySelector(`option[value="${CSS.escape(appId)}"]`)) loadGames(); else $("#gamePicker").value = appId;
   render();
+}
+
+/** Phones: back from a game to the game list. */
+function closeGame() {
+  document.body.classList.remove("ingame");
+  $("#search").value = "";
+  window.scrollTo(0, 0);
 }
 
 /** Send the whole game; the server merges it (newest edit wins) and returns the result. */
@@ -288,7 +318,7 @@ function render() {
   const icon = { death: "💀", boss: "⚔️", custom: "#" };
 
   $("#content").innerHTML = `
-    <div class="gamehead">${gameIcon(games.find((g) => g.appId === game.appId) || game)}<h2 style="margin:0;flex:1">${esc(game.name)}</h2>
+    <div class="gamehead"><button class="mobile-only" id="backToGames" aria-label="All games">‹ Games</button>${gameIcon(games.find((g) => g.appId === game.appId) || game)}<h2 style="margin:0;flex:1">${esc(game.name)}</h2>
       <button id="gameSettings" title="Rename, or link more app IDs to this game">⚙ Game</button></div>
     <div class="meta">Launched ${game.launchCount ?? 0}× · ${Math.round((game.playtimeSeconds ?? 0) / 60)} min played · last played ${date(game.lastLaunched)}</div>
 
@@ -304,11 +334,11 @@ function render() {
           <span>${icon[c.kind] || "#"}</span><span class="name">${esc(c.name)} ${c.defeated ? '<span class="chip">✓ defeated</span>' : ""} ${c.sessionCount ? `<small>+${c.sessionCount} this session</small>` : ""}</span>
           <button class="icon" data-act="dec">−</button><span class="n">${c.count}</span><button class="icon" data-act="inc">+</button>
           ${c.kind === "boss" ? `<button class="icon" data-act="defeat">${c.defeated ? "Undo defeat" : "Defeated"}</button>` : ""}
-          <button class="icon" data-act="rename">Rename</button><button class="icon danger" data-act="del">✕</button></div>`).join("") || '<div class="meta">No counters yet.</div>'}
-      <div class="toolbar" style="margin:8px 0 0">
+          <button class="icon" data-act="rename">Rename</button><button class="icon danger" data-act="del">✕</button></div>`).join("") || '<div class="meta">Track deaths or boss attempts.</div>'}
+      <details class="counter-add"><summary>＋ Add a counter</summary><div class="toolbar" style="margin:8px 0 0">
         <select id="counterKind"><option value="death">💀 Death counter</option><option value="boss">⚔️ Boss attempts</option><option value="custom"># Custom</option></select>
         <input id="counterName" placeholder="Name (e.g. Malenia)"><button id="addCounter">Add counter</button>
-      </div>
+      </div></details>
     </div>
 
     <div class="toolbar">
@@ -328,12 +358,13 @@ function render() {
       const shot = n.screenshots?.[0];
       const done = (n.checklist || []).filter((c) => c.done).length;
       const k = kindOf(n.kind);
-      const chips = [n.kind && n.kind !== "note" ? `${k[1]} ${k[2]}` : "", n.source ? `${n.source.type === "bookstore" ? "📚" : "👥"} from ${n.source.author}` : "", `Created ${day(n.createdAt)}`, `Edited ${date(n.updatedAt)}`, n.launchNumber ? `Launch #${n.launchNumber}` : "", n.folderId ? `📁 ${folderPath(n.folderId)}` : "",
+      const chips = [n.kind && n.kind !== "note" ? `${k[1]} ${k[2]}` : "", n.source ? `${n.source.type === "bookstore" ? "📚" : "👥"} from ${n.source.author}` : "", n.launchNumber ? `Launch #${n.launchNumber}` : "", n.folderId ? `📁 ${folderPath(n.folderId)}` : "",
         n.checklist?.length ? `☑ ${done}/${n.checklist.length}` : "", n.recordings?.length ? `🎙 ${n.recordings.length}` : "", ...(n.tags || []).map((t) => "#" + t)].filter(Boolean);
       return `<div class="card" data-id="${esc(n.id)}"><div class="text">
           <h3>${n.pinned ? "📌 " : ""}${n.spoiler ? "🙈 " : ""}${esc(n.title)}</h3>
           <div class="first ${n.spoiler ? "spoiler" : ""}">${esc(firstLine(n.body) || (transcriptsOf(n) ? "🎙 " + transcriptsOf(n) : "")) || "&nbsp;"}</div>
-          ${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}</div>
+          ${chips.map((c) => `<span class="chip">${esc(c)}</span>`).join("")}
+          <div class="when" title="Created ${esc(date(n.createdAt))}">Edited ${esc(date(n.updatedAt))}</div></div>
           ${shot ? `<img class="${n.spoiler ? "spoiler" : ""}" loading="lazy" src="${mediaUrl(game.appId, shot.thumb || shot.file)}">` : ""}</div>`;
     }).join("")}
     ${folderFilter === "shared" ? sharedHere.map((s) => `<div class="card shared" data-share="${esc(s.shareId)}"><div class="text">
@@ -367,7 +398,8 @@ function render() {
     c.updatedAt = Date.now();
     save();
   })));
-  $("#newNote").onclick = () => editNote(null);
+  $("#newNote").onclick = $("#fabNote").onclick = () => editNote(null);
+  $("#backToGames").onclick = closeGame;
   $("#gameSettings").onclick = gameDialog;
   $("#showDeleted").onclick = showDeleted;
   $("#newFolder").onclick = () => {
@@ -515,9 +547,9 @@ function editNote(original, draft = {}) {
           ${r.transcript ? `<div class="said"><span class="meta">🎙 said:</span>${esc(r.transcript)} <button class="icon" data-said="${i}">Add to text</button></div>` : ""}`).join("")}
       <div class="toolbar"><button id="eRecord" class="${recorder ? "recording" : ""}">${recorder ? "⏹ Stop recording" : "🎙 Record voice note"}</button>
         <span class="meta">or upload:</span><input type="file" id="eAudio" accept="audio/*"></div>
-      <div class="toolbar" style="margin-top:18px">
-        <button class="primary" id="eSave" ${recorder ? "disabled title=\"Stop the recording first\"" : ""}>Save</button><button id="eCancel">Cancel</button><span style="flex:1"></span>
-        ${original ? '<button id="eShare">👥 Share</button><button id="eHistory">🕘 Version history</button><button class="danger" id="eDelete">Delete note</button>' : ""}
+      ${original ? '<div class="toolbar" style="margin-top:18px"><button id="eShare">👥 Share</button><button id="eHistory">🕘 Version history</button><button class="danger" id="eDelete">Delete note</button></div>' : ""}
+      <div class="toolbar actions">
+        <button class="primary" id="eSave" ${recorder ? "disabled title=\"Stop the recording first\"" : ""}>Save</button><button id="eCancel">Cancel</button>
       </div>`;
     $("#eFolder", dlg).value = n.folderId || "";
     $("#eKind", dlg).value = n.kind || "note";
@@ -704,7 +736,7 @@ function addGameDialog() {
     <div class="lookup" id="gLook"></div>
     <label>Name <span id="gNameHint">(optional: leave empty to use Steam's)</span></label><input id="gName" style="width:100%" maxlength="120">
     <div class="err" id="gErr"></div>
-    <div class="toolbar"><span style="flex:1"></span><button id="gCancel">Cancel</button><button class="primary" id="gAdd" disabled>Add game</button></div>`;
+    <div class="toolbar actions"><span style="flex:1"></span><button id="gCancel">Cancel</button><button class="primary" id="gAdd" disabled>Add game</button></div>`;
   let info = null;
   const update = () => {
     $("#gAdd", dlg).disabled = !info || (!info.found && !$("#gName", dlg).value.trim() && !info.yours);
@@ -743,7 +775,7 @@ async function gameDialog() {
     <div class="lookup" id="lLook"></div>
     ${others.length ? `<label>…or merge one of your games into this one</label><select id="lPick" style="width:100%"><option value="">Pick a game…</option>${others.map((o) => `<option value="${esc(o.appId)}">${esc(o.name)} (${esc(o.appId)} · ${o.noteCount} notes)</option>`).join("")}</select>` : ""}
     <div class="err" id="lErr"></div>
-    <div class="toolbar"><span style="flex:1"></span><button id="lClose">Close</button><button class="primary" id="lAdd" disabled>Link ID</button></div>`;
+    <div class="toolbar actions"><span style="flex:1"></span><button id="lClose">Close</button><button class="primary" id="lAdd" disabled>Link ID</button></div>`;
   let target = null;
   const set = (id) => { target = id; $("#lAdd", dlg).disabled = !id; };
   wireLookup($("#lId", dlg), $("#lLook", dlg), (i) => { if ($("#lPick", dlg)) $("#lPick", dlg).value = ""; set(i?.appId && i.appId !== game.appId ? i.appId : null); });
@@ -814,9 +846,14 @@ async function accountDialog() {
         <h3>Users</h3>${a.speechAvailable ? '<p class="meta">🎤 Speech to text runs on this server\'s GPU. Tick who may use it.</p>' : '<p class="meta">🎤 Speech to text is off: set WHISPER_URL on the server to turn it on.</p>'}
         ${a.users.filter((u) => u.status !== "pending").map((u) => personRow({ ...u, steamId: [u.email, u.steamId && "Steam " + u.steamId].filter(Boolean).join(" · ") }, u.role === "owner" ? '<span class="chip">owner</span>' : `<label style="margin:0;opacity:1"><input type="checkbox" data-speech="${esc(u.id)}" ${u.speech ? "checked" : ""}> 🎤 Speech</label>${u.email ? `<button data-setpass="${esc(u.id)}" title="Set a new password for them">Password</button>` : ""}<button class="danger" data-remove="${esc(u.id)}">Remove</button>`)).join("")}`;
     }
-    dlg.innerHTML = `<div class="person" style="border:0">${me.avatar ? `<img src="${esc(me.avatar)}">` : '<div class="ph"></div>'}<div class="who"><b>${esc(me.name)}</b><div class="meta">${[me.email, me.steamId ? "Steam " + me.steamId : "Not linked to Steam"].filter(Boolean).map(esc).join(" · ")}</div></div></div>
-      <div class="toolbar"><button data-tab="devices">Devices</button><button data-tab="login">Sign-in</button><button data-tab="notify">Notifications</button>${speechOn ? '<button data-tab="speech">Speech</button>' : ""}${me.role === "owner" ? `<button data-tab="users">Users${pendingUsers ? `<span class="badge">${pendingUsers}</span>` : ""}</button>` : ""}
-        ${!me.steamId ? '<a href="/auth/steam?link=1"><button>Link Steam account</button></a>' : ""}<span style="flex:1"></span><button id="aLogout">Log out</button><button id="pClose">Close</button></div>${html}`;
+    const app = window.SessionNotesApp;
+    dlg.innerHTML = `<div class="dlghead"><div class="person" style="border:0">${me.avatar ? `<img src="${esc(me.avatar)}">` : '<div class="ph"></div>'}<div class="who"><b>${esc(me.name)}</b><div class="meta">${[me.email, me.steamId ? "Steam " + me.steamId : "Not linked to Steam"].filter(Boolean).map(esc).join(" · ")}</div></div></div>
+        <button id="pClose" class="icon" aria-label="Close">✕</button></div>
+      <div class="toolbar"><button data-tab="devices">📱 Devices</button><button data-tab="login">🔑 Sign-in</button><button data-tab="notify">🔔 Notifications</button>${speechOn ? '<button data-tab="speech">🎤 Speech</button>' : ""}${me.role === "owner" ? `<button data-tab="users">👥 Users${pendingUsers ? `<span class="badge">${pendingUsers}</span>` : ""}</button>` : ""}
+        ${!me.steamId ? '<a href="/auth/steam?link=1"><button>Link Steam account</button></a>' : ""}</div>${html}
+      <div class="toolbar" style="margin-top:24px;border-top:1px solid var(--line);padding-top:14px">${app ? '<button id="aServer">🌐 Change server</button>' : ""}<button id="aLogout" class="danger">Log out</button>
+        ${app?.version ? `<span class="meta" style="margin-left:auto">App ${esc(app.version())}</span>` : ""}</div>`;
+    if ($("#aServer", dlg)) $("#aServer", dlg).onclick = () => { dlg.close(); app.changeServer(); };
     dlg.querySelectorAll("[data-tab]").forEach((b) => { b.classList.toggle("primary", b.dataset.tab === tab); b.onclick = () => draw(b.dataset.tab); });
     $("#pClose", dlg).onclick = () => dlg.close();
     $("#aLogout", dlg).onclick = async () => { await fetch("/api/logout", { method: "POST" }); dlg.close(); showLogin(); };
@@ -954,7 +991,7 @@ function cropDialog(shot, done) {
   const dlg = $("#panel");
   dlg.innerHTML = `<h2 style="margin-top:0">Crop screenshot</h2><p class="meta">Drag over the image to choose the area to keep.</p>
     <div class="crop-wrap"><img id="cImg" src="${mediaUrl(game.appId, shot.file)}"><div class="crop-box hidden" id="cBox"></div></div>
-    <div class="toolbar"><button class="primary" id="cSave" disabled>Save crop</button><button id="pClose">Cancel</button></div>`;
+    <div class="toolbar actions"><button class="primary" id="cSave" disabled>Save crop</button><button id="pClose">Cancel</button></div>`;
   const img = $("#cImg", dlg), box = $("#cBox", dlg);
   let start = null, rect = null;
   const pos = (e) => { const r = img.getBoundingClientRect(); return { x: Math.min(Math.max(e.clientX - r.left, 0), r.width), y: Math.min(Math.max(e.clientY - r.top, 0), r.height) }; };
@@ -1063,6 +1100,7 @@ window.snReceiveShareNative = (payload) => {
 window.snBack = () => {
   if (dictation) { cancelDictation(); return true; }
   for (const d of [$("#panel"), $("#editor")]) if (d.open) { d.close(); return true; }
+  if (document.body.classList.contains("ingame") && matchMedia("(max-width: 760px)").matches) { closeGame(); return true; }
   return false;
 };
 

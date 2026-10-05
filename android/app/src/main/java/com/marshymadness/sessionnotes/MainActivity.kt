@@ -26,7 +26,9 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -39,8 +41,11 @@ import org.json.JSONObject
 class MainActivity : Activity() {
     private lateinit var webView: WebView // Notes tab (your server)
     private lateinit var storeView: WebView // Bookstore tab
-    private lateinit var notesTab: TextView
-    private lateinit var storeTab: TextView
+    private lateinit var notesTab: LinearLayout
+    private lateinit var storeTab: LinearLayout
+    private lateinit var tabBar: LinearLayout
+    private lateinit var progress: ProgressBar
+    private var lastBackPress = 0L
     private var storeLoaded = false
     private val prefs by lazy { getSharedPreferences("session-notes", MODE_PRIVATE) }
 
@@ -52,6 +57,10 @@ class MainActivity : Activity() {
     private var pendingDictationLang: String? = null // waiting for the microphone permission
 
     private val server: String? get() = prefs.getString("server", null)
+    /** The server has loaded at least once, so a failure later means "offline", not "wrong address". */
+    private var serverWorked: Boolean
+        get() = prefs.getBoolean("serverWorked", true)
+        set(v) = prefs.edit().putBoolean("serverWorked", v).apply()
     private val bookstore: String get() = prefs.getString("bookstore", null) ?: DEFAULT_BOOKSTORE
     private val current: WebView get() = if (storeView.visibility == View.VISIBLE) storeView else webView
 
@@ -62,19 +71,37 @@ class MainActivity : Activity() {
         webView = newWebView(Client(store = false)).apply { addJavascriptInterface(Bridge(), "SessionNotesApp") }
         storeView = newWebView(Client(store = true)).apply { addJavascriptInterface(StoreBridge(), "SessionNotesApp") }
 
-        val pages = FrameLayout(this).apply { addView(webView); addView(storeView) }
-        notesTab = tabButton("📝  Notes") { showTab(store = false) }
-        storeTab = tabButton("📚  Bookstore") { showTab(store = true) }
-        val bar = LinearLayout(this).apply {
-            setBackgroundColor(getColor(R.color.panel))
-            addView(notesTab, LinearLayout.LayoutParams(0, dp(52), 1f))
-            addView(storeTab, LinearLayout.LayoutParams(0, dp(52), 1f))
+        // A thin loading bar along the top of the page while it loads.
+        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
+            max = 100
+            progressTintList = android.content.res.ColorStateList.valueOf(getColor(R.color.accent))
+            progressBackgroundTintList = android.content.res.ColorStateList.valueOf(android.graphics.Color.TRANSPARENT)
+            visibility = View.GONE
         }
-        setContentView(LinearLayout(this).apply {
+        val pages = FrameLayout(this).apply {
+            addView(webView); addView(storeView)
+            addView(progress, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(3), Gravity.TOP))
+        }
+        notesTab = tabButton("📝", "My notes") { if (current === webView) scrollToTop() else showTab(store = false) }
+        storeTab = tabButton("📚", "Bookstore") { if (current === storeView) scrollToTop() else showTab(store = true) }
+        tabBar = LinearLayout(this).apply {
+            setBackgroundColor(getColor(R.color.panel))
+            addView(notesTab, LinearLayout.LayoutParams(0, dp(60), 1f))
+            addView(storeTab, LinearLayout.LayoutParams(0, dp(60), 1f))
+        }
+        val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(pages, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f))
-            addView(bar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
-        })
+            addView(View(context).apply { setBackgroundColor(0xFF2A2F38.toInt()) }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 1))
+            addView(tabBar, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+        }
+        setContentView(root)
+        // Hide the tabs while the keyboard is up, so there's more room to write.
+        root.viewTreeObserver.addOnGlobalLayoutListener {
+            val visible = android.graphics.Rect().also { root.getWindowVisibleDisplayFrame(it) }
+            val keyboardUp = root.rootView.height - visible.bottom > root.rootView.height / 5
+            tabBar.visibility = if (keyboardUp) View.GONE else View.VISIBLE
+        }
 
         handleShareIntent(intent)
         if (savedInstanceState != null) {
@@ -100,13 +127,33 @@ class MainActivity : Activity() {
         webChromeClient = Chrome()
     }
 
-    private fun tabButton(label: String, onClick: () -> Unit) = TextView(this).apply {
-        text = label
-        gravity = Gravity.CENTER
-        setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f)
+    /** A bottom tab: an accent line on top when selected, then the icon and a label. */
+    private fun tabButton(icon: String, label: String, onClick: () -> Unit) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
+        contentDescription = label
         isClickable = true
+        isFocusable = true
+        background = TypedValue().let { tv ->
+            context.theme.resolveAttribute(android.R.attr.selectableItemBackground, tv, true)
+            getDrawable(tv.resourceId)
+        }
         setOnClickListener { onClick() }
+        addView(View(context).apply { tag = "line" }, LinearLayout.LayoutParams(dp(48), dp(3)))
+        addView(TextView(context).apply {
+            text = icon
+            gravity = Gravity.CENTER
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 0, 1f).apply { topMargin = dp(4) })
+        addView(TextView(context).apply {
+            tag = "label"
+            text = label
+            gravity = Gravity.CENTER
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
+        }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) })
     }
+
+    private fun scrollToTop() = current.evaluateJavascript("window.scrollTo({top: 0, behavior: 'smooth'})", null)
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
@@ -118,9 +165,20 @@ class MainActivity : Activity() {
         storeView.visibility = if (store) View.VISIBLE else View.GONE
         webView.visibility = if (store) View.GONE else View.VISIBLE
         for ((tab, on) in listOf(notesTab to !store, storeTab to store)) {
-            tab.setTextColor(if (on) getColor(R.color.accent) else 0xFF9AA3B2.toInt())
-            tab.setTypeface(null, if (on) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            tab.findViewWithTag<View>("line").setBackgroundColor(if (on) getColor(R.color.accent) else android.graphics.Color.TRANSPARENT)
+            tab.findViewWithTag<TextView>("label").apply {
+                setTextColor(if (on) getColor(R.color.accent) else 0xFF9AA3B2.toInt())
+                setTypeface(null, if (on) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            }
+            tab.isSelected = on
         }
+        progress.visibility = View.GONE
+    }
+
+    /** "Can't reach the server" page with Try again, instead of a raw WebView error. */
+    private fun showOffline(view: WebView, store: Boolean, error: String?) {
+        val url = if (store) bookstore else server ?: ""
+        view.loadUrl("file:///android_asset/offline.html?which=${if (store) "store" else "notes"}&url=${Uri.encode(url)}&error=${Uri.encode(error ?: "")}")
     }
 
     private fun loadHome() {
@@ -239,7 +297,11 @@ class MainActivity : Activity() {
             when {
                 view.canGoBack() -> view.goBack()
                 view === storeView -> showTab(store = false)
-                else -> finish()
+                System.currentTimeMillis() - lastBackPress < 2000 -> finish()
+                else -> {
+                    lastBackPress = System.currentTimeMillis()
+                    Toast.makeText(this, "Press back again to close Session Notes", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
@@ -302,12 +364,16 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun setServer(url: String) {
-            prefs.edit().putString("server", url).apply()
+            prefs.edit().putString("server", url).putBoolean("serverWorked", false).apply()
             runOnUiThread { webView.clearHistory(); webView.loadUrl("$url/") }
         }
 
         @JavascriptInterface
         fun changeServer() = runOnUiThread { showSetup() }
+
+        /** "Try again" on the offline page. */
+        @JavascriptInterface
+        fun retry() = runOnUiThread { loadHome() }
 
         /** Called by the website once it's logged in and loaded, so a pending share can be delivered. */
         @JavascriptInterface
@@ -350,6 +416,13 @@ class MainActivity : Activity() {
 
         @JavascriptInterface
         fun version(): String = BuildConfig.VERSION_NAME
+
+        /** Offline page buttons. */
+        @JavascriptInterface
+        fun retry() = runOnUiThread { storeView.loadUrl("$bookstore/") }
+
+        @JavascriptInterface
+        fun backToNotes() = runOnUiThread { showTab(store = false) }
     }
 
     // ---------- WebView plumbing ----------
@@ -385,22 +458,39 @@ class MainActivity : Activity() {
             return true
         }
 
+        private var failed = false
+
         override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
             if (!store) pageReady = false
+            failed = false
+        }
+
+        override fun onPageFinished(view: WebView, url: String) {
+            if (url.startsWith("file:") || failed) return
+            if (!store) serverWorked = true
+            // Don't let Back return to the offline/setup page after a successful retry.
+            val history = view.copyBackForwardList()
+            if (history.currentIndex > 0 && history.getItemAtIndex(history.currentIndex - 1).url.startsWith("file:")) view.clearHistory()
         }
 
         override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
             if (!request.isForMainFrame || request.url.scheme == "file") return
-            if (!store) return showSetup(error.description?.toString())
-            storeLoaded = false // try again next time the tab is opened
-            val msg = android.text.Html.escapeHtml(error.description ?: "")
-            view.loadDataWithBaseURL(null, """<body style="background:#14171c;color:#e6e9ee;font-family:sans-serif;padding:24px">
-                <h2>📚 Bookstore unreachable</h2><p>$msg</p><p style="opacity:.7">${android.text.Html.escapeHtml(bookstore)}</p>
-                <p style="opacity:.7">Change the address with the Server button on the Notes tab.</p></body>""", "text/html", "utf-8", null)
+            failed = true
+            val msg = error.description?.toString()
+            // A server that never worked probably has a typo in its address, so go back to setup to fix it.
+            if (!store && !serverWorked) return showSetup(msg)
+            if (store) storeLoaded = false // try again next time the tab is opened
+            showOffline(view, store, msg)
         }
     }
 
     private inner class Chrome : WebChromeClient() {
+        override fun onProgressChanged(view: WebView, newProgress: Int) {
+            if (view !== current) return
+            progress.progress = newProgress
+            progress.visibility = if (newProgress in 1..99) View.VISIBLE else View.GONE
+        }
+
         override fun onPermissionRequest(request: PermissionRequest) {
             runOnUiThread {
                 if (PermissionRequest.RESOURCE_AUDIO_CAPTURE !in request.resources) return@runOnUiThread request.deny()

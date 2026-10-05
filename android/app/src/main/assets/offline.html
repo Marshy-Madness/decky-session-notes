@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, sans-serif; background: #14171c; color: #e6e9ee; display: flex; min-height: 100vh; align-items: center; justify-content: center; padding: 16px; text-align: center; }
+  .card { width: min(420px, 100%); }
+  .icon { font-size: 52px; } h1 { font-size: 21px; margin: 10px 0 8px; }
+  p { color: #aab2bf; font-size: 15px; line-height: 1.45; margin: 6px 0; }
+  .addr { color: #8d96a5; font-size: 13px; word-break: break-all; margin-top: 10px; }
+  button { width: 100%; font-size: 17px; font-weight: 600; padding: 14px; border-radius: 10px; border: 0; margin-top: 12px; }
+  .primary { background: #1a9fff; color: #fff; margin-top: 24px; } .plain { background: #2b313c; color: #e6e9ee; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="icon" id="icon">📡</div>
+  <h1 id="title">Can't reach your server</h1>
+  <p id="msg">Check that your phone is online. If the server runs at home, you may need to be on your home Wi-Fi.</p>
+  <div class="addr" id="addr"></div>
+  <button class="primary" id="retry">Try again</button>
+  <button class="plain" id="change">Change server address</button>
+</div>
+<script>
+  const params = new URLSearchParams(location.search);
+  const $ = (id) => document.getElementById(id);
+  const store = params.get("which") === "store";
+  if (store) {
+    $("icon").textContent = "📚";
+    $("title").textContent = "Can't reach the Bookstore";
+    $("msg").textContent = "Check that your phone is online and try again.";
+    $("change").textContent = "Back to my notes";
+  }
+  $("addr").textContent = [params.get("url"), params.get("error")].filter(Boolean).join(" · ");
+  $("retry").onclick = () => { $("retry").textContent = "Trying…"; SessionNotesApp.retry(); };
+  $("change").onclick = () => (store ? SessionNotesApp.backToNotes() : SessionNotesApp.changeServer());
+</script>
+</body>
+</html>
