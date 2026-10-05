@@ -41,7 +41,12 @@ lock = threading.Lock()
 STARTED = time.time()
 # Site settings admins can change on the website (key: (type, default)).
 SETTINGS = {"announcement": (str, ""), "readOnly": (bool, False), "approvePosts": (bool, False), "commentsEnabled": (bool, True),
-            "blockedWords": (str, ""), "maxPostsPerDay": (int, 0), "minAccountDays": (int, 0)}
+            "blockedWords": (str, ""), "maxPostsPerDay": (int, 0), "minAccountDays": (int, 0),
+            # 🔥 Trending: likes (and, if on, saves to notes) in the last trendingDays days.
+            "trendingDays": (int, 7), "trendingCopies": (bool, True),
+            # ⭐ Featured: how many show on the front page; 📦 Note Packs on/off for non-admins.
+            "featuredLimit": (int, 8), "packsEnabled": (bool, True)}
+MAX_PACK = 100
 
 
 def now_ms() -> int:
@@ -93,7 +98,8 @@ def blocked_word(*texts) -> str:
 
 def delete_entry(entry_id: str):
     c = db.conn()
-    for t in ("entries WHERE id", "comments WHERE entry_id", "likes WHERE entry_id", "entry_versions WHERE entry_id", "reports WHERE entry_id"):
+    for t in ("entries WHERE id", "comments WHERE entry_id", "likes WHERE entry_id", "entry_versions WHERE entry_id", "reports WHERE entry_id",
+              "copies WHERE entry_id"):
         c.execute(f"DELETE FROM {t}=?", (entry_id,))
 
 
@@ -109,7 +115,70 @@ def summary(e: dict) -> dict:
             "author": public_user(e["author"]), "likes": e["likes"], "comments": e["comments"], "allowCopy": e["allow_copy"],
             "hasScreenshots": bool(e["screenshots"]), "hasVoice": bool(e["recordings"]), "hasChecklist": bool(e["checklist"]),
             "thumb": thumb, "createdAt": e["created_at"], "updatedAt": e["updated_at"],
-            "pinned": e["pinned"], "locked": e["locked"], "status": e["status"]}
+            "pinned": e["pinned"], "locked": e["locked"], "status": e["status"], "featured": e["featured"], "copies": e["copies"]}
+
+
+def pack_out(row, viewer=None, with_entries=False) -> dict:
+    """A Note Pack: a named collection of posts, saved to your notes all at once."""
+    ids = json.loads(row["entry_ids"] or "[]")
+    out = {"id": row["id"], "title": row["title"], "description": row["description"] or "", "appId": row["app_id"] or None,
+           "gameName": row["game_name"] or "", "author": public_user(row["author"]), "count": len(ids), "copies": row["copies"] or 0,
+           "featured": bool(row["featured"]), "status": row["status"], "createdAt": row["created_at"], "updatedAt": row["updated_at"],
+           "isAuthor": viewer == row["author"], "canEdit": bool(viewer) and (viewer == row["author"] or is_admin(viewer))}
+    if with_entries:
+        entries = [get_entry(i, viewer) for i in ids]
+        out["entries"] = [summary(e) for e in entries if e]
+        out["count"] = len(out["entries"])
+    return out
+
+
+def pack_fields(data: dict, viewer: str) -> dict:
+    title = str(data.get("title", "")).strip()[:120]
+    if not title:
+        raise ValueError("Give the pack a name")
+    ids, seen = [], set()
+    for i in data.get("entryIds") or []:
+        e = get_entry(str(i), viewer)
+        if e and e["id"] not in seen and (e["status"] == "published" or e["author"] == viewer):
+            ids.append(e["id"])
+            seen.add(e["id"])
+    if not ids:
+        raise ValueError("Add at least one post to the pack")
+    games = {get_entry(i)["app_id"] for i in ids}
+    app_id = games.pop() if len(games) == 1 else None
+    name = get_entry(ids[0])["game_name"] if app_id else ""
+    return {"title": title, "description": str(data.get("description", "")).strip()[:1000], "app_id": app_id, "game_name": name,
+            "entry_ids": json.dumps(ids[:MAX_PACK])}
+
+
+def count_copy(entry_ids: list, who: str):
+    """Someone saved these posts to their notes: counted once per person (or address) per day."""
+    c, now = db.conn(), now_ms()
+    for eid in entry_ids:
+        cur = c.execute("INSERT OR IGNORE INTO copies VALUES (?,?,?,?)", (eid, who, now // 86400_000, now))
+        if cur.rowcount:
+            c.execute("UPDATE entries SET copies=copies+1 WHERE id=?", (eid,))
+    c.commit()
+
+
+def trending(app_id: str = "", limit: int = 20) -> list:
+    since = now_ms() - max(1, setting("trendingDays") or 7) * 86400_000
+    copies = 1 if setting("trendingCopies") else 0
+    where, args = "status='published'", [since, since, copies]
+    if app_id:
+        where += " AND app_id=?"
+        args.append(app_id)
+    rows = db.conn().execute(
+        "SELECT * FROM (SELECT e.*, (SELECT COUNT(*) FROM likes l WHERE l.entry_id=e.id AND l.created_at>?) AS recent_likes, "
+        "(SELECT COUNT(*) FROM copies k WHERE k.entry_id=e.id AND k.at>?) AS recent_copies, ? AS use_copies FROM entries e) "
+        f"WHERE {where} AND recent_likes + recent_copies * use_copies > 0 "
+        "ORDER BY recent_likes + recent_copies * use_copies DESC, likes DESC, updated_at DESC LIMIT ?", args + [limit]).fetchall()
+    out = []
+    for r in rows:
+        e = summary(db.row_to_entry(r))
+        e["recentLikes"], e["recentCopies"] = r["recent_likes"], r["recent_copies"]
+        out.append(e)
+    return out
 
 
 def full(e: dict, viewer) -> dict:
@@ -280,7 +349,7 @@ class Handler(BaseHTTPRequestHandler):
         c = db.conn()
 
         if p[1:] == ["me"]:
-            site = {k: setting(k) for k in ("announcement", "readOnly", "approvePosts", "commentsEnabled")}
+            site = {k: setting(k) for k in ("announcement", "readOnly", "approvePosts", "commentsEnabled", "packsEnabled", "trendingDays")}
             out = {"user": public_user(viewer) if viewer else None, "admin": is_admin(viewer), "ownerAdmin": viewer in ADMINS, "site": site}
             if out["admin"]:
                 out["openReports"] = c.execute("SELECT COUNT(*) FROM reports WHERE status='open'").fetchone()[0]
@@ -288,6 +357,52 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, out)
         if len(p) >= 3 and p[1] == "admin":
             return self.admin_get(viewer, p[2:]) if is_admin(viewer) else self.err(403, "Admins only")
+        if p[1:] == ["featured"]:
+            q = self.query()
+            where, args = "status='published' AND featured=1", []
+            if q.get("appId"):
+                where += " AND app_id=?"; args.append(q["appId"])
+            limit = max(1, setting("featuredLimit") or 8)
+            rows = c.execute(f"SELECT * FROM entries WHERE {where} ORDER BY featured_at DESC LIMIT ?", args + [limit]).fetchall()
+            pwhere, pargs = "status='published' AND featured=1", []
+            if q.get("appId"):
+                pwhere += " AND (app_id=? OR app_id IS NULL)"; pargs.append(q["appId"])
+            packs = c.execute(f"SELECT * FROM packs WHERE {pwhere} ORDER BY featured_at DESC LIMIT ?", pargs + [limit]).fetchall()
+            return self.send(200, {"entries": [summary(db.row_to_entry(r)) for r in rows], "packs": [pack_out(r, viewer) for r in packs]})
+        if p[1:] == ["trending"]:
+            return self.send(200, trending(self.query().get("appId", ""), min(50, int(self.query().get("limit", 20) or 20))))
+        if p[1:] == ["packs"]:
+            q = self.query()
+            where, args = ["(status='published' OR author=?)"], [viewer or ""]
+            if q.get("appId"):  # this game's packs, plus mixed-game packs with a post for it (filtered below)
+                where.append("(app_id=? OR app_id IS NULL)"); args.append(q["appId"])
+            if q.get("author"):
+                where.append("author=?"); args.append(q["author"])
+            if q.get("featured"):
+                where.append("featured=1")
+            order = {"top": "copies DESC, updated_at DESC"}.get(q.get("sort"), "updated_at DESC")
+            rows = c.execute(f"SELECT * FROM packs WHERE {' AND '.join(where)} ORDER BY featured DESC, {order} LIMIT 100", args).fetchall()
+            out = [pack_out(r, viewer) for r in rows]
+            if q.get("appId"):
+                out = [x for x, r in zip(out, rows) if r["app_id"] == q["appId"] or (r["app_id"] is None and any(
+                    (get_entry(i) or {}).get("app_id") == q["appId"] for i in json.loads(r["entry_ids"] or "[]")))]
+            return self.send(200, out)
+        if len(p) == 3 and p[1] == "packs":
+            row = c.execute("SELECT * FROM packs WHERE id=?", (p[2],)).fetchone()
+            if not row or (row["status"] != "published" and row["author"] != viewer and not is_admin(viewer)):
+                return self.err(404, "No such pack")
+            return self.send(200, pack_out(row, viewer, with_entries=True))
+        if p[1:] == ["mine"]:
+            if not viewer:
+                return self.err(401, "Sign in first")
+            posts = c.execute("SELECT * FROM entries WHERE author=? ORDER BY updated_at DESC LIMIT 200", (viewer,)).fetchall()
+            liked = c.execute("SELECT e.* FROM likes l JOIN entries e ON e.id=l.entry_id WHERE l.steam_id=? AND e.status='published' "
+                              "ORDER BY l.created_at DESC LIMIT 100", (viewer,)).fetchall()
+            packs = c.execute("SELECT * FROM packs WHERE author=? ORDER BY updated_at DESC", (viewer,)).fetchall()
+            posts = [summary(db.row_to_entry(r)) for r in posts]
+            return self.send(200, {"posts": posts, "liked": [summary(db.row_to_entry(r)) for r in liked],
+                                   "packs": [pack_out(r, viewer) for r in packs],
+                                   "stats": {"posts": len(posts), "likes": sum(x["likes"] for x in posts), "copies": sum(x["copies"] for x in posts)}})
         if p[1:] == ["games"]:
             q = self.query().get("q", "").strip().lower()
             rows = c.execute("SELECT app_id, MAX(game_name) AS name, COUNT(*) AS n, MAX(updated_at) AS u FROM entries "
@@ -314,7 +429,7 @@ class Handler(BaseHTTPRequestHandler):
                 where.append("author=?"); args.append(q["author"])
             if q.get("q"):
                 where.append("(title LIKE ? OR body LIKE ? OR tags LIKE ? OR game_name LIKE ?)"); args += [f"%{q['q']}%"] * 4
-            order = {"top": "likes DESC, updated_at DESC", "updated": "updated_at DESC"}.get(q.get("sort"), "created_at DESC")
+            order = {"top": "likes DESC, updated_at DESC", "updated": "updated_at DESC", "copies": "copies DESC, likes DESC"}.get(q.get("sort"), "created_at DESC")
             if q.get("appId"):
                 order = "pinned DESC, " + order
             sql = "SELECT * FROM entries" + (" WHERE " + " AND ".join(where) if where else "") + f" ORDER BY {order} LIMIT 50 OFFSET ?"
@@ -406,6 +521,24 @@ class Handler(BaseHTTPRequestHandler):
             c.commit()
             return self.send(200, {"status": "linked", "token": token, "user": public_user(row["steam_id"])})
 
+        # Saved to someone's notes (the Deck, the Desk website): counted for 🔥 Trending, no sign-in needed.
+        if len(p) == 4 and p[0] == "api" and p[1] in ("entries", "packs") and p[3] == "copied":
+            # A Desk server saving for one of its users says who (hashed), so people behind one server count separately.
+            by = self.headers.get("X-Copied-By", "")[:80]
+            who = self.viewer() or ("u:" + h(by)[:16] if by else "ip:" + h(self.client_ip())[:16])
+            if p[1] == "entries":
+                e = get_entry(p[2])
+                if e and e["status"] == "published":
+                    count_copy([e["id"]], who)
+            else:
+                row = c.execute("SELECT * FROM packs WHERE id=? AND status='published'", (p[2],)).fetchone()
+                if row:
+                    day = now_ms() // 86400_000
+                    if c.execute("INSERT OR IGNORE INTO copies VALUES (?,?,?,?)", ("pack:" + row["id"], who, day, now_ms())).rowcount:
+                        c.execute("UPDATE packs SET copies=copies+1 WHERE id=?", (row["id"],))
+                    count_copy(json.loads(row["entry_ids"] or "[]"), who)
+            return self.send(200, {"ok": True})
+
         viewer = self.viewer(mutating=True)
         if not viewer:
             return self.err(401, "Sign in with Steam first")
@@ -490,6 +623,18 @@ class Handler(BaseHTTPRequestHandler):
                        json.dumps(editors), 1 if data.get("allowCopy", True) else 0, now, now, viewer, status))
             c.commit()
             return self.send(200, full(get_entry(eid), viewer))
+        if p == ["api", "packs"]:
+            if not admin and (setting("readOnly") or not setting("packsEnabled")):
+                return self.err(403, "Note Packs are closed for now.")
+            fields = pack_fields(self.json_body(), viewer)
+            if not admin and blocked_word(fields["title"], fields["description"]):
+                return self.err(400, "Your pack has a blocked word in it.")
+            pid, now = uuid.uuid4().hex[:12], now_ms()
+            c.execute("INSERT INTO packs (id, title, description, app_id, game_name, author, entry_ids, status, created_at, updated_at) "
+                      "VALUES (?,?,?,?,?,?,?,?,?,?)", (pid, fields["title"], fields["description"], fields["app_id"], fields["game_name"], viewer,
+                                                       fields["entry_ids"], "pending" if setting("approvePosts") and not admin else "published", now, now))
+            c.commit()
+            return self.send(200, pack_out(c.execute("SELECT * FROM packs WHERE id=?", (pid,)).fetchone(), viewer, True))
         if len(p) == 4 and p[:2] == ["api", "entries"] and p[3] == "comments":
             e = get_entry(p[2], viewer)
             text = str(self.json_body().get("text", "")).strip()[:2000]
@@ -510,7 +655,7 @@ class Handler(BaseHTTPRequestHandler):
             if c.execute("SELECT 1 FROM likes WHERE entry_id=? AND steam_id=?", (e["id"], viewer)).fetchone():
                 c.execute("DELETE FROM likes WHERE entry_id=? AND steam_id=?", (e["id"], viewer))
             else:
-                c.execute("INSERT INTO likes VALUES (?,?)", (e["id"], viewer))
+                c.execute("INSERT INTO likes (entry_id, steam_id, created_at) VALUES (?,?,?)", (e["id"], viewer, now_ms()))
             c.execute("UPDATE entries SET likes=(SELECT COUNT(*) FROM likes WHERE entry_id=?) WHERE id=?", (e["id"], e["id"]))
             c.commit()
             return self.send(200, full(get_entry(e["id"]), viewer))
@@ -621,6 +766,9 @@ class Handler(BaseHTTPRequestHandler):
                                     "updatedAt": r["u"]} for r in rows])
         if rest == ["settings"]:
             return self.send(200, all_settings())
+        if rest == ["packs"]:
+            rows = c.execute("SELECT * FROM packs ORDER BY featured DESC, updated_at DESC LIMIT 200").fetchall()
+            return self.send(200, [pack_out(r, viewer) for r in rows])
         if rest == ["log"]:
             rows = c.execute("SELECT * FROM modlog ORDER BY at DESC LIMIT 300").fetchall()
             return self.send(200, [{"at": r["at"], "actor": public_user(r["actor"]), "action": r["action"], "target": r["target"],
@@ -634,13 +782,16 @@ class Handler(BaseHTTPRequestHandler):
         if rest == ["entries", "bulk"]:
             ids = [str(i) for i in (data.get("ids") or [])][:200]
             actions = {"publish": "status='published'", "hide": "status='hidden'", "pending": "status='pending'", "pin": "pinned=1",
-                       "unpin": "pinned=0", "lock": "locked=1", "unlock": "locked=0"}
+                       "unpin": "pinned=0", "lock": "locked=1", "unlock": "locked=0",
+                       "feature": f"featured=1, featured_at={now_ms()}", "unfeature": "featured=0"}
             # single-entry form: {pinned, locked, status}
             todo = [data["action"]] if data.get("action") else []
             if "pinned" in data:
                 todo.append("pin" if data["pinned"] else "unpin")
             if "locked" in data:
                 todo.append("lock" if data["locked"] else "unlock")
+            if "featured" in data:
+                todo.append("feature" if data["featured"] else "unfeature")
             if data.get("status") in ("published", "hidden", "pending"):
                 todo.append({"published": "publish", "hidden": "hide", "pending": "pending"}[data["status"]])
             for eid in ids:
@@ -765,6 +916,21 @@ class Handler(BaseHTTPRequestHandler):
                 modlog(viewer, "settings", "", ", ".join(changed))
             c.commit()
             return self.send(200, all_settings())
+        if len(rest) == 2 and rest[0] == "packs":
+            row = c.execute("SELECT * FROM packs WHERE id=?", (rest[1],)).fetchone()
+            if not row:
+                return self.err(404, "No such pack")
+            if "featured" in data:
+                c.execute("UPDATE packs SET featured=?, featured_at=? WHERE id=?", (1 if data["featured"] else 0, now_ms(), row["id"]))
+                modlog(viewer, "pack.feature" if data["featured"] else "pack.unfeature", row["id"], row["title"])
+            if data.get("status") in ("published", "hidden", "pending"):
+                c.execute("UPDATE packs SET status=? WHERE id=?", (data["status"], row["id"]))
+                modlog(viewer, f"pack.{data['status']}", row["id"], row["title"])
+            if data.get("action") == "delete":
+                c.execute("DELETE FROM packs WHERE id=?", (row["id"],))
+                modlog(viewer, "pack.delete", row["id"], row["title"])
+            c.commit()
+            return self.send(200, {"ok": True})
         if len(rest) == 2 and rest[0] == "ban":  # older builds
             return self.admin_post(viewer, ["users", rest[1]], {"banned": True})
         return self.err(404, "not found")
@@ -776,6 +942,18 @@ class Handler(BaseHTTPRequestHandler):
             viewer = self.viewer(mutating=True)
             if not viewer:
                 return self.err(401, "Sign in with Steam first")
+            if len(p) == 3 and p[:2] == ["api", "packs"]:
+                c = db.conn()
+                row = c.execute("SELECT * FROM packs WHERE id=?", (p[2],)).fetchone()
+                if not row or not (row["author"] == viewer or is_admin(viewer)):
+                    return self.err(403, "Only the pack's maker can change it")
+                data = self.json_body()
+                current = {"title": row["title"], "description": row["description"], "entryIds": json.loads(row["entry_ids"] or "[]")}
+                fields = pack_fields({**current, **data}, viewer)
+                c.execute("UPDATE packs SET title=?, description=?, app_id=?, game_name=?, entry_ids=?, updated_at=? WHERE id=?",
+                          (fields["title"], fields["description"], fields["app_id"], fields["game_name"], fields["entry_ids"], now_ms(), row["id"]))
+                c.commit()
+                return self.send(200, pack_out(c.execute("SELECT * FROM packs WHERE id=?", (row["id"],)).fetchone(), viewer, True))
             if len(p) == 3 and p[:2] == ["api", "entries"]:
                 e = get_entry(p[2])
                 if not e:
@@ -824,6 +1002,15 @@ class Handler(BaseHTTPRequestHandler):
             delete_entry(e["id"])
             if viewer != e["author"]:
                 modlog(viewer, "entry.delete", e["id"], e["title"])
+            c.commit()
+            return self.send(200, {"ok": True})
+        if len(p) == 3 and p[:2] == ["api", "packs"]:
+            row = c.execute("SELECT * FROM packs WHERE id=?", (p[2],)).fetchone()
+            if not row or not (row["author"] == viewer or is_admin(viewer)):
+                return self.err(403, "Only the pack's maker can delete it")
+            c.execute("DELETE FROM packs WHERE id=?", (row["id"],))
+            if viewer != row["author"]:
+                modlog(viewer, "pack.delete", row["id"], row["title"])
             c.commit()
             return self.send(200, {"ok": True})
         if len(p) == 3 and p[:2] == ["api", "comments"]:

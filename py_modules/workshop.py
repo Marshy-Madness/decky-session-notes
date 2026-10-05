@@ -13,6 +13,7 @@ from sync import _SSL, clean_url
 
 DEFAULT_URL = "https://workshop.marshymadness.com"
 OLD_URL = "https://bookstore.marshymadness.com"
+SYNC_STATE = os.path.join(decky.DECKY_PLUGIN_SETTINGS_DIR, "sync_state.json")
 CACHE_DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "bookstore_cache")
 MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "gif": "image/gif",
         "wav": "audio/wav", "webm": "audio/webm", "ogg": "audio/ogg", "m4a": "audio/mp4", "mp3": "audio/mpeg"}
@@ -20,8 +21,17 @@ MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "
 
 class Workshop:
     def base(self) -> str:
-        url = clean_url(storage.get_settings().get("bookstoreUrl") or DEFAULT_URL)
+        # Your own setting, else the address your sync server's admin set, else the public Workshop.
+        url = clean_url(storage.get_settings().get("bookstoreUrl") or self.server_default() or DEFAULT_URL)
         return DEFAULT_URL if url == OLD_URL else url  # the Bookstore's old address
+
+    @staticmethod
+    def server_default() -> str:
+        try:
+            with open(SYNC_STATE) as f:
+                return (json.load(f).get("account") or {}).get("workshopUrl") or ""
+        except (OSError, ValueError):
+            return ""
 
     def _request(self, method: str, path: str, body=None, raw: bytes = None, auth: bool = True):
         data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
@@ -181,4 +191,46 @@ class Workshop:
                 "source": {"type": "bookstore", "id": e["id"], "author": e["author"]["name"]}}
         if not note["checklist"]:
             note.pop("checklist")
-        return storage.save_note(appid, note)
+        saved = storage.save_note(appid, note)
+        self.copied("entries", e["id"])
+        return saved
+
+    def copied(self, kind: str, item_id: str):
+        """Counts the save for 🔥 Trending. Best effort: no network, no count."""
+        try:
+            self._request("POST", f"/api/{kind}/{urllib.parse.quote(item_id)}/copied", {})
+        except RuntimeError:
+            pass
+
+    # ⭐ Featured, 🔥 Trending, 📦 Note Packs, 🧰 My Workshop
+    def featured(self, app_id: str = "") -> dict:
+        return self._request("GET", "/api/featured" + (f"?appId={urllib.parse.quote(app_id)}" if app_id else ""))
+
+    def trending(self, app_id: str = "") -> list:
+        return self._request("GET", "/api/trending" + (f"?appId={urllib.parse.quote(app_id)}" if app_id else ""))
+
+    def packs(self, params: dict) -> list:
+        return self._request("GET", "/api/packs?" + urllib.parse.urlencode({k: v for k, v in params.items() if v}))
+
+    def pack(self, pack_id: str) -> dict:
+        return self._request("GET", f"/api/packs/{urllib.parse.quote(pack_id)}")
+
+    def mine(self) -> dict:
+        return self._request("GET", "/api/mine")
+
+    def copy_pack(self, pack_id: str) -> dict:
+        """Copies every post in a Note Pack into its own game's notes; posts you already copied are skipped."""
+        pk = self.pack(pack_id)
+        done = skipped = 0
+        for e in pk.get("entries", []):
+            game = storage.load_game(e["appId"])
+            if any((n.get("source") or {}).get("id") == e["id"] for n in game.get("notes", [])):
+                skipped += 1
+                continue
+            try:
+                self.copy(e["id"], e["appId"])
+                done += 1
+            except RuntimeError:
+                skipped += 1
+        self.copied("packs", pack_id)
+        return {"copied": done, "skipped": skipped, "title": pk.get("title")}

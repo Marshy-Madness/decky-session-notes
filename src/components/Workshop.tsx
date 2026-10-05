@@ -5,7 +5,7 @@ import { toaster } from "@decky/api";
 import { backend } from "../api/backend";
 import { useRunningGame } from "../hooks/useAppLifetime";
 import { emitDataChanged, loadSettings, useSettings } from "../state/notesStore";
-import { WorkshopEntry, WorkshopGame, WorkshopSummary, WorkshopUser, EditPolicy, Note, NoteKind } from "../types";
+import { WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, EditPolicy, Note, NoteKind } from "../types";
 import { formatDateTime } from "../utils/format";
 import { KINDS, kindInfo } from "../utils/kinds";
 import { MediaImage, MediaLoader } from "./MediaImage";
@@ -345,8 +345,162 @@ export const PublishModal: FC<{ appId: string; note: Note; closeModal?: () => vo
 
 // ---------- the Workshop tab ----------
 
+/** One post in a list: A opens it. */
+const EntryRow: FC<{ entry: WorkshopSummary; appId: string; showGame?: boolean }> = ({ entry: e, appId, showGame }) => {
+  const k = kindInfo(e.kind);
+  const open = () => showModal(<EntryModal id={e.id} appId={appId} />);
+  return (
+    <Focusable style={s.row} onActivate={open} onClick={open}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={s.title}>
+          {e.featured && "⭐ "}
+          {k.icon} {e.title}
+        </div>
+        <div style={{ ...s.subline, filter: e.spoiler ? "blur(5px)" : undefined }}>
+          {e.spoiler ? `Spoiler${e.spoilerLabel ? ": " + e.spoilerLabel : ""}` : e.firstLine || " "}
+        </div>
+        <div style={s.chipRow}>
+          {showGame ? <span style={s.chip}>🎮 {e.gameName}</span> : <span style={s.chip}>{k.label}</span>}
+          <span style={s.chip}>by {e.author.name}</span>
+          <span style={s.chip}>♥ {e.likes}</span>
+          {!!e.copies && <span style={s.chip}>📥 {e.copies}</span>}
+          <span style={s.chip}>💬 {e.comments}</span>
+          {e.hasScreenshots && <span style={s.chip}>📷</span>}
+          {e.hasVoice && <span style={s.chip}>🎙</span>}
+          {e.hasChecklist && <span style={s.chip}>☑</span>}
+          {e.spoiler && <span style={s.chip}>🙈 {e.spoilerLabel || "Spoiler"}</span>}
+        </div>
+      </div>
+      {e.thumb && (
+        <MediaImage
+          appId={appId}
+          file={e.thumb}
+          loader={workshopMedia}
+          style={{ width: "128px", height: "72px", flex: "0 0 auto", filter: e.spoiler ? "blur(6px)" : undefined }}
+        />
+      )}
+    </Focusable>
+  );
+};
+
+const PackRow: FC<{ pack: WorkshopPack }> = ({ pack: p }) => {
+  const open = () => showModal(<PackModal id={p.id} />);
+  return (
+    <Focusable style={s.row} onActivate={open} onClick={open}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={s.title}>
+          {p.featured && "⭐ "}📦 {p.title}
+        </div>
+        {p.description && <div style={s.subline}>{p.description}</div>}
+        <div style={s.chipRow}>
+          <span style={s.chip}>
+            {p.count} {p.count === 1 ? "book" : "books"}
+          </span>
+          <span style={s.chip}>🎮 {p.gameName || "Several games"}</span>
+          <span style={s.chip}>by {p.author.name}</span>
+          <span style={s.chip}>📥 {p.copies}</span>
+        </div>
+      </div>
+    </Focusable>
+  );
+};
+
+/** 🧰 My Workshop: your posts, packs and likes, with how they're doing. */
+const MineModal: FC<{ closeModal?: () => void }> = ({ closeModal }) => {
+  const [mine, setMine] = useState<Awaited<ReturnType<typeof backend.bsMine>> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    backend.bsMine().then(setMine).catch((e) => setError(errText(e)));
+  }, []);
+  return (
+    <ModalRoot onCancel={closeModal} closeModal={closeModal}>
+      <h2 style={{ margin: "0 0 6px" }}>🧰 My Workshop</h2>
+      {error && <div>⚠️ {error}</div>}
+      {!mine && !error && <Spinner style={{ width: "28px" }} />}
+      {mine && (
+        <Focusable style={{ maxHeight: "60vh", overflowY: "auto" }}>
+          <div style={{ fontSize: "14px", marginBottom: "6px" }}>
+            📚 {mine.stats.posts} posts · ♥ {mine.stats.likes} likes · 📥 saved {mine.stats.copies}× · 📦 {mine.packs.length} packs
+          </div>
+          {mine.packs.length > 0 && <div style={s.sectionLabel}>📦 My packs</div>}
+          {mine.packs.map((p) => (
+            <PackRow key={p.id} pack={p} />
+          ))}
+          <div style={s.sectionLabel}>📚 My posts</div>
+          {mine.posts.map((e) => (
+            <EntryRow key={e.id} entry={e} appId={e.appId} showGame />
+          ))}
+          {mine.posts.length === 0 && <div style={{ opacity: 0.7 }}>Nothing yet. Publish a note from its ☰ menu.</div>}
+          {mine.liked.length > 0 && <div style={s.sectionLabel}>♥ Liked</div>}
+          {mine.liked.map((e) => (
+            <EntryRow key={e.id} entry={e} appId={e.appId} showGame />
+          ))}
+        </Focusable>
+      )}
+      <DialogButton style={{ ...s.smallButton, marginTop: "10px" }} onClick={() => closeModal?.()}>
+        Close
+      </DialogButton>
+    </ModalRoot>
+  );
+};
+
+/** A Note Pack: what's in it, and copying it all to your notes (each book into its own game). */
+const PackModal: FC<{ id: string; closeModal?: () => void }> = ({ id, closeModal }) => {
+  const [pack, setPack] = useState<WorkshopPack | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    backend.bsPack(id).then(setPack).catch((e) => setError(errText(e)));
+  }, [id]);
+  const copyAll = async () => {
+    setBusy(true);
+    try {
+      const r = await backend.bsCopyPack(id);
+      emitDataChanged();
+      toaster.toast({
+        title: "Madness Workshop",
+        body: `Copied ${r.copied} ${r.copied === 1 ? "book" : "books"} from “${r.title}”${r.skipped ? ` (${r.skipped} already in your notes)` : ""}.`,
+      });
+      closeModal?.();
+    } catch (e) {
+      toaster.toast({ title: "Madness Workshop", body: errText(e) });
+    }
+    setBusy(false);
+  };
+  return (
+    <ModalRoot onCancel={closeModal} closeModal={closeModal}>
+      {error && <div>⚠️ {error}</div>}
+      {!pack && !error && <Spinner style={{ width: "28px" }} />}
+      {pack && (
+        <>
+          <h2 style={{ margin: "0 0 4px" }}>📦 {pack.title}</h2>
+          <div style={{ fontSize: "13px", opacity: 0.75 }}>
+            by {pack.author.name} · {pack.gameName || "several games"} · saved {pack.copies}×
+          </div>
+          {pack.description && <p style={{ fontSize: "14px" }}>{pack.description}</p>}
+          <Focusable style={{ maxHeight: "50vh", overflowY: "auto", margin: "8px 0" }}>
+            {(pack.entries ?? []).map((e) => (
+              <EntryRow key={e.id} entry={e} appId={e.appId} showGame={!pack.appId} />
+            ))}
+          </Focusable>
+          <Focusable style={s.toolbar}>
+            <DialogButton style={s.primaryButton} disabled={busy} onClick={copyAll}>
+              <FaCopy /> {busy ? "Copying…" : `Copy all ${pack.entries?.length ?? pack.count} to my notes`}
+            </DialogButton>
+            <DialogButton style={s.smallButton} onClick={() => closeModal?.()}>
+              Close
+            </DialogButton>
+          </Focusable>
+        </>
+      )}
+    </ModalRoot>
+  );
+};
+
 const SORTS = [
   { label: "Most liked", data: "top" },
+  { label: "🔥 Trending", data: "trending" },
+  { label: "📥 Most saved", data: "copies" },
   { label: "Newest", data: "new" },
   { label: "Recently updated", data: "updated" },
 ];
@@ -363,6 +517,7 @@ export const showWorkshopFor = (game: { appId: string; name: string }) => (lastG
 
 export const WorkshopView: FC = () => {
   const running = useRunningGame();
+  const linked = !!useSettings().bookstoreUser;
   const [game, setGame] = useState<{ appId: string; name: string } | null>(
     lastGame ?? (running ? { appId: running.appId, name: running.name } : null)
   );
@@ -371,6 +526,8 @@ export const WorkshopView: FC = () => {
   const [sort, setSort] = useState("top");
   const [entries, setEntries] = useState<WorkshopSummary[] | null>(null);
   const [games, setGames] = useState<WorkshopGame[] | null>(null);
+  const [front, setFront] = useState<{ featured: WorkshopSummary[]; packs: WorkshopPack[]; trending: WorkshopSummary[] } | null>(null);
+  const [gamePacks, setGamePacks] = useState<WorkshopPack[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const pick = (g: { appId: string; name: string } | null) => {
@@ -382,11 +539,22 @@ export const WorkshopView: FC = () => {
     setError(null);
     if (!game) {
       backend.bsGames().then(setGames).catch((e) => setError(errText(e)));
+      Promise.all([
+        backend.bsFeatured().catch(() => ({ entries: [], packs: [] })),
+        backend.bsTrending().catch(() => []),
+        backend.bsPacks({ sort: "top" }).catch(() => []),
+      ]).then(([f, trending, packs]) =>
+        setFront({ featured: f.entries, trending: trending.slice(0, 5), packs: [...f.packs, ...packs.filter((p) => !f.packs.some((x) => x.id === p.id))].slice(0, 6) })
+      );
       return;
     }
     setEntries(null);
-    backend
-      .bsEntries({ appId: game.appId, kind: kinds.join(","), has: has.join(","), sort })
+    backend.bsPacks({ appId: game.appId }).then(setGamePacks).catch(() => setGamePacks([]));
+    const kindOk = (e: WorkshopSummary) => !kinds.length || kinds.includes(e.kind);
+    (sort === "trending"
+      ? backend.bsTrending(game.appId).then((list) => list.filter(kindOk))
+      : backend.bsEntries({ appId: game.appId, kind: kinds.join(","), has: has.join(","), sort })
+    )
       .then(setEntries)
       .catch((e) => setError(errText(e)));
   }, [game?.appId, kinds.join(), has.join(), sort]);
@@ -415,7 +583,18 @@ export const WorkshopView: FC = () => {
           >
             <FaSearch /> Search games
           </DialogButton>
+          {linked && (
+            <DialogButton style={s.smallButton} onClick={() => showModal(<MineModal />)}>
+              🧰 My Workshop
+            </DialogButton>
+          )}
         </Focusable>
+        {front && front.featured.length + front.packs.length > 0 && <div style={s.sectionLabel}>⭐ Featured & 📦 Note Packs</div>}
+        {front?.packs.map((p) => <PackRow key={p.id} pack={p} />)}
+        {front?.featured.map((e) => <EntryRow key={e.id} entry={e} appId={e.appId} showGame />)}
+        {front && front.trending.length > 0 && <div style={s.sectionLabel}>🔥 Trending</div>}
+        {front?.trending.map((e) => <EntryRow key={e.id} entry={e} appId={e.appId} showGame />)}
+        <div style={s.sectionLabel}>🎮 Games</div>
         {!games && <Spinner style={{ width: "28px" }} />}
         {games?.length === 0 && <div style={{ opacity: 0.7 }}>Nothing here yet. Publish one of your notes to start it off!</div>}
         {games?.map((g) => (
@@ -466,45 +645,19 @@ export const WorkshopView: FC = () => {
       </Focusable>
 
       {!entries && <Spinner style={{ width: "28px" }} />}
-      {entries?.length === 0 && <div style={{ opacity: 0.7, padding: "8px 0" }}>No posts match. Publish one of your notes from its ☰ menu!</div>}
-      {entries?.map((e) => {
-        const k = kindInfo(e.kind);
-        return (
-          <Focusable
-            key={e.id}
-            style={s.row}
-            onActivate={() => showModal(<EntryModal id={e.id} appId={game.appId} />)}
-            onClick={() => showModal(<EntryModal id={e.id} appId={game.appId} />)}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={s.title}>
-                {k.icon} {e.title}
-              </div>
-              <div style={{ ...s.subline, filter: e.spoiler ? "blur(5px)" : undefined }}>
-                {e.spoiler ? `Spoiler${e.spoilerLabel ? ": " + e.spoilerLabel : ""}` : e.firstLine || " "}
-              </div>
-              <div style={s.chipRow}>
-                <span style={s.chip}>{k.label}</span>
-                <span style={s.chip}>by {e.author.name}</span>
-                <span style={s.chip}>♥ {e.likes}</span>
-                <span style={s.chip}>💬 {e.comments}</span>
-                {e.hasScreenshots && <span style={s.chip}>📷</span>}
-                {e.hasVoice && <span style={s.chip}>🎙</span>}
-                {e.hasChecklist && <span style={s.chip}>☑</span>}
-                {e.spoiler && <span style={s.chip}>🙈 {e.spoilerLabel || "Spoiler"}</span>}
-              </div>
-            </div>
-            {e.thumb && (
-              <MediaImage
-                appId={game.appId}
-                file={e.thumb}
-                loader={workshopMedia}
-                style={{ width: "128px", height: "72px", flex: "0 0 auto", filter: e.spoiler ? "blur(6px)" : undefined }}
-              />
-            )}
-          </Focusable>
-        );
-      })}
+      {entries?.length === 0 && (
+        <div style={{ opacity: 0.7, padding: "8px 0" }}>
+          {sort === "trending" ? "Nothing trending for this game right now." : "No posts match. Publish one of your notes from its ☰ menu!"}
+        </div>
+      )}
+      {gamePacks.length > 0 && <div style={s.sectionLabel}>📦 Note Packs</div>}
+      {gamePacks.map((p) => (
+        <PackRow key={p.id} pack={p} />
+      ))}
+      {gamePacks.length > 0 && <div style={s.sectionLabel}>📚 Books</div>}
+      {entries?.map((e) => (
+        <EntryRow key={e.id} entry={e} appId={game.appId} />
+      ))}
     </div>
   );
 };

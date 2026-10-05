@@ -149,6 +149,22 @@ export const SettingsView: FC = () => {
         />
       </PanelSectionRow>
       <PanelSectionRow>
+        <ToggleField
+          label="Compact Tomes"
+          description="Tighter Tomes with one line per item, so more fit in the Quick Access menu."
+          checked={!!settings.desk?.compact}
+          onChange={(v) => updateSettings({ desk: { ...settings.desk, compact: v } })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ToggleField
+          label="New-books badge"
+          description="The Madness Workshop Tome says when new community books arrive for a game since you last looked."
+          checked={settings.desk?.workshopBadge !== false}
+          onChange={(v) => updateSettings({ desk: { ...settings.desk, workshopBadge: v } })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
         <DropdownItem
           label="Counters: X adds"
           description="On the Counters Tome, A adds 1 and X adds this many."

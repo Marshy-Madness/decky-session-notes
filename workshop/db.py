@@ -31,6 +31,13 @@ CREATE TABLE IF NOT EXISTS modlog (at INTEGER, actor TEXT, action TEXT, target T
 CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, kind TEXT, target_id TEXT, entry_id TEXT, reporter TEXT, reason TEXT,
   created_at INTEGER, status TEXT DEFAULT 'open', resolved_by TEXT, resolved_at INTEGER);
 CREATE INDEX IF NOT EXISTS reports_status ON reports(status);
+CREATE TABLE IF NOT EXISTS copies (entry_id TEXT, who TEXT, day INTEGER, at INTEGER, PRIMARY KEY (entry_id, who, day));
+CREATE INDEX IF NOT EXISTS copies_at ON copies(at);
+CREATE TABLE IF NOT EXISTS packs (
+  id TEXT PRIMARY KEY, title TEXT, description TEXT, app_id TEXT, game_name TEXT, author TEXT NOT NULL, entry_ids TEXT DEFAULT '[]',
+  status TEXT DEFAULT 'published', featured INTEGER DEFAULT 0, featured_at INTEGER, copies INTEGER DEFAULT 0,
+  created_at INTEGER, updated_at INTEGER);
+CREATE INDEX IF NOT EXISTS packs_app ON packs(app_id);
 """
 
 # Columns added after the first release: (table, column, definition)
@@ -41,6 +48,10 @@ MIGRATIONS = [
     ("users", "role", "TEXT DEFAULT ''"),            # 'admin' = moderator (ADMIN_STEAM_IDS are always admins)
     ("users", "ban_reason", "TEXT"),
     ("users", "last_login", "INTEGER"),
+    ("entries", "featured", "INTEGER DEFAULT 0"),    # ⭐ Featured, picked by admins
+    ("entries", "featured_at", "INTEGER"),
+    ("entries", "copies", "INTEGER DEFAULT 0"),      # times saved to someone's notes
+    ("likes", "created_at", "INTEGER"),              # for 🔥 Trending (older likes have none)
 ]
 
 JSON_COLS = ("tags", "checklist", "screenshots", "recordings", "editors")
@@ -77,4 +88,6 @@ def row_to_entry(row) -> dict:
     e["pinned"] = bool(e.get("pinned"))
     e["locked"] = bool(e.get("locked"))
     e["status"] = e.get("status") or "published"
+    e["featured"] = bool(e.get("featured"))
+    e["copies"] = e.get("copies") or 0
     return e

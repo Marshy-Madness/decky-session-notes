@@ -140,6 +140,11 @@ services:
 ```
 Put it behind a reverse proxy (e.g. Nginx Proxy Manager) with HTTPS to use it away from home.
 
+### Admin: Desk & Workshop
+🛡 Admin → Settings → **Desk & Workshop**: the **starting Desk** (which Tomes, in what order) for everyone who hasn't
+arranged their own, on the Deck and the website; the **Workshop address** (overrides WORKSHOP_URL, and Decks use it
+unless they set their own); and **Scrolls** (which ones people may install, and their space per person).
+
 ### Accounts and security
 - **Steam sign-in** (OpenID, no API key needed) for everyone. The owner can also use the password from `WEB_PASSWORD`,
   and can link their Steam account from the account menu.
@@ -158,6 +163,12 @@ See [`server/API.md`](server/API.md). In short:
 ---
 
 ## Madness Workshop
+
+**Sections:** ⭐ **Featured** (picked by admins), 🔥 **Trending** (likes, and saves to notes, in the last 7 days; admins
+change the window), 📦 **Note Packs** (collections of posts you save to your notes in one go: “Save all” on the website,
+“Copy all” on the Deck; each post goes into its own game), and 🧰 **My Workshop** (your posts, packs, likes and how often
+they were saved). Anyone signed in can make a pack from their own posts and ones they liked, or add a post to a pack from
+its page. Admins get ⭐ Feature on posts and packs, a Note Packs page, and Site → Featured & trending.
 
 A separate public container (`workshop/`) where players publish notes for everyone. It shows up as the
 **Workshop** tab on the Deck and as a website.

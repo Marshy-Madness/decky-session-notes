@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import { WorkshopEntry, WorkshopGame, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings } from "../types";
+import { DeskLayout, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings } from "../types";
 
 export const backend = {
   importNotice: () => call<[], { from: string } | null>("import_notice"),
@@ -39,7 +39,8 @@ export const backend = {
   startRecording: (appId: string) => call<[string], Recording>("start_recording", appId),
   stopRecording: () => call<[], Recording | null>("stop_recording"),
 
-  speechStatus: (refresh = false) => call<[boolean], { allowed: boolean }>("speech_status", refresh),
+  speechStatus: (refresh = false) =>
+    call<[boolean], { allowed: boolean; deskDefaults?: DeskLayout | null; workshopUrl?: string; allowedScrolls?: string[] }>("speech_status", refresh),
   startDictation: () => call<[], boolean>("start_dictation"),
   /** Stops listening and returns the words ("" if nothing was heard). */
   stopDictation: (appId = "", game = "") => call<[string, string], string>("stop_dictation", appId, game),
@@ -82,6 +83,13 @@ export const backend = {
   bsPublish: (appId: string, noteId: string, options: Record<string, unknown>) =>
     call<[string, string, Record<string, unknown>], WorkshopEntry>("bs_publish", appId, noteId, options),
   bsCopy: (id: string, appId: string) => call<[string, string], Note>("bs_copy", id, appId),
+  bsFeatured: (appId = "") => call<[string], { entries: WorkshopSummary[]; packs: WorkshopPack[] }>("bs_featured", appId),
+  bsTrending: (appId = "") => call<[string], WorkshopSummary[]>("bs_trending", appId),
+  bsPacks: (params: Record<string, string>) => call<[Record<string, string>], WorkshopPack[]>("bs_packs", params),
+  bsPack: (id: string) => call<[string], WorkshopPack>("bs_pack", id),
+  bsCopyPack: (id: string) => call<[string], { copied: number; skipped: number; title: string }>("bs_copy_pack", id),
+  bsMine: () =>
+    call<[], { posts: WorkshopSummary[]; liked: WorkshopSummary[]; packs: WorkshopPack[]; stats: { posts: number; likes: number; copies: number } }>("bs_mine"),
 
   pinOverlay: (appId: string, noteId: string) =>
     call<[string, string], { overlayRunning: boolean; pinned: boolean }>("pin_overlay", appId, noteId),

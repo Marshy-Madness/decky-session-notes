@@ -4,7 +4,7 @@ import { FaBullseye, FaCheck, FaExchangeAlt, FaPen, FaPlus, FaStickyNote } from 
 import { backend } from "../api/backend";
 import { useRunningGame } from "../hooks/useAppLifetime";
 import { NotesProvider, useGame } from "../state/NotesProvider";
-import { useDataVersion } from "../state/notesStore";
+import { useDataVersion, useSettings } from "../state/notesStore";
 import { getPlace, setPlace } from "../state/place";
 import { rememberFolder } from "../state/resume";
 import { Game, GameSummary } from "../types";
@@ -175,6 +175,13 @@ const GameDesk: FC<Omit<StreamProps, "game">> = (props) => {
   return <DeskStream {...props} game={game} />;
 };
 
+// Compact mode: tighter Tomes and lines, so more fit in the Quick Access menu.
+const COMPACT_CSS = `
+.dom-compact .dom-tome { padding: 4px 8px !important; margin-bottom: 6px !important; }
+.dom-compact .dom-line { padding: 4px 8px !important; margin-bottom: 2px !important; }
+.dom-compact .dom-sub { display: none; }
+`;
+
 interface StreamProps extends Omit<TomeProps, "game"> {
   appId: string | null;
   game: Game | null;
@@ -184,13 +191,15 @@ interface StreamProps extends Omit<TomeProps, "game"> {
 /** The Tomes that are on, in order; in edit mode with buttons to move and hide them. */
 const DeskStream: FC<StreamProps> = ({ appId, game, editing, ...rest }) => {
   const { items, own, perGame } = useArrangement(appId);
+  const compact = !!useSettings().desk?.compact;
   const on = items.filter((x) => x.on);
   const shown = on.filter((x) => editing || !(x.def.needsGame && !game) && !x.def.isEmpty?.(game));
   const tomeProps: TomeProps = { ...rest, game };
 
   return (
     <>
-      <div style={rest.fullScreen ? { columnCount: 2, columnGap: "12px" } : undefined}>
+      {compact && <style>{COMPACT_CSS}</style>}
+      <div className={compact ? "dom-compact" : undefined} style={rest.fullScreen ? { columnCount: 2, columnGap: "12px" } : undefined}>
         {shown.map(({ def, collapsed }, i) => {
           const Tome = def.component;
           return (

@@ -29,7 +29,7 @@ const FILTERS: { label: string; match: (n: Note) => boolean }[] = [
 const NoteLine: FC<{ game: Game; note: Note }> = ({ game, note }) => (
   <Line icon={note.pinned ? "📌" : kindInfo(note.kind).icon} onOpen={() => openNote(game, note)} okLabel="Open">
     <div style={ellipsis}>{note.title}</div>
-    <div style={{ fontSize: "12px", opacity: 0.6, ...ellipsis }}>
+    <div className="dom-sub" style={{ fontSize: "12px", opacity: 0.6, ...ellipsis }}>
       {formatWhen(note.updatedAt)}
       {firstLine(note.body) && ` · ${firstLine(note.body)}`}
     </div>
@@ -194,7 +194,7 @@ const VoiceNotes: FC<TomeProps> = ({ game }) => {
       {recent.map(({ note, rec }) => (
         <Line key={rec.id} icon="▶" onOpen={() => openNote(game, note)} okLabel="Open">
           <div style={ellipsis}>{rec.transcript ? `“${rec.transcript}”` : note.title}</div>
-          <div style={{ fontSize: "12px", opacity: 0.6 }}>
+          <div className="dom-sub" style={{ fontSize: "12px", opacity: 0.6 }}>
             {formatWhen(rec.createdAt)}
             {rec.durationSec ? ` · ${formatClock(rec.durationSec)}` : ""}
           </div>

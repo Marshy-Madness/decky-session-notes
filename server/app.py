@@ -55,8 +55,32 @@ speech_limit = speech.RateLimit(SPEECH_PER_HOUR)
 shares_lock = threading.Lock()
 failed_logins: dict = {}
 STARTED = time.time()
-SETTING_KEYS = {"emailSignups": bool, "speechDefault": bool, "quotaMb": int, "announcement": str, "maxDevices": int}
+SETTING_KEYS = {"emailSignups": bool, "speechDefault": bool, "quotaMb": int, "announcement": str, "maxDevices": int,
+                # Madness Workshop address (empty = WORKSHOP_URL); Scrolls people may install (comma separated ids,
+                # empty = any the Workshop has approved) and how much space they may take per person.
+                "workshopUrl": str, "allowedScrolls": str, "scrollQuotaMb": int}
+# Tome ids the Desk knows, for the admin's default layout.
+TOME_IDS = ["game-brain", "quick-actions", "left-off", "checklist", "counters", "recent-notes", "guides", "voice-notes", "screenshot",
+            "game-stats", "workshop", "pinned-notes", "shared-notes", "system", "storage", "network"]
 readers = reader_cache.ReaderCache(DATA)
+
+
+def workshop_url() -> str:
+    return (accounts.setting("workshopUrl", "") or BOOKSTORE_URL).rstrip("/")
+
+
+def desk_defaults():
+    """The admin's starting Desk for people who haven't arranged their own (None = the built-in one)."""
+    d = accounts.setting("deskDefaults", None)
+    return d if isinstance(d, dict) and d.get("order") else None
+
+
+def clean_desk_defaults(d):
+    if not d:
+        return None
+    order = [t for t in d.get("order", []) if t in TOME_IDS]
+    order += [t for t in TOME_IDS if t not in order]
+    return {"order": order, "hidden": [t for t in d.get("hidden", []) if t in TOME_IDS], "collapsed": [t for t in d.get("collapsed", []) if t in TOME_IDS]}
 
 
 def reader_cache_days() -> int:
@@ -304,13 +328,49 @@ def resolve_share(share: dict):
 # ---------- Madness Workshop import (the Workshop was called the Bookstore) ----------
 
 def bookstore_get(path: str) -> bytes:
-    req = urllib.request.Request(BOOKSTORE_URL + path, headers={"User-Agent": "DeskOfMadness-Server"})
+    req = urllib.request.Request(workshop_url() + path, headers={"User-Agent": "DeskOfMadness-Server"})
     with urllib.request.urlopen(req, timeout=20) as r:
         return r.read()
 
 
-def import_from_bookstore(store: "Store", entry_id: str, source: str) -> dict:
-    """Copy a public Madness Workshop entry into this user's notes (same shape as the Deck plugin's copy)."""
+def tell_workshop_copied(kind: str, item_id: str, user_id: str):
+    """Counts the save for 🔥 Trending on the Workshop. Best effort: a failure here doesn't matter."""
+    try:
+        req = urllib.request.Request(f"{workshop_url()}/api/{kind}/{urllib.parse.quote(item_id)}/copied", data=b"{}", method="POST",
+                                     headers={"User-Agent": "DeskOfMadness-Server", "Content-Type": "application/json",
+                                              "X-Copied-By": hashlib.sha256(f"{PUBLIC_URL}|{user_id}".encode()).hexdigest()})
+        urllib.request.urlopen(req, timeout=5).read()
+    except Exception:
+        pass
+
+
+def import_pack(store: "Store", pack_id: str, source: str, user_id: str) -> dict:
+    """Copy every post in a Note Pack (each into its own game's notes)."""
+    if not SAFE.match(pack_id):
+        raise ValueError("bad id")
+    try:
+        pk = json.loads(bookstore_get(f"/api/packs/{urllib.parse.quote(pack_id)}"))
+    except urllib.error.HTTPError as err:
+        raise LookupError("That Note Pack doesn't exist anymore" if err.code == 404 else f"Workshop error {err.code}")
+    done, skipped, first = 0, 0, None
+    for e in pk.get("entries", []):
+        try:
+            r = import_from_bookstore(store, e["id"], source, None)
+            first = first or r
+            done += 0 if r["existing"] else 1
+        except (LookupError, PermissionError):
+            skipped += 1
+    threading.Thread(target=tell_workshop_copied, args=("packs", pack_id, user_id), daemon=True).start()
+    if not first:
+        raise LookupError("Nothing in that pack can be copied")
+    return {**first, "pack": pk.get("title"), "copied": done, "skipped": skipped}
+
+
+def import_from_bookstore(store: "Store", entry_id: str, source: str, user_id: str = None) -> dict:
+    """Copy a public Madness Workshop entry into this user's notes (same shape as the Deck plugin's copy).
+    `pack:<id>` copies a whole Note Pack."""
+    if entry_id.startswith("pack:"):
+        return import_pack(store, entry_id[5:], source, user_id or "")
     if not SAFE.match(entry_id):
         raise ValueError("bad id")
     try:
@@ -351,6 +411,8 @@ def import_from_bookstore(store: "Store", entry_id: str, source: str) -> dict:
         note["checklist"] = [{"id": str(uuid.uuid4()), "text": c["text"], "done": False} for c in e["checklist"]]
     name = (stored or {}).get("name") or e.get("gameName") or appid
     store.sync(appid, {"appId": appid, "name": name, "notes": [note]}, source)
+    if user_id:
+        threading.Thread(target=tell_workshop_copied, args=("entries", e["id"], user_id), daemon=True).start()
     return {"note": note, "appId": appid, "gameName": name, "existing": False}
 
 
@@ -554,7 +616,9 @@ def admin_settings() -> dict:
             "speechDefault": accounts.setting("speechDefault", False), "quotaMb": accounts.setting("quotaMb", 0),
             "maxDevices": accounts.setting("maxDevices", 0), "announcement": accounts.setting("announcement", ""),
             "readerCacheDays": reader_cache_days(), "readerCacheChoices": list(reader_cache.DAY_CHOICES),
-            "readerCache": readers.stats()}
+            "readerCache": readers.stats(), "workshopUrl": accounts.setting("workshopUrl", ""), "workshopUrlEnv": BOOKSTORE_URL,
+            "allowedScrolls": accounts.setting("allowedScrolls", ""), "scrollQuotaMb": accounts.setting("scrollQuotaMb", 0),
+            "deskDefaults": desk_defaults(), "tomeIds": TOME_IDS}
 
 
 def overview() -> dict:
@@ -575,7 +639,7 @@ def overview() -> dict:
             "dataBytes": dir_size(DATA), "diskFree": disk.free, "diskTotal": disk.total,
             "speech": speech.enabled(), "androidApp": os.path.exists(APK_PATH),
             "androidAppAt": int(os.path.getmtime(APK_PATH) * 1000) if os.path.exists(APK_PATH) else None,
-            "page": page_version(), "uptime": int(time.time() - STARTED), "publicUrl": PUBLIC_URL, "bookstoreUrl": BOOKSTORE_URL,
+            "page": page_version(), "uptime": int(time.time() - STARTED), "publicUrl": PUBLIC_URL, "bookstoreUrl": workshop_url(),
             "legacyToken": bool(os.environ.get("API_TOKEN")),
             "defaultPassword": WEB_PASSWORD == "AdminPassword" and not (accounts.get(OWNER_ID) or {}).get("password")}
 
@@ -747,7 +811,7 @@ class Handler(BaseHTTPRequestHandler):
             u = accounts.session_user(self.session_id())
             return self.send(200, {"loggedIn": bool(u), "user": {**accounts.public(u), "email": u.get("email"),
                                                                   "hasPassword": bool(u.get("password"))} if u else None,
-                                   "page": page_version(), "androidApp": os.path.exists(APK_PATH), "bookstoreUrl": BOOKSTORE_URL,
+                                   "page": page_version(), "androidApp": os.path.exists(APK_PATH), "bookstoreUrl": workshop_url(), "deskDefaults": desk_defaults(),
                                    "speech": speech_on(u), "signups": accounts.signup_mode(),
                                    "emailSignups": accounts.signup_mode() != "invite" and accounts.setting("emailSignups", True),
                                    "admin": accounts.is_admin(u), "announcement": accounts.setting("announcement", ""),
@@ -760,7 +824,9 @@ class Handler(BaseHTTPRequestHandler):
 
         if p[1:] == ["account"]:  # for devices: who am I, and what may I use
             return self.send(200, {"user": accounts.public(user), "speech": speech_on(user),
-                                   "announcement": accounts.setting("announcement", ""), "admin": accounts.is_admin(user)})
+                                   "announcement": accounts.setting("announcement", ""), "admin": accounts.is_admin(user),
+                                   "deskDefaults": desk_defaults(), "workshopUrl": workshop_url(),
+                                   "allowedScrolls": [x.strip() for x in accounts.setting("allowedScrolls", "").split(",") if x.strip()]})
         if p[1:] == ["reader"]:  # GET /api/reader?url=…[&refresh=1]: a page as a clean reader view
             url = self.query().get("url", "")
             try:
@@ -1021,7 +1087,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(400, {"error": err}) if err else self.send(200, {"email": u.get("email"), "hasPassword": bool(u.get("password"))})
         if p in (["api", "import", "workshop"], ["api", "import", "bookstore"]):
             try:
-                return self.send(200, import_from_bookstore(store, str(self.json_body().get("id", "")), self.source()))
+                return self.send(200, import_from_bookstore(store, str(self.json_body().get("id", "")), self.source(), user["id"]))
             except (LookupError, PermissionError) as err:
                 return self.send(404 if isinstance(err, LookupError) else 403, {"error": str(err)})
             except (urllib.error.URLError, OSError) as err:
@@ -1089,6 +1155,14 @@ class Handler(BaseHTTPRequestHandler):
                     if settings.get(key) != value:
                         settings[key] = value
                         changed.append(f"{key}: {value if kind is not str else (value[:40] or 'cleared')}")
+            if settings.get("workshopUrl") and not re.match(r"^https?://[^\s/]+", settings["workshopUrl"]):
+                settings["workshopUrl"] = ""
+                changed.append("workshopUrl: not a web address, cleared")
+            if "deskDefaults" in data:
+                value = clean_desk_defaults(data["deskDefaults"])
+                if settings.get("deskDefaults") != value:
+                    settings["deskDefaults"] = value
+                    changed.append("default Desk " + ("set" if value else "reset to built-in"))
             if "readerCacheDays" in data:
                 days = reader_cache.clean_days(data["readerCacheDays"])
                 if days != reader_cache_days():

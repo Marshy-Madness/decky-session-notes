@@ -152,7 +152,8 @@ class Plugin:
 
     # speech to text (done by the sync server, if its owner allowed this account)
     async def speech_status(self, refresh: bool = False):
-        return {"allowed": await asyncio.to_thread(self.sync.speech_allowed, refresh)}
+        allowed = await asyncio.to_thread(self.sync.speech_allowed, refresh)
+        return {"allowed": allowed, **self.sync.account_info()}
 
     async def start_dictation(self):
         if os.path.exists(DICTATION_PATH):
@@ -326,6 +327,24 @@ class Plugin:
 
     async def bs_copy(self, entry_id: str, appid: str):
         return await asyncio.to_thread(self.workshop.copy, entry_id, appid)
+
+    async def bs_featured(self, appid: str = ""):
+        return await asyncio.to_thread(self.workshop.featured, appid)
+
+    async def bs_trending(self, appid: str = ""):
+        return await asyncio.to_thread(self.workshop.trending, appid)
+
+    async def bs_packs(self, params: dict):
+        return await asyncio.to_thread(self.workshop.packs, params)
+
+    async def bs_pack(self, pack_id: str):
+        return await asyncio.to_thread(self.workshop.pack, pack_id)
+
+    async def bs_copy_pack(self, pack_id: str):
+        return await asyncio.to_thread(self.workshop.copy_pack, pack_id)
+
+    async def bs_mine(self):
+        return await asyncio.to_thread(self.workshop.mine)
 
     # the Desk's Deck Tomes and the Tome wheel
     async def stick_feed(self, on: bool):

@@ -149,7 +149,10 @@ function paintHeader() {
 }
 const canPost = () => me && (admin || !siteInfo.readOnly);
 /** Redraw whatever page is showing (after a change in a dialog). */
-const refreshView = () => (new URLSearchParams(location.search).get("admin") ? adminPage() : view.appId ? renderGame() : home());
+const refreshView = () => {
+  const q = new URLSearchParams(location.search);
+  return q.get("admin") ? adminPage() : view.appId ? renderGame() : q.get("packs") ? packsPage() : q.get("mine") ? minePage() : home();
+};
 
 async function start() {
   await loadMe();
@@ -159,23 +162,115 @@ async function start() {
   const params = new URLSearchParams(location.search);
   if (params.get("admin") && admin) return adminPage(params.get("admin"));
   if (params.get("game")) return openGame(params.get("game"), params.get("name") || "");
+  if (params.get("packs")) return packsPage();
+  if (params.get("mine")) return minePage();
+  if (params.get("pack")) { home(); return openPack(params.get("pack")); }
   home();
 }
 
 // ---------- pages ----------
+const homeTabs = (active) => `<div class="toolbar tabs"><button data-tab="home" class="${active === "home" ? "primary" : ""}">🏠 Home</button>
+  <button data-tab="packs" class="${active === "packs" ? "primary" : ""}">📦 Note Packs</button>${me ? `<button data-tab="mine" class="${active === "mine" ? "primary" : ""}">🧰 My Workshop</button>` : ""}</div>`;
+function wireTabs() { $("#main").querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => ({ home, packs: packsPage, mine: minePage })[b.dataset.tab]())); }
+
 async function home(q = "") {
   view.appId = null;
   history.replaceState(null, "", "/");
-  const [games, recent] = await Promise.all([api(`/api/games?q=${encodeURIComponent(q)}`), q ? [] : api("/api/entries?sort=new")]);
-  $("#main").innerHTML = `
+  const [games, recent, featured, hot] = await Promise.all([api(`/api/games?q=${encodeURIComponent(q)}`), q ? [] : api("/api/entries?sort=new"),
+    q ? { entries: [], packs: [] } : api("/api/featured"), q ? [] : api("/api/trending?limit=8")]);
+  $("#main").innerHTML = `${homeTabs("home")}
     <p>More things for your Desk. Discover, download, and share notes, guides and collections for your games. Open one on your Deck from the <b>Workshop</b> tab in Desk of Madness.</p>
-    <h2>${q ? "Games matching “" + esc(q) + "”" : "Games"}</h2>
+    ${featured.entries.length || featured.packs.length ? `<h2>⭐ Featured</h2>${featured.packs.map(packCard).join("")}${featured.entries.map(card).join("")}` : ""}
+    ${hot.length ? `<h2>🔥 Trending <small class="meta">last ${siteInfo.trendingDays || 7} days</small></h2>${hot.map(card).join("")}` : ""}
+    <h2>${q ? "Games matching “" + esc(q) + "”" : "🎮 Games"}</h2>
     <div class="grid">${games.map((g) => `<div class="game" data-app="${esc(g.appId)}" data-name="${esc(g.gameName)}"><img src="${art(g.appId)}" onerror="this.style.visibility='hidden'"><div><b>${esc(g.gameName)}</b><br><small>${g.count} posts</small></div></div>`).join("") || '<p class="meta">Nothing yet. Be the first to post!</p>'}</div>
     ${canPost() ? '<div class="toolbar"><button class="primary" id="newAny">+ Post something</button></div>' : ""}
-    ${recent.length ? `<h2>Latest</h2>${recent.slice(0, 15).map(card).join("")}` : ""}`;
+    ${recent.length ? `<h2>🆕 Latest</h2>${recent.slice(0, 15).map(card).join("")}` : ""}`;
   $("#main").querySelectorAll(".game").forEach((el) => (el.onclick = () => openGame(el.dataset.app, el.dataset.name)));
-  wireCards();
+  wireCards(); wireTabs();
   if ($("#newAny")) $("#newAny").onclick = () => editEntry(null, {});
+}
+
+// ---------- 📦 Note Packs ----------
+function packCard(pk) {
+  return `<div class="card pack" data-pack="${esc(pk.id)}"><div class="text">
+    <h3>📦 ${esc(pk.title)}${pk.status !== "published" ? ` <span class="chip">${pk.status === "pending" ? "⏳ Waiting for approval" : "🙈 Hidden"}</span>` : ""}</h3>
+    <div class="first">${esc(pk.description) || "&nbsp;"}</div>
+    ${pk.featured ? '<span class="chip">⭐ Featured</span>' : ""}<span class="chip">${pk.count} ${pk.count === 1 ? "book" : "books"}</span>
+    <span class="chip">🎮 ${esc(pk.gameName || "Several games")}</span><span class="chip">${who(pk.author)}</span><span class="chip">📥 ${pk.copies}</span></div></div>`;
+}
+
+async function packsPage() {
+  view.appId = null;
+  history.replaceState(null, "", "/?packs=1");
+  const list = await api("/api/packs?sort=top");
+  $("#main").innerHTML = `${homeTabs("packs")}<h2>📦 Note Packs</h2>
+    <p class="meta">Collections of books (notes, guides, tips) you can save to your notes in one go.</p>
+    ${me && siteInfo.packsEnabled !== false ? '<div class="toolbar"><button class="primary" id="newPack">+ Make a pack</button></div>' : ""}
+    ${list.map(packCard).join("") || '<p class="meta">No packs yet.</p>'}`;
+  wireCards(); wireTabs();
+  if ($("#newPack")) $("#newPack").onclick = () => editPack(null);
+}
+
+async function openPack(id) {
+  const pk = await api(`/api/packs/${encodeURIComponent(id)}`);
+  const dlg = $("#dlg");
+  dlg.innerHTML = `<div class="toolbar" style="margin-top:0"><h2 style="margin:0;flex:1">📦 ${esc(pk.title)}</h2><button id="close">Close</button></div>
+    <span class="chip">by ${who(pk.author)}</span><span class="chip">🎮 ${esc(pk.gameName || "Several games")}</span><span class="chip">📥 saved ${pk.copies}×</span>${pk.featured ? '<span class="chip">⭐ Featured</span>' : ""}
+    ${pk.description ? `<p>${esc(pk.description)}</p>` : ""}
+    ${pk.entries.map((e) => `<div class="mini" data-entry="${esc(e.id)}" style="cursor:pointer">${kindOf(e.kind)[1]} <b>${esc(e.title)}</b> <small>${esc(e.gameName)} · ${who(e.author)}</small></div>`).join("")}
+    <div class="toolbar">${pk.canEdit ? '<button id="pEdit">✏️ Edit</button><button id="pDel" class="danger">Delete</button>' : ""}
+      ${admin ? `<button id="pFeature">${pk.featured ? "Unfeature" : "⭐ Feature"}</button>` : ""}
+      <span style="flex:1"></span><button class="primary" id="pSave">📥 Save all ${pk.count} to my notes</button>${window.DeskApp ? "" : '<button id="saveWhere" title="Change your Desk of Madness address">⚙️</button>'}</div>`;
+  $("#close", dlg).onclick = () => dlg.close();
+  dlg.querySelectorAll("[data-entry]").forEach((el) => (el.onclick = () => openEntry(el.dataset.entry)));
+  $("#pSave", dlg).onclick = () => saveToNotes("pack:" + pk.id);
+  if ($("#saveWhere", dlg)) $("#saveWhere", dlg).onclick = () => notesUrl(true);
+  if ($("#pEdit", dlg)) $("#pEdit", dlg).onclick = () => editPack(pk);
+  if ($("#pDel", dlg)) $("#pDel", dlg).onclick = async () => { if (!confirm("Delete this pack? The posts in it stay.")) return; await api(`/api/packs/${pk.id}`, { method: "DELETE" }); dlg.close(); refreshView(); };
+  if ($("#pFeature", dlg)) $("#pFeature", dlg).onclick = async () => { await api(`/api/admin/packs/${pk.id}`, { method: "POST", json: { featured: !pk.featured } }); openPack(pk.id); };
+  if (!dlg.open) dlg.showModal();
+}
+
+/** Make or change a pack: pick from your own posts and the ones you liked (plus what's in it already). */
+async function editPack(pk, addId = null) {
+  const mine = await api("/api/mine");
+  const pool = new Map();
+  for (const e of [...(pk?.entries || []), ...mine.posts.filter((x) => x.status === "published"), ...mine.liked]) pool.set(e.id, e);
+  if (addId && !pool.has(addId)) { try { pool.set(addId, await api(`/api/entries/${encodeURIComponent(addId)}`)); } catch {} }
+  const chosen = new Set(pk?.entries.map((e) => e.id) || []);
+  if (addId) chosen.add(addId);
+  const d = $("#dlg2");
+  d.innerHTML = `<h2 style="margin-top:0">${pk ? "Edit pack" : "New Note Pack"}</h2>
+    <label>Name</label><input id="pkTitle" maxlength="120" style="width:100%" value="${esc(pk?.title || "")}">
+    <label>What's in it</label><textarea id="pkDesc" rows="2" maxlength="1000" style="width:100%">${esc(pk?.description || "")}</textarea>
+    <label>Books <span class="meta">— your posts and ones you liked</span></label>
+    <div style="max-height:40vh;overflow:auto">${[...pool.values()].map((e) => `<label class="radio"><input type="checkbox" data-pe="${esc(e.id)}" ${chosen.has(e.id) ? "checked" : ""}><span>${kindOf(e.kind)[1]} ${esc(e.title)} <small class="meta">${esc(e.gameName)}</small></span></label>`).join("") || '<p class="meta">Post or like something first.</p>'}</div>
+    <div class="toolbar"><button class="primary" id="pkSave">Save</button><button id="pkCancel">Cancel</button></div>`;
+  $("#pkCancel", d).onclick = () => d.close();
+  $("#pkSave", d).onclick = async () => {
+    const json = { title: $("#pkTitle", d).value, description: $("#pkDesc", d).value, entryIds: [...d.querySelectorAll("[data-pe]:checked")].map((x) => x.dataset.pe) };
+    try {
+      const saved = await api(pk ? `/api/packs/${pk.id}` : "/api/packs", { method: pk ? "PUT" : "POST", json });
+      d.close(); openPack(saved.id);
+    } catch (err) { alert(err.message); }
+  };
+  d.showModal();
+}
+
+// ---------- 🧰 My Workshop ----------
+async function minePage() {
+  if (!me) return (location.href = signIn("/?mine=1"));
+  view.appId = null;
+  history.replaceState(null, "", "/?mine=1");
+  const m = await api("/api/mine");
+  $("#main").innerHTML = `${homeTabs("mine")}<h2>🧰 My Workshop</h2>
+    <div class="stats">${[[m.stats.posts, "posts"], [m.stats.likes, "likes on them"], [m.stats.copies, "saves to notes"], [m.packs.length, "packs"]].map(([n, l]) => `<div class="stat"><b>${n}</b><span>${l}</span></div>`).join("")}</div>
+    <h3>📦 My packs</h3>${siteInfo.packsEnabled !== false ? '<div class="toolbar"><button class="primary" id="newPack">+ Make a pack</button></div>' : ""}${m.packs.map(packCard).join("") || '<p class="meta">None yet.</p>'}
+    <h3>📚 My posts</h3>${m.posts.map(card).join("") || '<p class="meta">You haven\'t posted anything yet. Publish a note from Desk of Madness, or post here.</p>'}
+    <h3>♥ Liked</h3>${m.liked.map(card).join("") || '<p class="meta">Nothing liked yet.</p>'}`;
+  wireCards(); wireTabs();
+  if ($("#newPack")) $("#newPack").onclick = () => editPack(null);
 }
 
 async function openGame(appId, gameName) {
@@ -188,7 +283,11 @@ async function renderGame() {
   const params = new URLSearchParams({ appId: view.appId, sort: view.sort, q: view.q });
   if (view.kinds.length) params.set("kind", view.kinds.join(","));
   if (view.has.length) params.set("has", view.has.join(","));
-  const entries = await api(`/api/entries?${params}`);
+  const [entries, packs] = await Promise.all([
+    view.sort === "trending" ? api(`/api/trending?appId=${encodeURIComponent(view.appId)}&limit=50`).then((list) => list.filter((e) => (!view.kinds.length || view.kinds.includes(e.kind))
+      && (!view.has.includes("screenshots") || e.hasScreenshots) && (!view.has.includes("voice") || e.hasVoice) && (!view.has.includes("checklist") || e.hasChecklist)))
+      : api(`/api/entries?${params}`),
+    api(`/api/packs?appId=${encodeURIComponent(view.appId)}`).catch(() => [])]);
   if (!view.gameName && entries[0]) view.gameName = entries[0].gameName;
   $("#main").innerHTML = `
     <div class="toolbar"><button id="back">← All games</button><img src="${art(view.appId)}" style="height:34px;border-radius:4px" onerror="this.remove()"><h2 style="margin:0">${esc(view.gameName || view.appId)}</h2>
@@ -197,8 +296,9 @@ async function renderGame() {
     <div class="toolbar"><span class="meta">Contains:</span>
       ${[["screenshots", "📷 Screenshots"], ["voice", "🎙 Voice recording"], ["checklist", "☑ Checklist"]].map(([h, l]) => `<button data-has="${h}" class="${view.has.includes(h) ? "on" : ""}">${l}</button>`).join("")}
       <span style="flex:1"></span><input id="q" placeholder="Search posts…" value="${esc(view.q)}">
-      <select id="sort"><option value="top">Most liked</option><option value="new">Newest</option><option value="updated">Recently updated</option></select></div>
-    ${entries.map(card).join("") || '<p class="meta">No posts match.</p>'}`;
+      <select id="sort"><option value="top">Most liked</option><option value="trending">🔥 Trending</option><option value="copies">📥 Most saved</option><option value="new">Newest</option><option value="updated">Recently updated</option></select></div>
+    ${packs.length ? `<h3>📦 Note Packs</h3>${packs.map(packCard).join("")}<h3>📚 Books</h3>` : ""}
+    ${entries.map(card).join("") || `<p class="meta">${view.sort === "trending" ? "Nothing trending right now." : "No posts match."}</p>`}`;
   $("#sort").value = view.sort;
   $("#back").onclick = () => home();
   $("#sort").onchange = (e) => { view.sort = e.target.value; renderGame(); };
@@ -215,12 +315,15 @@ function card(e) {
     <h3>${e.pinned ? "📌 " : ""}${k[1]} ${esc(e.title)}${e.status === "pending" ? ' <span class="chip">⏳ Waiting for approval</span>' : e.status === "hidden" ? ' <span class="chip">🙈 Hidden</span>' : ""}</h3>
     <div class="first ${e.spoiler ? "blur" : ""}">${e.spoiler ? "Spoiler" + (e.spoilerLabel ? ": " + esc(e.spoilerLabel) : "") : esc(e.firstLine) || "&nbsp;"}</div>
     <span class="chip">${k[2]}</span>${view.appId ? "" : `<span class="chip">🎮 ${esc(e.gameName)}</span>`}<span class="chip">${who(e.author)}</span>
-    <span class="chip">♥ ${e.likes}</span><span class="chip">💬 ${e.comments}</span>
+    ${e.featured ? '<span class="chip">⭐ Featured</span>' : ""}<span class="chip">♥ ${e.likes}</span><span class="chip">💬 ${e.comments}</span>${e.copies ? `<span class="chip">📥 ${e.copies}</span>` : ""}
     ${e.hasScreenshots ? '<span class="chip">📷</span>' : ""}${e.hasVoice ? '<span class="chip">🎙</span>' : ""}${e.hasChecklist ? '<span class="chip">☑</span>' : ""}
     ${e.spoiler ? `<span class="chip">🙈 ${esc(e.spoilerLabel || "Spoiler")}</span>` : ""}${e.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}</div>
     ${e.thumb ? `<img class="thumb ${e.spoiler ? "blur" : ""}" loading="lazy" src="${media(e.thumb)}">` : ""}</div>`;
 }
-function wireCards() { $("#main").querySelectorAll(".card").forEach((c) => (c.onclick = () => openEntry(c.dataset.id))); }
+function wireCards() {
+  $("#main").querySelectorAll(".card[data-id]").forEach((c) => (c.onclick = () => openEntry(c.dataset.id)));
+  $("#main").querySelectorAll(".card[data-pack]").forEach((c) => (c.onclick = () => openPack(c.dataset.pack)));
+}
 
 // ---------- entry view ----------
 async function openEntry(id, revealed = false, prefetched = null) {
@@ -241,7 +344,7 @@ async function openEntry(id, revealed = false, prefetched = null) {
     ${e.status === "pending" ? '<div class="box warnbox">⏳ Waiting for an admin to check it. Only you and the admins can see it for now.</div>' : e.status === "hidden" ? '<div class="box warnbox">🙈 Hidden by an admin. Only the poster and admins can see it.</div>' : ""}
     ${e.canModerate ? `<div class="toolbar adminbar"><span class="meta">🛡 Admin</span>
       ${e.status !== "published" ? '<button class="primary" data-mod="publish">✅ Publish</button>' : '<button data-mod="hide">🙈 Hide</button>'}
-      <button data-mod="${e.pinned ? "unpin" : "pin"}">${e.pinned ? "Unpin" : "📌 Pin"}</button><button data-mod="${e.locked ? "unlock" : "lock"}">${e.locked ? "🔓 Unlock" : "🔒 Lock"}</button></div>` : ""}
+      <button data-mod="${e.pinned ? "unpin" : "pin"}">${e.pinned ? "Unpin" : "📌 Pin"}</button><button data-mod="${e.featured ? "unfeature" : "feature"}">${e.featured ? "Unfeature" : "⭐ Feature"}</button><button data-mod="${e.locked ? "unlock" : "lock"}">${e.locked ? "🔓 Unlock" : "🔒 Lock"}</button></div>` : ""}
     ${hidden ? `<div class="spoiler-gate"><p>🙈 Spoiler${e.spoilerLabel ? `: <b>${esc(e.spoilerLabel)}</b>` : ""}</p><button class="primary" id="reveal">Reveal</button></div>` : `
       <div class="body">${body || '<span class="meta">(no text)</span>'}</div>
       ${e.checklist.length ? `<div>${e.checklist.map((c) => `<div>☐ ${esc(c.text)}</div>`).join("")}</div>` : ""}
@@ -249,7 +352,7 @@ async function openEntry(id, revealed = false, prefetched = null) {
       <div class="gallery">${e.screenshots.filter((_, i) => !inlined.has(i)).map((s) => `<img src="${media(s.thumb || s.file)}" data-full="${esc(s.file)}">`).join("")}</div>`}
     <div class="toolbar">
       <button id="like" class="${e.liked ? "on" : ""}">♥ ${e.likes}</button>
-      ${e.canEdit ? '<button id="edit">✏️ Edit</button>' : ""}<button id="history">🕘 History</button>
+      ${e.canEdit ? '<button id="edit">✏️ Edit</button>' : ""}<button id="history">🕘 History</button>${me && siteInfo.packsEnabled !== false && e.status === "published" ? '<button id="toPack">📦 Add to a pack</button>' : ""}
       ${e.canDelete ? '<button id="del" class="danger">Delete</button>' : ""}${me && !e.isAuthor ? '<button id="report" title="Report to the admins">🚩 Report</button>' : ""}
       <span style="flex:1"></span>${e.allowCopy ? `<button class="primary" id="save">📥 Save to my notes</button>${window.DeskApp ? "" : '<button id="saveWhere" title="Change your Desk of Madness address">⚙️</button>'}` : ""}
     </div>
@@ -266,6 +369,18 @@ async function openEntry(id, revealed = false, prefetched = null) {
   $("#like", dlg).onclick = async () => { if (!me) return (location.href = signIn()); await api(`/api/entries/${id}/like`, { method: "POST" }); openEntry(id, revealed); };
   if ($("#edit", dlg)) $("#edit", dlg).onclick = () => editEntry(e);
   $("#history", dlg).onclick = () => showHistory(e);
+  if ($("#toPack", dlg)) $("#toPack", dlg).onclick = async () => {
+    const mine = (await api("/api/mine")).packs;
+    if (!mine.length) return editPack(null, e.id);
+    const names = mine.map((pk, i) => `${i + 1}. ${pk.title}`).join("\n");
+    const pick = prompt(`Add “${e.title}” to which pack? Type its number, or leave empty to make a new one.\n\n${names}`);
+    if (pick === null) return;
+    const pk = mine[+pick - 1];
+    if (!pk) return editPack(null, e.id);
+    const full = await api(`/api/packs/${pk.id}`);
+    try { await api(`/api/packs/${pk.id}`, { method: "PUT", json: { entryIds: [...full.entries.map((x) => x.id), e.id] } }); alert(`Added to “${pk.title}”.`); }
+    catch (err) { alert(err.message); }
+  };
   if ($("#save", dlg)) $("#save", dlg).onclick = () => saveToNotes(e.id);
   if ($("#saveWhere", dlg)) $("#saveWhere", dlg).onclick = () => notesUrl(true);
   if ($("#del", dlg)) $("#del", dlg).onclick = async () => { if (!confirm("Delete this post for everyone?")) return; await api(`/api/entries/${id}`, { method: "DELETE" }); dlg.close(); refreshView(); };
@@ -426,9 +541,9 @@ function linkPage() {
 const ADMIN_PAGES = [
   ["Dashboard", [["overview", "📊", "Overview"], ["log", "🕘", "Mod log"]]],
   ["Moderation", [["queue", "⏳", "Approval queue"], ["reports", "🚩", "Reports"]]],
-  ["Content", [["posts", "📚", "Posts"], ["comments", "💬", "Comments"], ["games", "🎮", "Games"]]],
+  ["Content", [["posts", "📚", "Posts"], ["packs", "📦", "Note Packs"], ["comments", "💬", "Comments"], ["games", "🎮", "Games"]]],
   ["People", [["users", "👥", "Users"]]],
-  ["Site", [["general", "📣", "Announcement & mode"], ["rules", "📏", "Posting rules"]]],
+  ["Site", [["general", "📣", "Announcement & mode"], ["rules", "📏", "Posting rules"], ["discovery", "⭐", "Featured & trending"]]],
 ];
 const bytes = (n) => { if (!n) return "0 B"; const u = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(4, Math.floor(Math.log(n) / Math.log(1024))); return `${(n / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`; };
 const ago = (ms) => { if (!ms) return "never"; const s = (Date.now() - ms) / 1000; if (s < 90) return "just now"; if (s < 5400) return `${Math.round(s / 60)} min ago`; if (s < 129600) return `${Math.round(s / 3600)} h ago`; return `${Math.round(s / 86400)} days ago`; };
@@ -438,7 +553,8 @@ const ACTIONS = { "entry.delete": "deleted post", "entry.hide": "hid post", "ent
   "entry.pin": "pinned", "entry.unpin": "unpinned", "entry.lock": "locked", "entry.unlock": "unlocked", "comment.delete": "deleted a comment on",
   "user.ban": "banned", "user.unban": "unbanned", "user.admin": "made admin:", "user.unadmin": "removed admin from", "user.purge": "cleared out",
   "user.signout": "signed out", "report.resolved": "resolved a report on", "report.dismissed": "dismissed a report on", "game.rename": "renamed game",
-  "game.move": "moved posts of game", settings: "changed settings:" };
+  "game.move": "moved posts of game", settings: "changed settings:", "entry.feature": "featured", "entry.unfeature": "unfeatured",
+  "pack.feature": "featured pack", "pack.unfeature": "unfeatured pack", "pack.hidden": "hid pack", "pack.published": "published pack", "pack.pending": "sent back pack", "pack.delete": "deleted pack" };
 let adm = { page: "overview", q: "", status: "", flag: "", sort: "", filter: "", reportStatus: "open", selected: new Set() };
 
 async function adminPage(page) {
@@ -478,9 +594,9 @@ async function adminPage(page) {
           <select id="admSort"><option value="">Newest</option><option value="old">Oldest</option><option value="updated">Recently updated</option><option value="top">Most liked</option><option value="comments">Most comments</option></select></div>
           ${adm.author ? `<div class="toolbar"><span class="chip">👤 Posts by ${esc(adm.authorName || adm.author)} <a href="#" id="clearAuthor">✕</a></span></div>` : ""}`}
       <div class="toolbar bulk"><label class="inline"><input type="checkbox" id="selAll"> Select all</label><span class="meta">${adm.selected.size} selected</span>
-        <span style="flex:1"></span>${[["publish", "✅ Publish"], ["hide", "🙈 Hide"], ["pin", "📌 Pin"], ["unpin", "Unpin"], ["lock", "🔒 Lock"], ["unlock", "Unlock"]].map(([a, l]) => `<button data-bulk="${a}">${l}</button>`).join("")}<button class="danger" data-bulk="delete">🗑 Delete</button></div>
+        <span style="flex:1"></span>${[["publish", "✅ Publish"], ["hide", "🙈 Hide"], ["pin", "📌 Pin"], ["unpin", "Unpin"], ["feature", "⭐ Feature"], ["unfeature", "Unfeature"], ["lock", "🔒 Lock"], ["unlock", "Unlock"]].map(([a, l]) => `<button data-bulk="${a}">${l}</button>`).join("")}<button class="danger" data-bulk="delete">🗑 Delete</button></div>
       ${list.map((e) => `<div class="arow"><input type="checkbox" data-sel="${esc(e.id)}" ${adm.selected.has(e.id) ? "checked" : ""}>
-        <div class="text" data-open="${esc(e.id)}"><b>${kindOf(e.kind)[1]} ${esc(e.title)}</b> ${e.pinned ? '<span class="chip">📌</span>' : ""}${e.locked ? '<span class="chip">🔒</span>' : ""}${e.reports ? `<span class="chip redchip">🚩 ${e.reports}</span>` : ""}<span class="chip">${STATUS[e.status]}</span>
+        <div class="text" data-open="${esc(e.id)}"><b>${kindOf(e.kind)[1]} ${esc(e.title)}</b> ${e.pinned ? '<span class="chip">📌</span>' : ""}${e.featured ? '<span class="chip">⭐</span>' : ""}${e.locked ? '<span class="chip">🔒</span>' : ""}${e.reports ? `<span class="chip redchip">🚩 ${e.reports}</span>` : ""}<span class="chip">${STATUS[e.status]}</span>
           <div class="meta">🎮 ${esc(e.gameName)} · ${who(e.author)} · ${date(e.createdAt)} · ♥ ${e.likes} · 💬 ${e.comments}</div><div class="first">${esc(e.firstLine)}</div></div>
         <div class="acts">${e.status !== "published" ? `<button class="primary" data-one="publish" data-id="${esc(e.id)}">Publish</button>` : `<button data-one="hide" data-id="${esc(e.id)}">Hide</button>`}<button class="danger" data-one="delete" data-id="${esc(e.id)}">Delete</button></div></div>`).join("")
         || `<p class="meta">${p === "queue" ? "Nothing is waiting. 🎉" : "No posts match."}</p>`}`;
@@ -491,6 +607,23 @@ async function adminPage(page) {
           <div class="quote">${r.exists ? esc(r.text || "") : '<i class="meta">already removed</i>'}</div>
           <div class="meta">${r.author ? "by " + who(r.author) + " · " : ""}reported by ${who(r.reporter)} ${ago(r.createdAt)}${r.reason ? ` · “${esc(r.reason)}”` : ""}${r.resolvedBy ? ` · ${esc(r.status)} by ${esc(r.resolvedBy.name)}` : ""}</div></div>
         ${r.status === "open" ? `<div class="acts"><button class="danger" data-rremove="${esc(r.id)}">Remove ${r.kind === "entry" ? "post" : "comment"}</button><button data-rdismiss="${esc(r.id)}">Dismiss</button>${r.author ? `<button data-ruser="${esc(r.author.steamId)}">👤 User</button>` : ""}</div>` : ""}</div>`).join("") || '<p class="meta">No reports here.</p>'}`;
+  } else if (p === "packs") {
+    const list = await api("/api/admin/packs");
+    html = `<h2>Note Packs</h2><p class="meta">Feature a pack to put it at the top of the front page.</p>
+      ${list.map((pk) => `<div class="arow"><div class="text" data-openpack="${esc(pk.id)}"><b>📦 ${esc(pk.title)}</b> ${pk.featured ? '<span class="chip">⭐</span>' : ""}<span class="chip">${STATUS[pk.status] || pk.status}</span>
+          <div class="meta">${who(pk.author)} · ${pk.count} books · 🎮 ${esc(pk.gameName || "several games")} · 📥 ${pk.copies} · ${date(pk.updatedAt)}</div><div class="first">${esc(pk.description)}</div></div>
+        <div class="acts"><button data-pfeat="${esc(pk.id)}" data-on="${pk.featured ? "" : "1"}">${pk.featured ? "Unfeature" : "⭐ Feature"}</button>
+          ${pk.status !== "published" ? `<button class="primary" data-pstat="published" data-id="${esc(pk.id)}">Publish</button>` : `<button data-pstat="hidden" data-id="${esc(pk.id)}">Hide</button>`}
+          <button class="danger" data-pdel="${esc(pk.id)}">Delete</button></div></div>`).join("") || '<p class="meta">No packs yet.</p>'}`;
+  } else if (p === "discovery") {
+    const st = await api("/api/admin/settings");
+    html = `<h2>Featured & trending</h2>
+      <p class="meta">⭐ Feature posts and packs from their page or from Posts / Note Packs. Featured ones show first on the front page and on their game.</p>
+      <div class="row"><div><label>⭐ Featured items on the front page</label><input id="sFeat" type="number" min="1" max="50" value="${st.featuredLimit}" style="width:100%"></div>
+        <div><label>🔥 Trending looks back this many days</label><input id="sTrend" type="number" min="1" max="365" value="${st.trendingDays}" style="width:100%"></div></div>
+      <label class="radio"><input type="checkbox" id="sTrendCopies" ${st.trendingCopies ? "checked" : ""}><span><b>📥 Count saves to notes</b><br><span class="meta">Trending ranks by likes in that window; with this on, each time someone saves a post to their notes counts as well.</span></span></label>
+      <label class="radio"><input type="checkbox" id="sPacks" ${st.packsEnabled ? "checked" : ""}><span><b>📦 Note Packs</b><br><span class="meta">Let people make packs. Off: only admins can (existing packs stay up).</span></span></label>
+      <div class="toolbar"><button class="primary" id="sSaveDisc">Save</button></div>`;
   } else if (p === "comments") {
     const list = await api(`/api/admin/comments?q=${encodeURIComponent(adm.q)}`);
     html = `<h2>Comments</h2><div class="toolbar"><input id="admQ" placeholder="Search comments…" style="flex:1" value="${esc(adm.q)}"></div>
@@ -573,6 +706,14 @@ async function adminPage(page) {
   // settings
   on("[data-set]", (c) => (c.onchange = () => act(async () => { await aPost("settings", { [c.dataset.set]: c.checked }); await loadMe(); })));
   if ($("#sSaveAnn", m)) $("#sSaveAnn", m).onclick = () => act(async () => { await aPost("settings", { announcement: $("#sAnn", m).value }); await loadMe(); });
+  on("[data-openpack]", (el) => (el.onclick = () => openPack(el.dataset.openpack)));
+  on("[data-pfeat]", (b) => (b.onclick = () => act(() => aPost(`packs/${enc(b.dataset.pfeat)}`, { featured: !!b.dataset.on }))));
+  on("[data-pstat]", (b) => (b.onclick = () => act(() => aPost(`packs/${enc(b.dataset.id)}`, { status: b.dataset.pstat }))));
+  on("[data-pdel]", (b) => (b.onclick = () => confirm("Delete this pack? The posts in it stay.") && act(() => aPost(`packs/${enc(b.dataset.pdel)}`, { action: "delete" }))));
+  if ($("#sSaveDisc", m)) $("#sSaveDisc", m).onclick = () => act(async () => {
+    await aPost("settings", { featuredLimit: +$("#sFeat", m).value || 8, trendingDays: +$("#sTrend", m).value || 7, trendingCopies: $("#sTrendCopies", m).checked, packsEnabled: $("#sPacks", m).checked });
+    await loadMe();
+  });
   if ($("#sSaveRules", m)) $("#sSaveRules", m).onclick = () => act(() => aPost("settings", { maxPostsPerDay: +$("#sMax", m).value || 0, minAccountDays: +$("#sDays", m).value || 0, blockedWords: $("#sWords", m).value }));
 }
 

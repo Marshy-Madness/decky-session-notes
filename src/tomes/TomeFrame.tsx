@@ -31,7 +31,7 @@ export const TomeFrame: FC<{
   extra?: ReactNode;
   children: ReactNode;
 }> = ({ id, icon, name, collapsed, editing, isFirst, isLast, onToggle, onMove, onHide, extra, children }) => (
-  <div ref={(el) => registerTomeElement(id, el)} style={frame}>
+  <div ref={(el) => registerTomeElement(id, el)} className="dom-tome" style={frame}>
     <Focusable flow-children="row" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
       <Focusable
         data-tome-head

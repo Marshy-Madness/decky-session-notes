@@ -21,10 +21,10 @@ const WorkshopTome: FC<TomeProps> = ({ game, goTab }) => {
     if (!game) return;
     setTop(null);
     setError(null);
-    const seen = getSettings().desk?.workshopSeen?.[game.appId] ?? 0;
+    const seen = getSettings().desk?.workshopBadge === false ? 0 : getSettings().desk?.workshopSeen?.[game.appId] ?? 0;
     backend
       .bsEntries({ appId: game.appId, sort: "top" })
-      .then((list) => setTop(list.slice(0, 3)))
+      .then((list) => setTop([...list.filter((e) => e.featured), ...list.filter((e) => !e.featured)].slice(0, 3)))
       .catch((e) => setError(errText(e)));
     backend
       .bsEntries({ appId: game.appId, sort: "new" })
@@ -57,9 +57,13 @@ const WorkshopTome: FC<TomeProps> = ({ game, goTab }) => {
       )}
       {top?.map((e) => (
         <Line key={e.id} icon={kindInfo(e.kind).icon} onOpen={() => showModal(<EntryModal id={e.id} appId={game.appId} />)} okLabel="Read">
-          <div style={ellipsis}>{e.title}</div>
-          <div style={{ fontSize: "12px", opacity: 0.6 }}>
-            ❤️ {e.likes} · by {e.author.name}
+          <div style={ellipsis}>
+            {e.featured && "⭐ "}
+            {e.title}
+          </div>
+          <div className="dom-sub" style={{ fontSize: "12px", opacity: 0.6 }}>
+            ❤️ {e.likes}
+            {e.copies ? ` · 📥 ${e.copies}` : ""} · by {e.author.name}
           </div>
         </Line>
       ))}
@@ -82,7 +86,7 @@ const SharedNotesTome: FC<TomeProps> = ({ game }) => {
       {shared.slice(0, 5).map((sh) => (
         <Line key={sh.shareId} icon="👥" onOpen={() => showModal(<SharedNoteViewer appId={game.appId} shared={sh} />)} okLabel="Read">
           <div style={ellipsis}>{sh.note.title}</div>
-          <div style={{ fontSize: "12px", opacity: 0.6 }}>from {sh.fromName}</div>
+          <div className="dom-sub" style={{ fontSize: "12px", opacity: 0.6 }}>from {sh.fromName}</div>
         </Line>
       ))}
       {shared.length === 0 && <Hint>Nobody has shared notes for this game with you.</Hint>}

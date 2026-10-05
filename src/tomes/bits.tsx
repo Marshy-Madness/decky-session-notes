@@ -19,6 +19,7 @@ export const Line: FC<{
   style?: CSSProperties;
 }> = ({ icon, label, children, onOpen, onOptions, okLabel, optionsLabel, style }) => (
   <Focusable
+    className="dom-line"
     style={{ ...tomeRow, alignItems: "flex-start", ...style }}
     onActivate={onOpen ?? (() => {})}
     onClick={onOpen}

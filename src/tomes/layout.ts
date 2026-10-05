@@ -1,6 +1,7 @@
 import { getSettings, updateSettings, useSettings } from "../state/notesStore";
 import { DeskLayout, DeskSettings } from "../types";
 import { allTomes, TomeDef, useTomes } from "./registry";
+import { getServerInfo, useServerInfo } from "../state/speech";
 
 // Which Tomes the Desk shows and in what order. There's one layout for every game, and (unless per-game
 // layouts are turned off) a game gets its own the first time you change the Desk while it's showing.
@@ -33,7 +34,8 @@ export const defaultLayout = (): DeskLayout => ({ order: [], hidden: [], collaps
 
 /** The layout to use for a game (null = no game showing). */
 export function layoutFor(appId: string | null, d: DeskSettings = desk()): DeskLayout {
-  return (appId && perGameOn(d) && d.games?.[appId]) || d.layout || defaultLayout();
+  // Then the starting Desk the sync server's admin set, then the built-in one.
+  return (appId && perGameOn(d) && d.games?.[appId]) || d.layout || getServerInfo().deskDefaults || defaultLayout();
 }
 
 /** True when this game has a layout of its own. */
@@ -52,7 +54,7 @@ export function arrange(layout: DeskLayout, tomes: readonly TomeDef[]) {
     const known = layout.order.includes(id);
     return {
       def,
-      on: known ? !layout.hidden.includes(id) : def.defaultOn,
+      on: !layout.hidden.includes(id) && (known || def.defaultOn),
       collapsed: layout.collapsed.includes(id),
     };
   });
@@ -123,6 +125,7 @@ export function resetGameLayout(appId: string) {
 export function useArrangement(appId: string | null) {
   const settings = useSettings();
   const tomes = useTomes();
+  useServerInfo(); // the admin's starting Desk can arrive after the first draw
   const d = settings.desk ?? {};
   return { items: arrange(layoutFor(appId, d), tomes), own: hasOwnLayout(appId, d), perGame: perGameOn(d) };
 }

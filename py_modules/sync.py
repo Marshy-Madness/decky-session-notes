@@ -178,7 +178,10 @@ class Sync:
 
     def _refresh_account(self, state: dict) -> bool:
         try:
-            state["speech"] = bool((self._request("GET", "/api/account") or {}).get("speech"))
+            account = self._request("GET", "/api/account") or {}
+            state["speech"] = bool(account.get("speech"))
+            # What the server's admins set for everyone: the starting Desk, the Workshop address, allowed Scrolls.
+            state["account"] = {k: account.get(k) for k in ("deskDefaults", "workshopUrl", "allowedScrolls")}
         except RuntimeError as e:
             if "404" not in str(e):  # older server: no speech
                 raise
@@ -195,6 +198,10 @@ class Sync:
             except RuntimeError:
                 pass
         return bool(state.get("speech"))
+
+    def account_info(self) -> dict:
+        """The server's settings for this account, as of the last sync ({} without a server)."""
+        return self._state().get("account") or {}
 
     def transcribe(self, path: str, appid: str = "", game: str = "") -> str:
         """Send a WAV clip to the server and get the words back (blocking)."""

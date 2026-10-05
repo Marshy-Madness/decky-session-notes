@@ -248,6 +248,10 @@ export interface DeskSettings {
   workshopSeen?: Record<string, number>;
   /** The Tome wheel's button combo. On unless turned off. */
   radial?: boolean;
+  /** Tighter Tomes, to fit more in the Quick Access menu. */
+  compact?: boolean;
+  /** The Workshop Tome's "new books" badge. On unless turned off. */
+  workshopBadge?: boolean;
 }
 
 export type BrowserMode = "reader" | "full";
@@ -313,6 +317,27 @@ export interface WorkshopSummary {
   thumb: string | null;
   createdAt: number;
   updatedAt: number;
+  /** ⭐ picked by the Workshop's admins. */
+  featured?: boolean;
+  /** Times saved to someone's notes. */
+  copies?: number;
+}
+
+/** 📦 A Note Pack: a collection of Workshop posts, saved to your notes in one go. */
+export interface WorkshopPack {
+  id: string;
+  title: string;
+  description: string;
+  appId: string | null;
+  gameName: string;
+  author: WorkshopUser;
+  count: number;
+  copies: number;
+  featured: boolean;
+  status: string;
+  createdAt: number;
+  updatedAt: number;
+  entries?: WorkshopSummary[];
 }
 
 export interface WorkshopEntry extends WorkshopSummary {

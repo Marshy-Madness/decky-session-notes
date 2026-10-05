@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { backend } from "../api/backend";
+import { DeskLayout } from "../types";
 
 // Speech to text runs on the sync server, and its owner turns it on per account. The answer is cached
 // by the backend after every sync; refreshSpeech() asks the server right away.
@@ -7,20 +8,41 @@ import { backend } from "../api/backend";
 let allowed = false;
 const listeners = new Set<() => void>();
 
+/** What the sync server's admins set for everyone (cached from the last sync). */
+export interface ServerInfo {
+  deskDefaults?: DeskLayout | null;
+  workshopUrl?: string;
+  allowedScrolls?: string[];
+}
+let server: ServerInfo = {};
+export const getServerInfo = () => server;
+
 export function speechAllowed(): boolean {
   return allowed;
 }
 
 export async function refreshSpeech(fromServer = true) {
   try {
-    const next = (await backend.speechStatus(fromServer)).allowed;
-    if (next !== allowed) {
+    const { allowed: next, ...info } = await backend.speechStatus(fromServer);
+    const infoChanged = JSON.stringify(info) !== JSON.stringify(server);
+    server = info;
+    if (next !== allowed || infoChanged) {
       allowed = next;
       listeners.forEach((l) => l());
     }
   } catch {
     // keep the last answer
   }
+}
+
+export function useServerInfo(): ServerInfo {
+  return useSyncExternalStore(
+    (l) => {
+      listeners.add(l);
+      return () => listeners.delete(l);
+    },
+    () => server
+  );
 }
 
 export function useSpeechAllowed(): boolean {

@@ -51,7 +51,7 @@ const GameBrain: FC<TomeProps> = ({ game, showNotes }) => {
           optionsLabel="Open note"
         >
           {next.item.text}
-          <div style={{ fontSize: "12px", opacity: 0.6, ...ellipsis }}>from {next.note.title}</div>
+          <div className="dom-sub" style={{ fontSize: "12px", opacity: 0.6, ...ellipsis }}>from {next.note.title}</div>
         </Line>
       )}
       {guide && (
@@ -75,7 +75,7 @@ const GameBrain: FC<TomeProps> = ({ game, showNotes }) => {
       {last && (
         <Line icon={kindInfo(last.kind).icon} label="Last note" onOpen={() => openNote(game, last)} okLabel="Open">
           <div style={ellipsis}>{last.title}</div>
-          {firstLine(last.body) && <div style={{ fontSize: "12px", opacity: 0.65, ...ellipsis }}>“{firstLine(last.body)}”</div>}
+          {firstLine(last.body) && <div className="dom-sub" style={{ fontSize: "12px", opacity: 0.65, ...ellipsis }}>“{firstLine(last.body)}”</div>}
         </Line>
       )}
       <Buttons>
@@ -96,7 +96,7 @@ const LeftOff: FC<TomeProps> = ({ game }) => {
   return left ? (
     <>
       <div style={{ fontSize: "15px", whiteSpace: "pre-wrap" }}>{left.text}</div>
-      <div style={{ fontSize: "12px", opacity: 0.6, marginTop: "2px" }}>
+      <div className="dom-sub" style={{ fontSize: "12px", opacity: 0.6, marginTop: "2px" }}>
         {formatWhen(left.updatedAt)}
         {left.launchNumber != null && ` · Launch #${left.launchNumber}`}
       </div>
@@ -140,7 +140,7 @@ const Checklist: FC<TomeProps> = ({ game, fullScreen }) => {
   };
   return (
     <>
-      <div style={{ fontSize: "12px", opacity: 0.65, marginBottom: "4px" }}>
+      <div className="dom-sub" style={{ fontSize: "12px", opacity: 0.65, marginBottom: "4px" }}>
         {items.length} of {total} still to do
       </div>
       {items.slice(0, limit).map(({ note, item }) => (
@@ -153,7 +153,7 @@ const Checklist: FC<TomeProps> = ({ game, fullScreen }) => {
           optionsLabel="Open note"
         >
           {item.text}
-          <div style={{ fontSize: "11px", opacity: 0.55, ...ellipsis }}>{note.title}</div>
+          <div className="dom-sub" style={{ fontSize: "11px", opacity: 0.55, ...ellipsis }}>{note.title}</div>
         </Line>
       ))}
       {ticked
@@ -202,7 +202,7 @@ const CounterLine: FC<{ appId: string; counter: Counter; step: number }> = ({ ap
           {counter.name}
           {counter.defeated && " ✅"}
         </div>
-        {counter.sessionCount > 0 && <div style={{ fontSize: "11px", opacity: 0.6 }}>+{counter.sessionCount} this session</div>}
+        {counter.sessionCount > 0 && <div className="dom-sub" style={{ fontSize: "11px", opacity: 0.6 }}>+{counter.sessionCount} this session</div>}
       </div>
       <span style={{ fontSize: "12px", opacity: 0.45 }}>◀</span>
       <span style={{ minWidth: "34px", textAlign: "center", fontSize: "20px", fontWeight: "bold" }}>{counter.count}</span>
@@ -221,7 +221,7 @@ const Counters: FC<TomeProps> = ({ game }) => {
         <CounterLine key={c.id} appId={game.appId} counter={c} step={step} />
       ))}
       {counters.length === 0 && <Hint>No counters yet: deaths, boss attempts, anything you want to count.</Hint>}
-      <div style={{ fontSize: "11px", opacity: 0.5, marginTop: "2px" }}>A or ▶ +1 · ◀ −1 · X +{step}</div>
+      <div className="dom-sub" style={{ fontSize: "11px", opacity: 0.5, marginTop: "2px" }}>A or ▶ +1 · ◀ −1 · X +{step}</div>
       <Buttons>
         <Btn onClick={() => addCounter(game.appId)}>+ Add counter</Btn>
       </Buttons>
