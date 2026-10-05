@@ -4,7 +4,7 @@ import { LinkSource, openLink, splitLinks } from "../browser";
 
 /**
  * Note text with its web links as things you can select (A, a tap or the right trackpad), which open them in
- * Session Notes' browser. `beforeOpen` closes the window the text is in, when that isn't a tracked note.
+ * Desk of Madness' browser. `beforeOpen` closes the window the text is in, when that isn't a tracked note.
  */
 export const LinkedText: FC<{ text: string; from?: LinkSource; beforeOpen?: () => void; style?: CSSProperties }> = ({
   text,

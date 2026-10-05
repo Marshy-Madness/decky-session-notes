@@ -1,4 +1,6 @@
-# Session Notes
+# Desk of Madness
+
+*Your Deck. Your Notes. Your Madness.* Formerly **Session Notes**; installing Desk of Madness copies your Session Notes notes and settings across on first start.
 
 Per-game notes for the Steam Deck, right in the Quick Access menu. Write down where you left off, boss tips, checklists,
 voice memos and screenshots while you play. Optionally sync everything to your own server, then read and edit it from a
@@ -10,7 +12,7 @@ Four parts, all in this repo:
 | --- | --- | --- |
 | **Decky plugin** | `src/`, `main.py`, `py_modules/` | The Quick Access panel on the Deck |
 | **Sync server** | `server/` | Self-hosted, multi-user: two-way sync, web editor, sharing, API, webhooks |
-| **Bookstore** | `bookstore/` | Public library where players post notes, guides and tips for everyone |
+| **Madness Workshop** | `workshop/` | Public library where players post notes, guides and tips for everyone |
 | **Android app** | `android/` | Native shell around the web editor, with mic, photo picker and share sheet |
 
 ---
@@ -18,10 +20,9 @@ Four parts, all in this repo:
 ## Deck plugin
 
 ### Layout
-- **Wide panel.** The Quick Access menu widens while Session Notes is open (Normal / Wide / Extra wide).
 - **Current** tab: notes for the game you're playing right now.
 - **All** tab: every game you've played or written notes for.
-- **Bookstore** tab: browse what other players posted for your game (see [Bookstore](#bookstore)).
+- **Workshop** tab: browse what other players posted for your game (see [Workshop](#madness-workshop)).
 - **Sort** by Alphabetical, Created, Last Edited or Recent Games. Pinned notes stay on top.
 - **Search** and **tag filters** inside each game.
 
@@ -44,7 +45,7 @@ Four parts, all in this repo:
 - **Recently deleted**: bring back notes you deleted.
 
 ### Links and the browser
-- **Links in notes** (`https://…` or `www.…`) can be selected and open in Session Notes' own browser page.
+- **Links in notes** (`https://…` or `www.…`) can be selected and open in Desk of Madness' own browser page.
 - **Reader view** (default): just the article, without ads, menus, pop-ups or cookie banners. The sync server makes it
   and keeps a copy, so a page opens instantly the next time on any device; without a server the Deck makes it itself.
   Fandom, wiki.gg and Wikipedia pages come straight from their wiki API. Pages the reader can't handle open in full.
@@ -79,7 +80,7 @@ the one-time **pairing code** shown on the website (your name → Devices → Co
 
 ### Install
 - From the **Madness Decky Store**, or
-- Grab `decky-session-notes.zip` from [Releases](../../releases) and install it with Decky's developer "Install from zip", or
+- Grab `desk-of-madness.zip` from [Releases](../../releases) and install it with Decky's developer "Install from zip", or
 - Build and copy it yourself: `pnpm install && DECK_HOST=deck@<deck-ip> ./deploy.sh`
 
 ---
@@ -102,11 +103,11 @@ Voice recording in the browser needs the site served over **https**.
 ### Run it
 ```yaml
 services:
-  session-notes:
+  desk-of-madness:
     build:
-      context: /path/to/decky-session-notes
+      context: /path/to/desk-of-madness
       dockerfile: server/Dockerfile
-    container_name: session-notes
+    container_name: desk-of-madness
     restart: unless-stopped
     ports:
       - "8430:8430"
@@ -137,10 +138,10 @@ See [`server/API.md`](server/API.md). In short:
 
 ---
 
-## Bookstore
+## Madness Workshop
 
-A separate public container (`bookstore/`) where players publish notes for everyone. It shows up as the
-**Bookstore** tab on the Deck and as a website.
+A separate public container (`workshop/`) where players publish notes for everyone. It shows up as the
+**Workshop** tab on the Deck and as a website.
 
 - **Browse** by game, filter by type (Guide, Tip, Boss strategy, …) and by what a post contains (📷 screenshots,
   🎙 voice recordings, ☑ checklists). Sort by most liked, newest or recently updated.
@@ -149,22 +150,22 @@ A separate public container (`bookstore/`) where players publish notes for every
 - **Who can edit:** Only me, Me and people I choose (picked by Steam name), or Anyone signed in. Every edit is kept
   in the post's history.
 - **Allow copies:** let people copy a post into their own notes, where their copy is private (e.g. to tick off a
-  checklist). Copies go to their own notes and sync server, never back into the Bookstore.
-  On the website, **📥 Save to my notes** opens your Session Notes site at `/?import=bookstore:<id>`, which does the
-  copy (it asks for your Session Notes address once). The Android app does this from its Bookstore tab.
+  checklist). Copies go to their own notes and sync server, never back into the Workshop.
+  On the website, **📥 Save to my notes** opens your Desk of Madness site at `/?import=workshop:<id>`, which does the
+  copy (it asks for your Desk of Madness address once). The Android app does this from its Workshop tab.
 - **Spoiler tag:** hide a post until readers choose to reveal it, with a label like "Beat the first boss" so they
   know when it's safe.
 - **Likes and comments.**
-- **Sign in with Steam** to post. On the Deck: gear tab → Bookstore → **Link your Steam account**. It shows a code
-  to enter at `<bookstore>/link` on your phone.
+- **Sign in with Steam** to post. On the Deck: gear tab → Workshop → **Link your Steam account**. It shows a code
+  to enter at `<workshop>/link` on your phone.
 - Admins (`ADMIN_STEAM_IDS`) can delete any post or comment and ban users.
 
 ```yaml
 services:
-  bookstore:
+  workshop:
     build:
-      context: /path/to/decky-session-notes
-      dockerfile: bookstore/Dockerfile
+      context: /path/to/desk-of-madness
+      dockerfile: workshop/Dockerfile
     restart: unless-stopped
     ports:
       - "8431:8431"
@@ -174,7 +175,7 @@ services:
       - ADMIN_STEAM_IDS=7656119xxxxxxxxxx
 ```
 
-The plugin points at `https://bookstore.marshymadness.com` by default. Change it under gear tab → Bookstore.
+The plugin points at `https://workshop.marshymadness.com` by default. Change it under gear tab → Workshop.
 
 ---
 
@@ -183,10 +184,10 @@ The plugin points at `https://bookstore.marshymadness.com` by default. Change it
 `android/` is a small Kotlin app that loads your server's web editor and adds:
 - First-run **server address** setup. Change it later with the **Server** button.
 - **Microphone** access for voice notes, and the **photo/file picker** for screenshots.
-- **"Add to Session Notes"** in Android's share menu: share photos, recordings or text from any app into a new note.
+- **"Add to Desk of Madness"** in Android's share menu: share photos, recordings or text from any app into a new note.
 - The **back button** closes dialogs first.
-- A **Bookstore** tab (bottom bar) with Steam sign-in inside the app. **📥 Save to my notes** on a post copies it
-  into your notes and opens it on the Notes tab. The Bookstore address is under "Bookstore address" on the setup screen.
+- A **Workshop** tab (bottom bar) with Steam sign-in inside the app. **📥 Save to my notes** on a post copies it
+  into your notes and opens it on the Notes tab. The Workshop address is under "Workshop address" on the setup screen.
 
 Download the APK from [Releases](../../releases), or from your server at `/download/android`.
 To build it: `cd android && ./gradlew dist`, which needs JDK 17 or newer and the Android SDK.

@@ -1,4 +1,4 @@
-package com.marshymadness.sessionnotes
+package com.marshymadness.deskofmadness
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -35,21 +35,21 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Thin native shell around the Session Notes website (served by your own server), with a second tab for the
- * public Bookstore. Native extras: remembers the server, microphone access for voice notes, the file/photo picker,
- * the Android back button, "Share to Session Notes" from other apps, "Save to my notes" from the Bookstore, and
+ * Thin native shell around the Desk of Madness website (served by your own server), with a second tab for the
+ * public Madness Workshop. Native extras: remembers the server, microphone access for voice notes, the file/photo picker,
+ * the Android back button, "Share to Desk of Madness" from other apps, "Save to my notes" from the Workshop, and
  * speech to text with the phone's own recognizer (live words, works offline).
  */
 class MainActivity : Activity() {
     private lateinit var webView: WebView // Notes tab (your server)
-    private lateinit var storeView: WebView // Bookstore tab
+    private lateinit var storeView: WebView // Madness Workshop tab
     private lateinit var notesTab: LinearLayout
     private lateinit var storeTab: LinearLayout
     private lateinit var tabBar: LinearLayout
     private lateinit var progress: ProgressBar
     private var lastBackPress = 0L
     private var storeLoaded = false
-    private val prefs by lazy { getSharedPreferences("session-notes", MODE_PRIVATE) }
+    private val prefs by lazy { getSharedPreferences("desk-of-madness", MODE_PRIVATE) }
 
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingPermission: PermissionRequest? = null
@@ -70,8 +70,8 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
         CookieManager.getInstance().setAcceptCookie(true)
         if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
-        webView = newWebView(Client(store = false)).apply { addJavascriptInterface(Bridge(), "SessionNotesApp") }
-        storeView = newWebView(Client(store = true)).apply { addJavascriptInterface(StoreBridge(), "SessionNotesApp") }
+        webView = newWebView(Client(store = false)).apply { addJavascriptInterface(Bridge(), "DeskApp") }
+        storeView = newWebView(Client(store = true)).apply { addJavascriptInterface(StoreBridge(), "DeskApp") }
 
         // A thin loading bar along the top of the page while it loads.
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
@@ -84,8 +84,8 @@ class MainActivity : Activity() {
             addView(webView); addView(storeView)
             addView(progress, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, dp(3), Gravity.TOP))
         }
-        notesTab = tabButton("📝", "My notes") { if (current === webView) scrollToTop() else showTab(store = false) }
-        storeTab = tabButton("📚", "Bookstore") { if (current === storeView) scrollToTop() else showTab(store = true) }
+        notesTab = tabButton("📝", "My Desk") { if (current === webView) scrollToTop() else showTab(store = false) }
+        storeTab = tabButton("🏭", "Workshop") { if (current === storeView) scrollToTop() else showTab(store = true) }
         tabBar = LinearLayout(this).apply {
             setBackgroundColor(getColor(R.color.panel))
             addView(notesTab, LinearLayout.LayoutParams(0, dp(60), 1f))
@@ -333,7 +333,7 @@ class MainActivity : Activity() {
                 System.currentTimeMillis() - lastBackPress < 2000 -> finish()
                 else -> {
                     lastBackPress = System.currentTimeMillis()
-                    Toast.makeText(this, "Press back again to close Session Notes", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Press back again to close Desk of Madness", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -383,7 +383,7 @@ class MainActivity : Activity() {
         webView.evaluateJavascript("window.snReceiveShareNative && window.snReceiveShareNative($share)", null)
     }
 
-    // ---------- JS bridge (window.SessionNotesApp) ----------
+    // ---------- JS bridge (window.DeskApp) ----------
 
     inner class Bridge {
         @JavascriptInterface
@@ -415,7 +415,7 @@ class MainActivity : Activity() {
         @JavascriptInterface
         fun version(): String = BuildConfig.VERSION_NAME
 
-        /** Lets the website know the Bookstore is a tab here (so it doesn't show its own link). */
+        /** Lets the website know the Workshop is a tab here (so it doesn't show its own link). */
         @JavascriptInterface
         fun openBookstore() = runOnUiThread { showTab(store = true) }
 
@@ -435,7 +435,7 @@ class MainActivity : Activity() {
         fun cancelDictation() = runOnUiThread { endDictation() }
     }
 
-    /** window.SessionNotesApp on Bookstore pages. */
+    /** window.DeskApp on Madness Workshop pages. */
     inner class StoreBridge {
         /** "Save to my notes": the Notes site copies the post (with its media) into your notes and opens it. */
         @JavascriptInterface
@@ -444,7 +444,7 @@ class MainActivity : Activity() {
             showTab(store = false)
             val url = server
             if (url == null) showSetup()
-            else webView.loadUrl("$url/?import=bookstore:$entryId")
+            else webView.loadUrl("$url/?import=workshop:$entryId")
         }
 
         @JavascriptInterface
@@ -476,7 +476,7 @@ class MainActivity : Activity() {
             val url = request.url
             if (url.scheme == "file") return false
             if (sameSite(url, if (store) bookstore else server) || isSteamLogin(url)) return false
-            if (!store && sameSite(url, bookstore)) { // a Bookstore link on the Notes site: open it in the Bookstore tab
+            if (!store && sameSite(url, bookstore)) { // a Workshop link on the Desk site: open it in the Workshop tab
                 storeLoaded = true
                 storeView.loadUrl(url.toString())
                 showTab(store = true)
@@ -588,6 +588,6 @@ class MainActivity : Activity() {
         private const val REQ_FILES = 2
         private const val REQ_DICTATE = 3
         private const val REQ_START = 4
-        private const val DEFAULT_BOOKSTORE = "https://bookstore.marshymadness.com"
+        private const val DEFAULT_BOOKSTORE = "https://workshop.marshymadness.com"
     }
 }

@@ -5,7 +5,7 @@ import { toaster } from "@decky/api";
 import { backend } from "../api/backend";
 import { useRunningGame } from "../hooks/useAppLifetime";
 import { emitDataChanged, loadSettings, useSettings } from "../state/notesStore";
-import { BookstoreEntry, BookstoreGame, BookstoreSummary, BookstoreUser, EditPolicy, Note, NoteKind } from "../types";
+import { WorkshopEntry, WorkshopGame, WorkshopSummary, WorkshopUser, EditPolicy, Note, NoteKind } from "../types";
 import { formatDateTime } from "../utils/format";
 import { KINDS, kindInfo } from "../utils/kinds";
 import { MediaImage, MediaLoader } from "./MediaImage";
@@ -15,7 +15,7 @@ import * as s from "./styles";
 import { errText } from "../utils/errors";
 
 const mediaCache = new Map<string, Promise<string | null>>();
-export const bookstoreMedia: MediaLoader = (file) => {
+export const workshopMedia: MediaLoader = (file) => {
   if (!mediaCache.has(file)) mediaCache.set(file, backend.bsMedia(file).catch(() => null));
   return mediaCache.get(file)!;
 };
@@ -23,8 +23,8 @@ export const bookstoreMedia: MediaLoader = (file) => {
 
 // ---------- linking your Steam account ----------
 
-/** Shows a code to type on the Bookstore website (phone/PC) and waits until it's approved. */
-export const LinkPanel: FC<{ onLinked?: (user: BookstoreUser) => void }> = ({ onLinked }) => {
+/** Shows a code to type on the Workshop website (phone/PC) and waits until it's approved. */
+export const LinkPanel: FC<{ onLinked?: (user: WorkshopUser) => void }> = ({ onLinked }) => {
   const [link, setLink] = useState<{ userCode: string; verifyUrl: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<number | undefined>(undefined);
@@ -42,7 +42,7 @@ export const LinkPanel: FC<{ onLinked?: (user: BookstoreUser) => void }> = ({ on
           if (r.status === "linked" && r.user) {
             window.clearInterval(timer.current);
             await loadSettings();
-            toaster.toast({ title: "Bookstore", body: `Linked as ${r.user.name}` });
+            toaster.toast({ title: "Madness Workshop", body: `Linked as ${r.user.name}` });
             onLinked?.(r.user);
           }
         } catch (e) {
@@ -76,7 +76,7 @@ export const LinkPanel: FC<{ onLinked?: (user: BookstoreUser) => void }> = ({ on
 
 const LinkModal: FC<{ closeModal?: () => void; onLinked?: () => void }> = ({ closeModal, onLinked }) => (
   <ModalRoot onCancel={closeModal}>
-    <h2 style={{ marginTop: 0 }}>Link the Bookstore</h2>
+    <h2 style={{ marginTop: 0 }}>Link the Madness Workshop</h2>
     <div style={{ fontSize: "13px", opacity: 0.8, marginBottom: "10px" }}>
       Browsing is open to everyone. To post, like, comment or copy notes, link your Steam account once.
     </div>
@@ -96,7 +96,7 @@ const requireLink = (linked: boolean, then: () => void) => (linked ? then() : sh
 const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void }> = ({ id, appId, closeModal }) => {
   const settings = useSettings();
   const linked = !!settings.bookstoreUser;
-  const [entry, setEntry] = useState<BookstoreEntry | null>(null);
+  const [entry, setEntry] = useState<WorkshopEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -105,13 +105,13 @@ const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void }> = (
     load();
   }, [id]);
 
-  const act = async (fn: () => Promise<BookstoreEntry | unknown>) => {
+  const act = async (fn: () => Promise<WorkshopEntry | unknown>) => {
     setBusy(true);
     try {
       const r = await fn();
-      if (r && typeof r === "object" && "id" in (r as object)) setEntry(r as BookstoreEntry);
+      if (r && typeof r === "object" && "id" in (r as object)) setEntry(r as WorkshopEntry);
     } catch (e) {
-      toaster.toast({ title: "Bookstore", body: errText(e) });
+      toaster.toast({ title: "Madness Workshop", body: errText(e) });
     }
     setBusy(false);
   };
@@ -131,7 +131,7 @@ const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void }> = (
         closeModal={closeModal}
         appId={appId}
         note={note}
-        loader={bookstoreMedia}
+        loader={workshopMedia}
         spoilerLabel={entry.spoilerLabel}
         chips={
           <>
@@ -170,7 +170,7 @@ const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void }> = (
               act(async () => {
                 await backend.bsCopy(entry.id, entry.appId);
                 emitDataChanged();
-                toaster.toast({ title: "Bookstore", body: `Copied "${entry.title}" to your notes for ${entry.gameName}.` });
+                toaster.toast({ title: "Madness Workshop", body: `Copied "${entry.title}" to your notes for ${entry.gameName}.` });
               })
             }
           >
@@ -202,8 +202,8 @@ const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void }> = (
   );
 };
 
-/** Quick edit of a Bookstore post from the Deck (text, type, spoiler; media is edited on the website). */
-const EditEntryModal: FC<{ entry: BookstoreEntry; onSaved: (e: BookstoreEntry) => void; closeModal?: () => void }> = ({
+/** Quick edit of a Workshop post from the Deck (text, type, spoiler; media is edited on the website). */
+const EditEntryModal: FC<{ entry: WorkshopEntry; onSaved: (e: WorkshopEntry) => void; closeModal?: () => void }> = ({
   entry,
   onSaved,
   closeModal,
@@ -220,7 +220,7 @@ const EditEntryModal: FC<{ entry: BookstoreEntry; onSaved: (e: BookstoreEntry) =
       onSaved(await backend.bsUpdate(entry.id, { title, body, kind, spoiler, spoilerLabel }));
       closeModal?.();
     } catch (e) {
-      toaster.toast({ title: "Bookstore", body: errText(e) });
+      toaster.toast({ title: "Madness Workshop", body: errText(e) });
     }
   };
 
@@ -262,15 +262,15 @@ export const PublishModal: FC<{ appId: string; note: Note; closeModal?: () => vo
   const [spoiler, setSpoiler] = useState(note.spoiler ?? false);
   const [spoilerLabel, setSpoilerLabel] = useState("");
   const [policy, setPolicy] = useState<EditPolicy>("owner");
-  const [editors, setEditors] = useState<BookstoreUser[]>([]);
-  const [results, setResults] = useState<BookstoreUser[]>([]);
+  const [editors, setEditors] = useState<WorkshopUser[]>([]);
+  const [results, setResults] = useState<WorkshopUser[]>([]);
   const [allowCopy, setAllowCopy] = useState(true);
   const [busy, setBusy] = useState(false);
 
   if (!settings.bookstoreUser) {
     return (
       <ModalRoot onCancel={closeModal}>
-        <h2 style={{ marginTop: 0 }}>Publish to the Bookstore</h2>
+        <h2 style={{ marginTop: 0 }}>Publish to the Madness Workshop</h2>
         <div style={{ fontSize: "13px", opacity: 0.8, marginBottom: "10px" }}>Link your Steam account first so people know who posted it.</div>
         <LinkPanel />
       </ModalRoot>
@@ -293,7 +293,7 @@ export const PublishModal: FC<{ appId: string; note: Note; closeModal?: () => vo
         kind, spoiler, spoilerLabel, editPolicy: policy, editors: editors.map((u) => u.steamId), allowCopy,
       });
       emitDataChanged();
-      toaster.toast({ title: "Bookstore", body: `${note.bookstoreId ? "Updated" : "Published"} "${e.title}"` });
+      toaster.toast({ title: "Madness Workshop", body: `${note.bookstoreId ? "Updated" : "Published"} "${e.title}"` });
       closeModal?.();
     } catch (e) {
       toaster.toast({ title: "Couldn't publish", body: errText(e) });
@@ -303,7 +303,7 @@ export const PublishModal: FC<{ appId: string; note: Note; closeModal?: () => vo
 
   return (
     <ModalRoot onCancel={closeModal} bAllowFullSize>
-      <h2 style={{ marginTop: 0 }}>{note.bookstoreId ? "Update published version" : "Publish to the Bookstore"}</h2>
+      <h2 style={{ marginTop: 0 }}>{note.bookstoreId ? "Update published version" : "Publish to the Madness Workshop"}</h2>
       <div style={{ fontSize: "13px", opacity: 0.75 }}>
         "{note.title}" with its screenshots, voice notes and checklist goes public as {settings.bookstoreUser.name}.
       </div>
@@ -343,7 +343,7 @@ export const PublishModal: FC<{ appId: string; note: Note; closeModal?: () => vo
   );
 };
 
-// ---------- the Bookstore tab ----------
+// ---------- the Workshop tab ----------
 
 const SORTS = [
   { label: "Most liked", data: "top" },
@@ -358,7 +358,7 @@ const CONTAINS = [
 
 let lastGame: { appId: string; name: string } | null = null;
 
-export const BookstoreView: FC = () => {
+export const WorkshopView: FC = () => {
   const running = useRunningGame();
   const [game, setGame] = useState<{ appId: string; name: string } | null>(
     lastGame ?? (running ? { appId: running.appId, name: running.name } : null)
@@ -366,8 +366,8 @@ export const BookstoreView: FC = () => {
   const [kinds, setKinds] = useState<string[]>([]);
   const [has, setHas] = useState<string[]>([]);
   const [sort, setSort] = useState("top");
-  const [entries, setEntries] = useState<BookstoreSummary[] | null>(null);
-  const [games, setGames] = useState<BookstoreGame[] | null>(null);
+  const [entries, setEntries] = useState<WorkshopSummary[] | null>(null);
+  const [games, setGames] = useState<WorkshopGame[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const pick = (g: { appId: string; name: string } | null) => {
@@ -495,7 +495,7 @@ export const BookstoreView: FC = () => {
               <MediaImage
                 appId={game.appId}
                 file={e.thumb}
-                loader={bookstoreMedia}
+                loader={workshopMedia}
                 style={{ width: "128px", height: "72px", flex: "0 0 auto", filter: e.spoiler ? "blur(6px)" : undefined }}
               />
             )}

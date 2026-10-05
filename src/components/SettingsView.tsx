@@ -5,7 +5,7 @@ import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../s
 import { BackupStatus, BrowserMode, DictateTarget, ReaderCacheSettings, VoiceFallback } from "../types";
 import { ComboRow, VoiceCommandList } from "./ComboSettings";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
-import { LinkPanel } from "./Bookstore";
+import { LinkPanel } from "./Workshop";
 import { openOverlayModal } from "./OverlayModal";
 import { useSeenButtons } from "../opening";
 import { formatDateTime } from "../utils/format";
@@ -61,7 +61,7 @@ export const SettingsView: FC = () => {
   const [url, setUrl] = useState(settings.syncUrl ?? "");
   const [token, setToken] = useState(settings.syncToken ?? "");
   const [status, setStatus] = useState<BackupStatus | null>(null);
-  const [bsUrl, setBsUrl] = useState(settings.bookstoreUrl ?? "https://bookstore.marshymadness.com");
+  const [bsUrl, setBsUrl] = useState(settings.bookstoreUrl ?? "https://workshop.marshymadness.com");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -110,11 +110,11 @@ export const SettingsView: FC = () => {
 
   return (
     <>
-      <Heading>Opening Session Notes</Heading>
+      <Heading>Opening Desk of Madness</Heading>
       <PanelSectionRow>
         <ToggleField
           label="Show in the Steam menu"
-          description="Add Session Notes to the main Steam-button menu. It opens the full-screen notes page."
+          description="Add Desk of Madness to the main Steam-button menu. It opens the full-screen notes page."
           checked={settings.mainMenuEntry ?? false}
           onChange={(v) => updateSettings({ mainMenuEntry: v })}
         />
@@ -122,7 +122,7 @@ export const SettingsView: FC = () => {
       <PanelSectionRow>
         <ToggleField
           label="Own Quick Access tab"
-          description="Give Session Notes its own tab in the Quick Access menu, so you don't have to go through Decky. Takes effect the next time you open the menu."
+          description="Give Desk of Madness its own tab in the Quick Access menu, so you don't have to go through Decky. Takes effect the next time you open the menu."
           checked={settings.qamTab ?? false}
           onChange={(v) => updateSettings({ qamTab: v })}
         />
@@ -319,11 +319,11 @@ export const SettingsView: FC = () => {
           </ButtonItem>
         </div>
       </PanelSectionRow>
-      <Heading>Bookstore</Heading>
+      <Heading>Madness Workshop</Heading>
       <PanelSectionRow>
         <TextField
-          label="Bookstore address"
-          description="The public library behind the Bookstore tab"
+          label="Workshop address"
+          description="The community site behind the Workshop tab"
           value={bsUrl}
           onChange={(e) => setBsUrl(e.target.value)}
           onBlur={() => updateSettings({ bookstoreUrl: bsUrl.trim() || undefined })}

@@ -20,7 +20,7 @@ import { SORT_LABELS, newId, sortNotes } from "../utils/format";
 import { KINDS, isGuide } from "../utils/kinds";
 import { SharedNoteViewer } from "./SharedNotes";
 import { ShareModal } from "./ShareModal";
-import { PublishModal } from "./Bookstore";
+import { PublishModal } from "./Workshop";
 import { NoteItem } from "./NoteItem";
 import { NoteEditor, folderPath } from "./NoteEditor";
 import { NoteViewer } from "./NoteViewer";
@@ -67,7 +67,7 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
   // This game's notes are what's showing: that goes in the address on the full-screen page.
   useEffect(() => setPlace({ appId, folderId }), [appId]);
 
-  // Bring back the note that was open when Session Notes was put away.
+  // Bring back the note that was open when Desk of Madness was put away.
   useEffect(() => {
     const reopen = game && noteToReopen(appId);
     if (!reopen) return;
@@ -189,7 +189,7 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
         <MenuItem onSelected={() => showModal(<VersionHistoryModal appId={appId} note={note} />)}>Version history…</MenuItem>
         {settings.syncUrl && <MenuItem onSelected={() => showModal(<ShareModal appId={appId} note={note} />)}>Share with…</MenuItem>}
         <MenuItem onSelected={() => showModal(<PublishModal appId={appId} note={note} />)}>
-          {note.bookstoreId ? "Update in Bookstore…" : "Publish to Bookstore…"}
+          {note.bookstoreId ? "Update in Workshop…" : "Publish to Workshop…"}
         </MenuItem>
         <MenuItem tone="destructive" onSelected={() => deleteNote(note)}>
           Delete

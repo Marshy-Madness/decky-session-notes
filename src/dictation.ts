@@ -45,7 +45,7 @@ async function finish() {
   try {
     const words = await backend.stopDictation(game?.appId ?? "", game?.name ?? "");
     if (!words) {
-      toaster.toast({ title: "Session Notes", body: "Didn't catch anything. Try again a little louder." });
+      toaster.toast({ title: "Desk of Madness", body: "Didn't catch anything. Try again a little louder." });
     } else if (getSettings().dictateTarget === "note" && game) {
       await saveAsNote(game.appId, game.name, words);
       toaster.toast({ title: `📝 Saved to ${game.name}`, body: words });

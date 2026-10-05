@@ -3,10 +3,14 @@ import os
 import re
 
 import decky
-import storage
+import migrate
+
+migrate.run()  # before storage reads anything: brings Session Notes data across on first start
+
+import storage  # noqa: E402
 from recorder import Recorder
 from sync import Sync, _SSL as SSL_CONTEXT
-from bookstore import Bookstore
+from workshop import Workshop
 from overlay import Overlay
 from buttons import Buttons
 import reader
@@ -22,7 +26,7 @@ class Plugin:
     recorder = Recorder()
     dictation = Recorder()  # separate from voice notes, so the button combo works with an editor open
     sync = Sync()
-    bookstore = Bookstore()
+    workshop = Workshop()
     overlay = Overlay()
     buttons = Buttons()
 
@@ -282,45 +286,48 @@ class Plugin:
     async def clear_reader_cache(self):
         return await asyncio.to_thread(self.sync.clear_reader_cache)
 
-    # Bookstore (public library of notes, guides and tips)
+    # Workshop (public library of notes, guides and tips)
     async def bs_games(self, q: str = ""):
-        return await asyncio.to_thread(self.bookstore.games, q)
+        return await asyncio.to_thread(self.workshop.games, q)
 
     async def bs_entries(self, params: dict):
-        return await asyncio.to_thread(self.bookstore.entries, params)
+        return await asyncio.to_thread(self.workshop.entries, params)
 
     async def bs_entry(self, entry_id: str):
-        return await asyncio.to_thread(self.bookstore.entry, entry_id)
+        return await asyncio.to_thread(self.workshop.entry, entry_id)
 
     async def bs_media(self, file: str):
-        return await asyncio.to_thread(self.bookstore.media, file)
+        return await asyncio.to_thread(self.workshop.media, file)
 
     async def bs_start_link(self):
-        return await asyncio.to_thread(self.bookstore.start_link)
+        return await asyncio.to_thread(self.workshop.start_link)
 
     async def bs_poll_link(self, device_code: str):
-        return await asyncio.to_thread(self.bookstore.poll_link, device_code)
+        return await asyncio.to_thread(self.workshop.poll_link, device_code)
 
     async def bs_unlink(self):
-        return await asyncio.to_thread(self.bookstore.unlink)
+        return await asyncio.to_thread(self.workshop.unlink)
 
     async def bs_like(self, entry_id: str):
-        return await asyncio.to_thread(self.bookstore.like, entry_id)
+        return await asyncio.to_thread(self.workshop.like, entry_id)
 
     async def bs_comment(self, entry_id: str, text: str):
-        return await asyncio.to_thread(self.bookstore.comment, entry_id, text)
+        return await asyncio.to_thread(self.workshop.comment, entry_id, text)
 
     async def bs_users(self, q: str):
-        return await asyncio.to_thread(self.bookstore.users, q)
+        return await asyncio.to_thread(self.workshop.users, q)
 
     async def bs_update(self, entry_id: str, fields: dict):
-        return await asyncio.to_thread(self.bookstore.update, entry_id, fields)
+        return await asyncio.to_thread(self.workshop.update, entry_id, fields)
 
     async def bs_publish(self, appid: str, note_id: str, options: dict):
-        return await asyncio.to_thread(self.bookstore.publish, appid, note_id, options)
+        return await asyncio.to_thread(self.workshop.publish, appid, note_id, options)
 
     async def bs_copy(self, entry_id: str, appid: str):
-        return await asyncio.to_thread(self.bookstore.copy, entry_id, appid)
+        return await asyncio.to_thread(self.workshop.copy, entry_id, appid)
+
+    async def import_notice(self):
+        return migrate.take_notice()
 
     async def buttons_status(self):
         return self.buttons.status()
@@ -330,7 +337,7 @@ class Plugin:
         self._style_overlay(storage.get_settings())
         self.overlay.task = asyncio.get_event_loop().create_task(self.overlay.loop())
         self.buttons.task = asyncio.get_event_loop().create_task(self.buttons.loop())
-        decky.logger.info("Session Notes plugin loaded")
+        decky.logger.info("Desk of Madness plugin loaded")
 
     async def _unload(self):
         if self.sync.task:

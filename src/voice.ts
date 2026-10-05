@@ -64,7 +64,7 @@ async function finish() {
   try {
     const words = (await backend.stopDictation(game?.appId ?? "", game?.name ?? "")).trim();
     if (!words) {
-      toaster.toast({ title: "Session Notes", body: "Didn't catch anything. Try again a little louder." });
+      toaster.toast({ title: "Desk of Madness", body: "Didn't catch anything. Try again a little louder." });
     } else {
       await runCommand(words, game);
     }
@@ -303,7 +303,7 @@ export const COMMANDS: Command[] = [
     },
   },
   {
-    say: ["open notes", "show notes", "open session notes", "notes"],
+    say: ["open notes", "show notes", "open desk", "open desk of madness", "open the desk", "notes"],
     usage: "open notes",
     does: "Opens the full-screen notes page",
     exact: true,
@@ -601,7 +601,7 @@ export async function runCommand(words: string, game: RunningGame | null) {
     return;
   }
   const result = await found.c.run({ words, rest: found.rest, game: game! });
-  if (result) toaster.toast({ title: "Session Notes", body: result, duration: 4000 });
+  if (result) toaster.toast({ title: "Desk of Madness", body: result, duration: 4000 });
 }
 
 async function finishMemo() {

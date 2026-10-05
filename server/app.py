@@ -1,4 +1,4 @@
-"""Session Notes sync server: multi-user two-way sync for the Decky plugin, web editor, sharing, API, webhooks.
+"""Desk of Madness sync server (formerly Session Notes): multi-user two-way sync for the Decky plugin, web editor, sharing, API, webhooks.
 
 Sign-in:
 - Website: "Sign in with Steam", email + password, or the owner password (WEB_PASSWORD until one is set on the website).
@@ -37,14 +37,14 @@ HISTORY_KEEP = int(os.environ.get("HISTORY_KEEP", "30"))
 SESSION_DAYS = int(os.environ.get("SESSION_DAYS", "30"))
 OWNER_WEBHOOKS = [u.strip() for u in os.environ.get("WEBHOOK_URLS", "").split(",") if u.strip()]
 PUBLIC_URL = os.environ.get("PUBLIC_URL", "").rstrip("/")
-BOOKSTORE_URL = (os.environ.get("BOOKSTORE_URL") or "https://bookstore.marshymadness.com").rstrip("/")
+BOOKSTORE_URL = (os.environ.get("WORKSHOP_URL") or os.environ.get("BOOKSTORE_URL") or "https://workshop.marshymadness.com").rstrip("/")
 MAX_BODY = 60 * 1024 * 1024
 SPEECH_PER_HOUR = int(os.environ.get("SPEECH_PER_HOUR", "120"))
 SAFE = re.compile(r"^[A-Za-z0-9._-]+$")
 HERE = os.path.dirname(os.path.abspath(__file__))
 COOKIE = "sn_session"
 STATIC = {"manifest.webmanifest": "application/manifest+json", "icon.svg": "image/svg+xml", "sw.js": "text/javascript"}
-APK_PATH = os.path.join(DATA, "app", "SessionNotes.apk")
+APK_PATH = os.path.join(DATA, "app", "DeskOfMadness.apk")
 SHARES_PATH = os.path.join(DATA, "shares.json")
 MEDIA_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png", ".webp": "image/webp", ".gif": "image/gif",
                ".wav": "audio/wav", ".webm": "audio/webm", ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".mp3": "audio/mpeg"}
@@ -301,22 +301,22 @@ def resolve_share(share: dict):
     return game, note
 
 
-# ---------- Bookstore import ----------
+# ---------- Madness Workshop import (the Workshop was called the Bookstore) ----------
 
 def bookstore_get(path: str) -> bytes:
-    req = urllib.request.Request(BOOKSTORE_URL + path, headers={"User-Agent": "SessionNotes-Server"})
+    req = urllib.request.Request(BOOKSTORE_URL + path, headers={"User-Agent": "DeskOfMadness-Server"})
     with urllib.request.urlopen(req, timeout=20) as r:
         return r.read()
 
 
 def import_from_bookstore(store: "Store", entry_id: str, source: str) -> dict:
-    """Copy a public Bookstore entry into this user's notes (same shape as the Deck plugin's copy)."""
+    """Copy a public Madness Workshop entry into this user's notes (same shape as the Deck plugin's copy)."""
     if not SAFE.match(entry_id):
         raise ValueError("bad id")
     try:
         e = json.loads(bookstore_get(f"/api/entries/{urllib.parse.quote(entry_id)}"))
     except urllib.error.HTTPError as err:
-        raise LookupError("That Bookstore post doesn't exist anymore" if err.code == 404 else f"Bookstore error {err.code}")
+        raise LookupError("That Workshop post doesn't exist anymore" if err.code == 404 else f"Workshop error {err.code}")
     if not e.get("allowCopy"):
         raise PermissionError("The poster turned off copying for this one")
     appid = safe(str(e["appId"]))
@@ -468,7 +468,7 @@ def send_webhooks(urls: list, game: dict, events: list, source: str):
         try:
             if url.startswith("ntfy+"):
                 req = urllib.request.Request(url[5:], data="\n".join(payload["summary"]).encode(), method="POST")
-                req.add_header("Title", f"Session Notes · {game.get('name')}")
+                req.add_header("Title", f"Desk of Madness · {game.get('name')}")
                 req.add_header("Tags", "memo")
                 if PUBLIC_URL:
                     req.add_header("Click", PUBLIC_URL)
@@ -489,7 +489,7 @@ def notify_owner(event: str, text: str, **extra):
             try:
                 if url.startswith("ntfy+"):
                     req = urllib.request.Request(url[5:], data=text.encode(), method="POST")
-                    req.add_header("Title", "Session Notes")
+                    req.add_header("Title", "Desk of Madness")
                     req.add_header("Tags", "bust_in_silhouette")
                     if PUBLIC_URL:
                         req.add_header("Click", PUBLIC_URL)
@@ -623,7 +623,7 @@ def page_version() -> str:
         return hashlib.sha256(f.read()).hexdigest()[:12]
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "SessionNotes/3"
+    server_version = "DeskOfMadness/3"
 
     def log_message(self, fmt, *args):
         print(f"{self.client_ip()} {fmt % args}", flush=True)
@@ -674,7 +674,7 @@ class Handler(BaseHTTPRequestHandler):
             return user
         user = accounts.session_user(self.session_id())
         # Browser changes need a custom header, which other sites can't send (CSRF protection).
-        if user and mutating and self.headers.get("X-Requested-With") != "session-notes":
+        if user and mutating and self.headers.get("X-Requested-With") not in ("desk-of-madness", "session-notes"):
             return None
         return user
 
@@ -732,7 +732,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(404, b"The Android app hasn't been uploaded to this server yet.", "text/plain")
             with open(APK_PATH, "rb") as f:
                 return self.send(200, f.read(), "application/vnd.android.package-archive",
-                                 {"Content-Disposition": 'attachment; filename="SessionNotes.apk"'})
+                                 {"Content-Disposition": 'attachment; filename="DeskOfMadness.apk"'})
         if p == ["auth", "steam"]:
             back = f"{self.base_url()}/auth/steam/callback" + ("?link=1" if self.query().get("link") else "")
             return self.redirect(steam.login_url(back, self.base_url() + "/"))
@@ -879,7 +879,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_response(200)
                 self.send_header("Content-Type", "application/zip")
                 self.send_header("Content-Length", str(os.path.getsize(path)))
-                self.send_header("Content-Disposition", f'attachment; filename="session-notes-{time.strftime("%Y%m%d-%H%M")}.zip"')
+                self.send_header("Content-Disposition", f'attachment; filename="desk-of-madness-{time.strftime("%Y%m%d-%H%M")}.zip"')
                 self.end_headers()
                 with open(path, "rb") as f:
                     shutil.copyfileobj(f, self.wfile)
@@ -1019,13 +1019,13 @@ class Handler(BaseHTTPRequestHandler):
                                      password=data["password"] if data.get("password") else None)
             u = accounts.get(user["id"])
             return self.send(400, {"error": err}) if err else self.send(200, {"email": u.get("email"), "hasPassword": bool(u.get("password"))})
-        if p == ["api", "import", "bookstore"]:
+        if p in (["api", "import", "workshop"], ["api", "import", "bookstore"]):
             try:
                 return self.send(200, import_from_bookstore(store, str(self.json_body().get("id", "")), self.source()))
             except (LookupError, PermissionError) as err:
                 return self.send(404 if isinstance(err, LookupError) else 403, {"error": str(err)})
             except (urllib.error.URLError, OSError) as err:
-                return self.send(502, {"error": f"Couldn't reach the Bookstore: {err}"})
+                return self.send(502, {"error": f"Couldn't reach the Madness Workshop: {err}"})
         if len(p) >= 2 and p[:2] == ["api", "transcribe"]:
             return self.transcribe(user, store, p[2:])
         if p == ["api", "devices", "code"]:
@@ -1331,5 +1331,5 @@ if __name__ == "__main__":
         print("NOTE: the owner password is the default (AdminPassword). Set WEB_PASSWORD to change it.", flush=True)
     readers.start_pruning(reader_cache_days)
     port = int(os.environ.get("PORT", "8430"))
-    print(f"Session Notes server on :{port}, data in {DATA}", flush=True)
+    print(f"Desk of Madness server on :{port}, data in {DATA}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

@@ -45,7 +45,7 @@ export const NoteEditor: FC<{
   initialScreenshots?: Screenshot[];
   defaultKind?: NoteKind;
   onSaved: (note: Note) => void;
-  /** Unsaved edits from before Session Notes was put away, to carry on with. */
+  /** Unsaved edits from before Desk of Madness was put away, to carry on with. */
   draft?: EditorDraft;
   closeModal?: () => void;
 }> = ({ appId, note, folderId: initialFolder, folders, gameName, initialScreenshots = [], defaultKind, onSaved, draft, closeModal }) => {
@@ -74,7 +74,7 @@ export const NoteEditor: FC<{
   // kept on disk so older versions of the note can still be restored with it.
   const added = useRef<(Screenshot | Recording)[]>(draft?.added ?? [...initialScreenshots]);
 
-  // Keep the edits somewhere safe, so putting Session Notes away with the button combo doesn't lose them.
+  // Keep the edits somewhere safe, so putting Desk of Madness away with the button combo doesn't lose them.
   useEffect(() => {
     saveDraft({ title, body, tags, folderId, screenshots, checklist, spoiler, kind, recordings, added: added.current });
   }, [title, body, tags, folderId, screenshots, checklist, spoiler, kind, recordings]);
@@ -86,7 +86,7 @@ export const NoteEditor: FC<{
       added.current.push(rec);
       setRecordings((r) => [...r, rec]);
     } else {
-      toaster.toast({ title: "Session Notes", body: "No audio was captured. Is a microphone available?" });
+      toaster.toast({ title: "Desk of Madness", body: "No audio was captured. Is a microphone available?" });
     }
   };
 
@@ -108,7 +108,7 @@ export const NoteEditor: FC<{
       try {
         const words = await backend.stopDictation(appId, gameName ?? "");
         if (words) setBody((b) => insertWords(b, words, ...cursor.current));
-        else toaster.toast({ title: "Session Notes", body: "Didn't catch anything. Try again a little louder." });
+        else toaster.toast({ title: "Desk of Madness", body: "Didn't catch anything. Try again a little louder." });
       } catch (e) {
         toaster.toast({ title: "Speech to text failed", body: errText(e) });
       }
@@ -131,7 +131,7 @@ export const NoteEditor: FC<{
     try {
       const text = await backend.transcribeRecording(appId, rec.file);
       if (text) setRecordings((list) => list.map((r) => (r.id === rec.id ? { ...r, transcript: text } : r)));
-      else toaster.toast({ title: "Session Notes", body: "No speech found in that recording." });
+      else toaster.toast({ title: "Desk of Madness", body: "No speech found in that recording." });
     } catch (e) {
       toaster.toast({ title: "Couldn't transcribe", body: errText(e) });
     }

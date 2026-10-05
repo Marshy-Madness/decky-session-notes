@@ -1,7 +1,7 @@
 {
-  "name": "decky-session-notes",
-  "version": "0.2.2-beta.13",
-  "description": "Per-game session notes, run tracking, and stats for Steam Deck",
+  "name": "desk-of-madness",
+  "version": "0.3.0-beta.1",
+  "description": "Desk of Madness: a game-aware desk for notes, checklists, counters and guides on Steam Deck",
   "type": "module",
   "scripts": {
     "build": "rollup -c",

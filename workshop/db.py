@@ -1,11 +1,11 @@
-"""SQLite storage for the Bookstore."""
+"""SQLite storage for the Madness Workshop."""
 import json
 import os
 import sqlite3
 import threading
 
 DATA = os.environ.get("DATA_DIR", "/data")
-DB_PATH = os.path.join(DATA, "bookstore.db")
+DB_PATH = os.path.join(DATA, "bookstore.db")  # name kept from when the Workshop was the Bookstore
 _local = threading.local()
 
 SCHEMA = """

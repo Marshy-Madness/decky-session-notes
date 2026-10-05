@@ -31,8 +31,8 @@ function startScreenshotWatch(): () => void {
 
       const count = getPendingScreenshots()?.paths.length ?? 1;
       toaster.toast({
-        title: "Session Notes",
-        body: count === 1 ? "Screenshot saved. Tap here (or open Session Notes) to attach it to a note." : `${count} screenshots waiting to be attached.`,
+        title: "Desk of Madness",
+        body: count === 1 ? "Screenshot saved. Tap here (or open Desk of Madness) to attach it to a note." : `${count} screenshots waiting to be attached.`,
         duration: 5000,
         onClick: () => {
           const pending = getPendingScreenshots();
@@ -46,6 +46,10 @@ function startScreenshotWatch(): () => void {
 
 export default definePlugin(() => {
   loadSettings();
+  // First start after the rename: say the Session Notes data came across (once).
+  backend.importNotice().then((n) => {
+    if (n) toaster.toast({ title: "Desk of Madness", body: "Imported your Session Notes notes and settings. You can uninstall Session Notes now.", duration: 8000 });
+  }).catch(() => {});
   refreshSpeech();
   const stopTracking = startLifetimeTracking((game) => {
     if (getSettings().sessionRecap) {
@@ -62,8 +66,8 @@ export default definePlugin(() => {
   addEventListener("data_changed", onRemoteChange);
 
   return {
-    name: "Session Notes",
-    titleView: <div>Session Notes</div>,
+    name: "Desk of Madness",
+    titleView: <div>Desk of Madness</div>,
     content: <QuickAccessPanel />,
     icon: <FaRegStickyNote />,
     onDismount() {

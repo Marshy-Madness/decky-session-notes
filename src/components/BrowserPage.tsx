@@ -29,7 +29,7 @@ import { newId } from "../utils/format";
 import { articleElements, READER_CSS } from "./ReaderArticle";
 import * as s from "./styles";
 
-// Session Notes' browser, for links in notes. Two ways to show a page:
+// Desk of Madness' browser, for links in notes. Two ways to show a page:
 // - Reader (default): just the article, made by the sync server (or the Deck) without ads, menus or pop-ups,
 //   drawn by us so every button does something sensible.
 // - Full page: the real site in a Steam browser view, for pages the reader can't handle.
@@ -118,14 +118,14 @@ export const BrowserPage: FC = () => {
           view.current.SetVisible(false);
           (window as any).SteamClient.BrowserView.Destroy(view.current);
         } catch (e) {
-          console.warn("Session Notes: couldn't close the browser view", e);
+          console.warn("Desk of Madness: couldn't close the browser view", e);
         }
         view.current = null;
       }
     };
   }, []);
 
-  // The address follows the page, so putting Session Notes away and opening it again comes back here.
+  // The address follows the page, so putting Desk of Madness away and opening it again comes back here.
   useEffect(() => {
     const path = webPath(cur.url, cur.mode);
     rememberAddress(path);
@@ -319,7 +319,7 @@ export const BrowserPage: FC = () => {
       strInitialURL: curRef.current.url,
     });
     viewUrl.current = curRef.current.url;
-    v.SetName?.("SessionNotesBrowser");
+    v.SetName?.("DeskOfMadnessBrowser");
     v.SetWindowStackingOrder?.(1);
     v.on("finished-request", (url: string) => {
       if (!url || url.startsWith("data:")) return;
@@ -353,7 +353,7 @@ export const BrowserPage: FC = () => {
       }
       keyboard.current?.ShowVirtualKeyboard?.();
     } catch (e) {
-      console.warn("Session Notes: no keyboard", e);
+      console.warn("Desk of Madness: no keyboard", e);
     }
   };
 

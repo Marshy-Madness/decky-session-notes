@@ -22,7 +22,7 @@ const ImageModal: FC<{ appId: string; file: string; loader?: MediaLoader; closeM
 );
 
 /**
- * Renders a note you can read but not edit (shared notes, Bookstore entries): spoiler gate,
+ * Renders a note you can read but not edit (shared notes, Workshop entries): spoiler gate,
  * information with inline screenshots, checklist, voice notes and a gallery.
  */
 export const ReadOnlyNote: FC<{

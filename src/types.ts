@@ -50,9 +50,9 @@ export interface Note {
   spoiler?: boolean;
   /** What sort of note this is; "note" when missing. Guides also show in the virtual Guides folder. */
   kind?: NoteKind;
-  /** Set when the note was copied from the Bookstore or a shared note. */
+  /** Set when the note was copied from the Workshop or a shared note. */
   source?: { type: "bookstore" | "shared"; id: string; author: string };
-  /** Bookstore entry this note was published as. */
+  /** Workshop entry this note was published as. */
   bookstoreId?: string;
 }
 
@@ -182,7 +182,7 @@ export interface Settings {
   /** Minutes between checks for website edits; 0 = manual only. */
   syncInterval?: number;
   bookstoreUrl?: string;
-  bookstoreUser?: BookstoreUser;
+  bookstoreUser?: WorkshopUser;
   /** Pin to screen: turn off Steam's own performance stats so only the to-do list shows. */
   overlayHideStats?: boolean;
   /** Pin to screen: where the overlay sits; unset = wherever Steam puts it (top left). Older setting, used
@@ -200,9 +200,9 @@ export interface Settings {
   openChord?: OpenChord;
   /** Buttons (1 to 4) for each combo; [] = off, unset = the default. */
   combos?: Partial<Record<ComboAction, string[]>>;
-  /** Add "Session Notes" to the main Steam-button menu. */
+  /** Add "Desk of Madness" to the main Steam-button menu. */
   mainMenuEntry?: boolean;
-  /** Give Session Notes its own Quick Access tab, next to Decky's. */
+  /** Give Desk of Madness its own Quick Access tab, next to Decky's. */
   qamTab?: boolean;
   /** The dictate combo starts and stops speech to text anywhere. Off unless turned on. */
   dictateChord?: boolean;
@@ -257,7 +257,7 @@ export type OverlayPosition =
   | "bottom-center"
   | "bottom-right";
 
-export interface BookstoreUser {
+export interface WorkshopUser {
   steamId: string;
   name: string;
   avatar: string;
@@ -265,7 +265,7 @@ export interface BookstoreUser {
 
 export type EditPolicy = "owner" | "select" | "anyone";
 
-export interface BookstoreSummary {
+export interface WorkshopSummary {
   id: string;
   appId: string;
   gameName: string;
@@ -275,7 +275,7 @@ export interface BookstoreSummary {
   tags: string[];
   spoiler: boolean;
   spoilerLabel: string;
-  author: BookstoreUser;
+  author: WorkshopUser;
   likes: number;
   comments: number;
   allowCopy: boolean;
@@ -287,21 +287,21 @@ export interface BookstoreSummary {
   updatedAt: number;
 }
 
-export interface BookstoreEntry extends BookstoreSummary {
+export interface WorkshopEntry extends WorkshopSummary {
   body: string;
   checklist: ChecklistItem[];
   screenshots: Screenshot[];
   recordings: Recording[];
   editPolicy: EditPolicy;
-  editors: BookstoreUser[];
+  editors: WorkshopUser[];
   canEdit: boolean;
   isAuthor: boolean;
   canDelete: boolean;
   liked: boolean;
-  commentList: { id: string; text: string; createdAt: number; author: BookstoreUser }[];
+  commentList: { id: string; text: string; createdAt: number; author: WorkshopUser }[];
 }
 
-export interface BookstoreGame {
+export interface WorkshopGame {
   appId: string;
   gameName: string;
   count: number;

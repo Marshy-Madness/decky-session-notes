@@ -7,7 +7,7 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icon.svg">
-<title>Session Notes</title>
+<title>Desk of Madness</title>
 <style>
   :root { color-scheme: dark; --bg: #14171c; --panel: #1d2129; --line: #2a2f38; --chip: #2c323d; --accent: #1a9fff; --danger: #e5484d; }
   * { box-sizing: border-box; }
@@ -157,7 +157,7 @@
 </head>
 <body>
 <form id="login" class="hidden">
-  <h2 style="margin-top:0">📝 Session Notes</h2>
+  <h2 style="margin-top:0">📝 Desk of Madness</h2>
   <a href="/auth/steam" class="steam-btn">Sign in with Steam</a>
   <div class="err" id="loginErr"></div>
   <div class="ok" id="loginOk"></div>
@@ -165,6 +165,7 @@
   <input id="signupName" class="hidden" placeholder="Your name" autocomplete="nickname" maxlength="60">
   <input id="email" type="email" placeholder="Email" autocomplete="username">
   <input id="password" type="password" placeholder="Password" autocomplete="current-password">
+  <input id="password2" class="hidden" type="password" placeholder="Retype password" autocomplete="new-password">
   <button class="primary" id="loginBtn" style="width:100%">Log in</button>
   <p class="meta hidden" id="signupNote"></p>
   <p class="meta" style="text-align:center"><a href="#" id="toggleSignup">New here? Create an account</a></p>
@@ -173,10 +174,10 @@
 
 <div id="app" class="hidden">
   <header>
-    <h1>📝 Session Notes</h1>
+    <h1>📝 Desk of Madness</h1>
     <select id="gamePicker" aria-label="Game"></select>
     <input id="search" placeholder="Search notes…">
-    <a id="bookstoreLink" class="hidden" target="_blank" rel="noopener"><button>📚 Bookstore</button></a>
+    <a id="bookstoreLink" class="hidden" target="_blank" rel="noopener"><button>🏭 Madness Workshop</button></a>
     <a id="getApp" class="hidden" href="/download/android"><button>📱 Android app</button></a>
     <button id="changeServer" class="hidden">Server</button>
     <button id="adminBtn" class="hidden">🛡<span class="hide-sm"> Admin</span></button>
@@ -193,6 +194,8 @@
 <div id="saving" class="saving hidden">Saving…</div>
 
 <script>
+window.DeskApp = window.DeskApp || window.SessionNotesApp; // the Android app's bridge (SessionNotesApp in apps before the rename)
+
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const date = (ms) => (ms ? new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—");
@@ -201,7 +204,7 @@ const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx
 const mediaUrl = (appId, file) => `/api/media/${encodeURIComponent(appId)}/${encodeURIComponent(file)}`;
 
 async function api(path, opts = {}) {
-  const r = await fetch(path, { ...opts, headers: { "X-Requested-With": "session-notes", ...(opts.json ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) }, body: opts.json ? JSON.stringify(opts.json) : opts.body });
+  const r = await fetch(path, { ...opts, headers: { "X-Requested-With": "desk-of-madness", ...(opts.json ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) }, body: opts.json ? JSON.stringify(opts.json) : opts.body });
   if (r.status === 401) { showLogin(); throw new Error("unauthorized"); }
   const data = await r.json().catch(() => null);
   if (!r.ok) throw new Error(data?.error || r.statusText);
@@ -214,6 +217,7 @@ let signingUp = false, signupMode = "approval";
 function setSignup(on) {
   signingUp = on;
   $("#signupName").classList.toggle("hidden", !on);
+  $("#password2").classList.toggle("hidden", !on);
   $("#ownerHint").classList.toggle("hidden", on);
   $("#signupNote").classList.toggle("hidden", !on);
   $("#signupNote").textContent = signupMode === "open" ? "" : "The server owner approves new accounts before you can sign in.";
@@ -227,26 +231,28 @@ $("#login").onsubmit = async (e) => {
   e.preventDefault();
   $("#loginErr").textContent = $("#loginOk").textContent = "";
   try {
+    if (signingUp && $("#password").value !== $("#password2").value) throw new Error("The passwords don't match. Type the same password in both boxes.");
     const body = signingUp ? { name: $("#signupName").value, email: $("#email").value, password: $("#password").value }
       : { email: $("#email").value, password: $("#password").value };
     const r = await fetch(signingUp ? "/api/signup" : "/api/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error);
-    $("#password").value = "";
+    $("#password").value = $("#password2").value = "";
     if (data.pending) { setSignup(false); $("#loginOk").textContent = "Thanks! You can log in once the server owner approves your account."; return; }
     start();
   } catch (err) { $("#loginErr").textContent = err.message; }
 };
 // The Android app's "change server" lives in the Account dialog, and under the login form.
-if (window.SessionNotesApp) {
+if (window.DeskApp) {
   $("#login").insertAdjacentHTML("beforeend", '<p class="meta" style="text-align:center"><a href="#" id="loginServer">Use a different server</a></p>');
-  $("#loginServer").onclick = (e) => { e.preventDefault(); window.SessionNotesApp.changeServer(); };
+  $("#loginServer").onclick = (e) => { e.preventDefault(); window.DeskApp.changeServer(); };
 }
 const loginError = new URLSearchParams(location.search).get("error");
 if (loginError) { $(/approve/.test(loginError) ? "#loginOk" : "#loginErr").textContent = loginError; history.replaceState(null, "", "/"); }
-// "Save to my notes" from the Bookstore links here as /?import=bookstore:<entryId>. Kept across a sign-in.
+// "Save to my notes" from the Madness Workshop links here as /?import=workshop:<entryId> (bookstore: from older links). Kept across a sign-in.
 const importParam = new URLSearchParams(location.search).get("import");
-if (importParam?.startsWith("bookstore:")) { sessionStorage.setItem("sn-import", importParam.slice(10)); history.replaceState(null, "", "/"); }
+const importMatch = importParam?.match(/^(?:workshop|bookstore):(.+)$/);
+if (importMatch) { sessionStorage.setItem("sn-import", importMatch[1]); history.replaceState(null, "", "/"); }
 
 // ---------- state ----------
 let games = [], game = null, folderFilter = "all", kindFilter = "all", sortMode = localStorage.getItem("sn-sort") || "edited";
@@ -276,8 +282,8 @@ async function start() {
   pendingUsers = info.pendingUsers || 0;
   paintAccount();
   $("#account").onclick = accountDialog;
-  if (info.androidApp && !window.SessionNotesApp && /Android/i.test(navigator.userAgent)) $("#getApp").classList.remove("hidden");
-  if (info.bookstoreUrl && !window.SessionNotesApp?.openBookstore) { $("#bookstoreLink").href = info.bookstoreUrl; $("#bookstoreLink").classList.remove("hidden"); }
+  if (info.androidApp && !window.DeskApp && /Android/i.test(navigator.userAgent)) $("#getApp").classList.remove("hidden");
+  if (info.bookstoreUrl && !window.DeskApp?.openBookstore) { $("#bookstoreLink").href = info.bookstoreUrl; $("#bookstoreLink").classList.remove("hidden"); }
   $("#login").classList.add("hidden");
   $("#app").classList.remove("hidden");
   await loadGames();
@@ -286,7 +292,7 @@ async function start() {
   else if (games.length) await openGame(games[0].appId); // most recently played
   checkPwaShare();
   await checkBookstoreImport();
-  window.SessionNotesApp?.ready?.(); // native Android app: deliver any pending share
+  window.DeskApp?.ready?.(); // native Android app: deliver any pending share
 }
 
 async function loadGames() {
@@ -877,9 +883,10 @@ async function accountDialog() {
         <label>Email</label><input id="aEmail" type="email" autocomplete="username" value="${esc(me.email || "")}" style="width:100%">
         ${me.hasPassword ? '<label>Current password</label><input id="aCurrent" type="password" autocomplete="current-password" style="width:100%">' : ""}
         <label>${me.hasPassword ? "New password (leave empty to keep it)" : "Password (8+ characters)"}</label><input id="aPass" type="password" autocomplete="new-password" style="width:100%">
+        <label>Retype the ${me.hasPassword ? "new " : ""}password</label><input id="aPass2" type="password" autocomplete="new-password" style="width:100%">
         <div class="err" id="aLoginErr"></div><div class="toolbar"><button class="primary" id="aSaveLogin">Save</button></div>`;
     }
-    const app = window.SessionNotesApp;
+    const app = window.DeskApp;
     dlg.innerHTML = `<div class="dlghead"><div class="person" style="border:0">${me.avatar ? `<img src="${esc(me.avatar)}">` : '<div class="ph"></div>'}<div class="who"><b>${esc(me.name)}</b><div class="meta">${[me.email, me.steamId ? "Steam " + me.steamId : "Not linked to Steam"].filter(Boolean).map(esc).join(" · ")}</div></div></div>
         <button id="pClose" class="icon" aria-label="Close">✕</button></div>
       <div class="toolbar"><button data-tab="devices">📱 Devices</button><button data-tab="login">🔑 Sign-in</button><button data-tab="notify">🔔 Notifications</button>${speechOn ? '<button data-tab="speech">🎤 Speech</button>' : ""}${me.admin ? '<button id="aAdmin">🛡 Admin</button>' : ""}
@@ -899,6 +906,7 @@ async function accountDialog() {
     if ($("#aAdmin", dlg)) $("#aAdmin", dlg).onclick = () => { dlg.close(); adminDialog(); };
     if ($("#aSaveLogin", dlg)) $("#aSaveLogin", dlg).onclick = async () => {
       try {
+        if ($("#aPass", dlg).value !== $("#aPass2", dlg).value) throw new Error("The passwords don't match. Type the same password in both boxes.");
         const r = await api("/api/account/login", { method: "POST", json: { email: $("#aEmail", dlg).value, password: $("#aPass", dlg).value, current: $("#aCurrent", dlg)?.value || "" } });
         me.email = r.email; me.hasPassword = r.hasPassword;
         draw("login", "");
@@ -1001,9 +1009,9 @@ async function adminDialog(page) {
     } else if (page === "server") {
       const o = await api("/api/admin/overview");
       html = `<h3>Server & backup</h3>
-        <div class="kv"><span>Website address</span><b>${esc(o.publicUrl || location.origin)}</b><span>Bookstore</span><b>${esc(o.bookstoreUrl || "—")}</b>
+        <div class="kv"><span>Website address</span><b>${esc(o.publicUrl || location.origin)}</b><span>Madness Workshop</span><b>${esc(o.bookstoreUrl || "—")}</b>
           <span>Page version</span><b>${esc(o.page)}</b><span>Up for</span><b>${Math.floor(o.uptime / 86400)} d ${Math.floor((o.uptime % 86400) / 3600)} h</b>
-          <span>Android app</span><b>${o.androidApp ? "uploaded " + day(o.androidAppAt) : "not uploaded (put it in data/app/SessionNotes.apk)"}</b>
+          <span>Android app</span><b>${o.androidApp ? "uploaded " + day(o.androidAppAt) : "not uploaded (put it in data/app/DeskOfMadness.apk)"}</b>
           <span>Speech to text</span><b>${o.speech ? "on" : "off"}</b><span>Legacy API_TOKEN</span><b>${o.legacyToken ? "set (works as the owner)" : "not set"}</b>
           <span>Disk</span><b>${bytes(o.dataBytes)} used by notes · ${bytes(o.diskFree)} free of ${bytes(o.diskTotal)}</b></div>
         <h4>Backup</h4><p class="meta">Download everything as a zip: accounts, notes, history and settings.</p>
@@ -1072,7 +1080,7 @@ function wireAdmin(dlg, a, { act, post, del, draw }) {
   // per-user actions
   on("[data-uname]", (b) => (b.onclick = () => { const n = prompt("New name:", nameOf(b.dataset.uname)); if (n) act(() => post(`users/${enc(b.dataset.uname)}/name`, { name: n }), "Renamed"); }));
   on("[data-uemail]", (b) => (b.onclick = () => { const u = a.users.find((x) => x.id === b.dataset.uemail); const v = prompt("Email they sign in with (empty to remove it):", u?.email || ""); if (v !== null) act(() => post(`users/${enc(u.id)}/email`, { email: v }), "Email saved"); }));
-  on("[data-upass]", (b) => (b.onclick = () => { const pw = prompt(`New password for ${nameOf(b.dataset.upass)} (8+ characters). Tell them yourself; they can change it under Account → Sign-in.`); if (pw) act(() => post(`users/${enc(b.dataset.upass)}/password`, { password: pw }), "Password changed"); }));
+  on("[data-upass]", (b) => (b.onclick = () => { const pw = prompt(`New password for ${nameOf(b.dataset.upass)} (8+ characters). Tell them yourself; they can change it under Account → Sign-in.`); if (!pw) return; if (prompt("Retype the new password") !== pw) return alert("The passwords don't match. Nothing was changed."); act(() => post(`users/${enc(b.dataset.upass)}/password`, { password: pw }), "Password changed"); }));
   on("[data-uspeech]", (c) => (c.onchange = () => act(() => post(`users/${enc(c.dataset.uspeech)}/speech`, { allowed: c.checked }))));
   on("[data-uadmin]", (c) => (c.onchange = () => { if (!confirm(c.checked ? `Make ${nameOf(c.dataset.uadmin)} an admin? They can approve, suspend and remove ordinary users and change server settings.` : `Remove admin from ${nameOf(c.dataset.uadmin)}?`)) { c.checked = !c.checked; return; } act(() => post(`users/${enc(c.dataset.uadmin)}/role`, { admin: c.checked })); }));
   on("[data-usignout]", (b) => (b.onclick = () => confirm(`Sign ${nameOf(b.dataset.usignout)} out everywhere? Their Deck and phone have to be linked again.`) && act(() => post(`users/${enc(b.dataset.usignout)}/signout`), "Signed out")));
@@ -1103,7 +1111,7 @@ function paintAnnouncement(text) {
 // ---------- speech to text ----------
 // 🎤 buttons fill a text box by voice. In the Android app the phone's own recognizer can do it (live words,
 // works offline); everywhere else the clip goes to the server's Whisper. Only shown if the owner allowed it.
-const nativeSpeech = () => !!window.SessionNotesApp?.hasNativeSpeech?.();
+const nativeSpeech = () => !!window.DeskApp?.hasNativeSpeech?.();
 const speechEngine = () => (nativeSpeech() ? localStorage.getItem("sn-speech-engine") || "phone" : "server");
 const micButton = (target) => (speechOn ? `<button type="button" class="icon" data-dictate="${target}" title="Speak instead of typing">🎤</button>` : "");
 let dictation = null; // { el, btn, start, end, stop(), cancel() }
@@ -1174,10 +1182,10 @@ async function dictateServer(el, btn) {
 
 function dictateNative(el, btn) {
   const d = beginDictation(el, btn, {
-    stop: () => window.SessionNotesApp.stopDictation(),
-    cancel: () => { window.SessionNotesApp.cancelDictation(); endDictation(d); },
+    stop: () => window.DeskApp.stopDictation(),
+    cancel: () => { window.DeskApp.cancelDictation(); endDictation(d); },
   });
-  window.SessionNotesApp.startDictation(localStorage.getItem("sn-speech-lang") || "");
+  window.DeskApp.startDictation(localStorage.getItem("sn-speech-lang") || "");
 }
 
 /** Events from the Android app's recognizer: {type: "partial"|"final"|"error"|"end", text}. */
@@ -1261,19 +1269,19 @@ window.snReceiveShare = async (items) => {
   dlg.showModal();
 };
 
-/** Copy a Bookstore post into my notes (server downloads it), then open it. */
+/** Copy a Madness Workshop post into my notes (server downloads it), then open it. */
 async function checkBookstoreImport() {
   const id = sessionStorage.getItem("sn-import");
   if (!id) return;
   sessionStorage.removeItem("sn-import");
   try {
-    const r = await api("/api/import/bookstore", { method: "POST", json: { id } });
+    const r = await api("/api/import/workshop", { method: "POST", json: { id } });
     await loadGames();
     await openGame(r.appId);
     const note = game.notes.find((n) => n.id === r.note.id);
     if (note) editNote(note);
     if (r.existing) alert(`You already have "${r.note.title}" in your notes for ${r.gameName}.`);
-  } catch (err) { alert("Couldn't copy from the Bookstore: " + err.message); }
+  } catch (err) { alert("Couldn't copy from the Madness Workshop: " + err.message); }
 }
 
 async function checkPwaShare() {

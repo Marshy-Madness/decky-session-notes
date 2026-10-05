@@ -1,4 +1,4 @@
-"""Session Notes Bookstore: a public library of game notes, guides and tips.
+"""Madness Workshop (formerly the Session Notes Bookstore): a public library of game notes, guides and tips.
 
 Anyone can browse. Signing in with Steam lets you post, edit (if allowed), comment and like.
 The Deck plugin links to an account with a device code that you approve on the website.
@@ -184,7 +184,7 @@ def clean_fields(data: dict) -> dict:
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "Bookstore/1"
+    server_version = "MadnessWorkshop/1"
 
     def log_message(self, fmt, *args):
         print(f"{self.client_ip()} {fmt % args}", flush=True)
@@ -242,7 +242,7 @@ class Handler(BaseHTTPRequestHandler):
             sid_cookie = self.session_id()
             row = db.conn().execute("SELECT steam_id, exp FROM sessions WHERE hash=?", (h(sid_cookie or ""),)).fetchone()
             sid = row["steam_id"] if row and row["exp"] > time.time() else None
-            if sid and mutating and self.headers.get("X-Requested-With") != "bookstore":
+            if sid and mutating and self.headers.get("X-Requested-With") not in ("workshop", "bookstore"):
                 return None
         if sid:
             banned = db.conn().execute("SELECT banned FROM users WHERE steam_id=?", (sid,)).fetchone()
@@ -457,7 +457,7 @@ class Handler(BaseHTTPRequestHandler):
         writing = p == ["api", "entries"] or (len(p) == 4 and p[:2] == ["api", "entries"] and p[3] == "comments")
         if writing and not admin:
             if setting("readOnly"):
-                return self.err(403, "The Bookstore is read-only for now. Try again later.")
+                return self.err(403, "The Madness Workshop is read-only for now. Try again later.")
             days = setting("minAccountDays")
             joined = c.execute("SELECT created_at FROM users WHERE steam_id=?", (viewer,)).fetchone()
             if days and joined and joined["created_at"] and now_ms() - joined["created_at"] < days * 86400_000:
@@ -848,5 +848,5 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     db.init()
     port = int(os.environ.get("PORT", "8431"))
-    print(f"Bookstore on :{port}, data in {DATA}", flush=True)
+    print(f"Madness Workshop on :{port}, data in {DATA}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

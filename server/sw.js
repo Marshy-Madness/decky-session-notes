@@ -1,4 +1,4 @@
-// Service worker: makes the site installable and receives "Share to Session Notes" from Android.
+// Service worker: makes the site installable and receives "Share to Desk of Madness" from Android.
 // Normal requests always go to the network so notes never come from a stale cache.
 self.addEventListener("install", () => self.skipWaiting());
 self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));

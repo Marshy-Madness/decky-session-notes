@@ -28,14 +28,14 @@
   const $ = (id) => document.getElementById(id);
   const store = params.get("which") === "store";
   if (store) {
-    $("icon").textContent = "📚";
-    $("title").textContent = "Can't reach the Bookstore";
+    $("icon").textContent = "🏭";
+    $("title").textContent = "Can't reach the Madness Workshop";
     $("msg").textContent = "Check that your phone is online and try again.";
-    $("change").textContent = "Back to my notes";
+    $("change").textContent = "Back to my Desk";
   }
   $("addr").textContent = [params.get("url"), params.get("error")].filter(Boolean).join(" · ");
-  $("retry").onclick = () => { $("retry").textContent = "Trying…"; SessionNotesApp.retry(); };
-  $("change").onclick = () => (store ? SessionNotesApp.backToNotes() : SessionNotesApp.changeServer());
+  $("retry").onclick = () => { $("retry").textContent = "Trying…"; DeskApp.retry(); };
+  $("change").onclick = () => (store ? DeskApp.backToNotes() : DeskApp.changeServer());
 </script>
 </body>
 </html>

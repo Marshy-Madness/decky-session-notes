@@ -22,7 +22,7 @@ export const SharedNoteViewer: FC<{ appId: string; shared: SharedNote; closeModa
     try {
       await backend.copySharedNote(appId, shared.shareId);
       emitDataChanged();
-      toaster.toast({ title: "Session Notes", body: `Copied "${shared.note.title}" to your notes.` });
+      toaster.toast({ title: "Desk of Madness", body: `Copied "${shared.note.title}" to your notes.` });
       closeModal?.();
     } catch (e) {
       toaster.toast({ title: "Couldn't copy", body: errText(e) });

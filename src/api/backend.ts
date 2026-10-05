@@ -1,7 +1,8 @@
 import { call } from "@decky/api";
-import { BookstoreEntry, BookstoreGame, BookstoreSummary, BookstoreUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings } from "../types";
+import { WorkshopEntry, WorkshopGame, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings } from "../types";
 
 export const backend = {
+  importNotice: () => call<[], { from: string } | null>("import_notice"),
   listGames: () => call<[], GameSummary[]>("list_games"),
   getGame: (appId: string) => call<[string], Game>("get_game", appId),
   recordLaunch: (appId: string, name: string) => call<[string, string], GameSummary>("record_launch", appId, name),
@@ -66,20 +67,20 @@ export const backend = {
   setReaderCacheDays: (days: number) => call<[number], ReaderCacheSettings>("set_reader_cache_days", days),
   clearReaderCache: () => call<[], { removed: number; readerCache: ReaderCacheSettings["readerCache"] }>("clear_reader_cache"),
 
-  bsGames: (q = "") => call<[string], BookstoreGame[]>("bs_games", q),
-  bsEntries: (params: Record<string, string>) => call<[Record<string, string>], BookstoreSummary[]>("bs_entries", params),
-  bsEntry: (id: string) => call<[string], BookstoreEntry>("bs_entry", id),
+  bsGames: (q = "") => call<[string], WorkshopGame[]>("bs_games", q),
+  bsEntries: (params: Record<string, string>) => call<[Record<string, string>], WorkshopSummary[]>("bs_entries", params),
+  bsEntry: (id: string) => call<[string], WorkshopEntry>("bs_entry", id),
   bsMedia: (file: string) => call<[string], string | null>("bs_media", file),
   bsStartLink: () =>
     call<[], { deviceCode: string; userCode: string; verifyUrl: string; interval: number; expiresIn: number }>("bs_start_link"),
-  bsPollLink: (deviceCode: string) => call<[string], { status: string; user?: BookstoreUser }>("bs_poll_link", deviceCode),
+  bsPollLink: (deviceCode: string) => call<[string], { status: string; user?: WorkshopUser }>("bs_poll_link", deviceCode),
   bsUnlink: () => call<[], void>("bs_unlink"),
-  bsLike: (id: string) => call<[string], BookstoreEntry>("bs_like", id),
-  bsComment: (id: string, text: string) => call<[string, string], BookstoreEntry>("bs_comment", id, text),
-  bsUsers: (q: string) => call<[string], BookstoreUser[]>("bs_users", q),
-  bsUpdate: (id: string, fields: Record<string, unknown>) => call<[string, Record<string, unknown>], BookstoreEntry>("bs_update", id, fields),
+  bsLike: (id: string) => call<[string], WorkshopEntry>("bs_like", id),
+  bsComment: (id: string, text: string) => call<[string, string], WorkshopEntry>("bs_comment", id, text),
+  bsUsers: (q: string) => call<[string], WorkshopUser[]>("bs_users", q),
+  bsUpdate: (id: string, fields: Record<string, unknown>) => call<[string, Record<string, unknown>], WorkshopEntry>("bs_update", id, fields),
   bsPublish: (appId: string, noteId: string, options: Record<string, unknown>) =>
-    call<[string, string, Record<string, unknown>], BookstoreEntry>("bs_publish", appId, noteId, options),
+    call<[string, string, Record<string, unknown>], WorkshopEntry>("bs_publish", appId, noteId, options),
   bsCopy: (id: string, appId: string) => call<[string, string], Note>("bs_copy", id, appId),
 
   pinOverlay: (appId: string, noteId: string) =>

@@ -1,6 +1,6 @@
 {
-  "name": "Session Notes",
-  "short_name": "Notes",
+  "name": "Desk of Madness",
+  "short_name": "Desk",
   "description": "Your Steam Deck game notes",
   "start_url": "/",
   "display": "standalone",

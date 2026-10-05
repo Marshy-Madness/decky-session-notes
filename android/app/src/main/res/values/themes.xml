@@ -1,5 +1,5 @@
 <resources>
-    <style name="SessionNotes" parent="android:Theme.Material.NoActionBar">
+    <style name="DeskOfMadness" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:statusBarColor">@color/panel</item>
         <item name="android:navigationBarColor">@color/bg</item>

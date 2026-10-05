@@ -4,15 +4,15 @@ plugins {
 }
 
 android {
-    namespace = "com.marshymadness.sessionnotes"
+    namespace = "com.marshymadness.deskofmadness"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.marshymadness.sessionnotes"
+        applicationId = "com.marshymadness.deskofmadness"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "0.5.2"
+        versionCode = 8
+        versionName = "1.0.0"
     }
 
     buildTypes {
@@ -35,10 +35,10 @@ dependencies {
     implementation("androidx.core:core-ktx:1.16.0")
 }
 
-// ./gradlew dist  ->  dist/SessionNotes-<version>.apk
+// ./gradlew dist  ->  dist/DeskOfMadness-<version>.apk
 tasks.register<Copy>("dist") {
     dependsOn("assembleRelease")
     from(layout.buildDirectory.file("outputs/apk/release/app-release.apk"))
     into(rootProject.layout.projectDirectory.dir("dist"))
-    rename { "SessionNotes-${android.defaultConfig.versionName}.apk" }
+    rename { "DeskOfMadness-${android.defaultConfig.versionName}.apk" }
 }

@@ -1,4 +1,4 @@
-"""Client for the public Session Notes Bookstore (browse, link account, publish, copy, like, comment)."""
+"""Client for the public Madness Workshop (browse, link account, publish, copy, like, comment)."""
 import base64
 import json
 import os
@@ -11,15 +11,17 @@ import decky
 import storage
 from sync import _SSL, clean_url
 
-DEFAULT_URL = "https://bookstore.marshymadness.com"
+DEFAULT_URL = "https://workshop.marshymadness.com"
+OLD_URL = "https://bookstore.marshymadness.com"
 CACHE_DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "bookstore_cache")
 MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "gif": "image/gif",
         "wav": "audio/wav", "webm": "audio/webm", "ogg": "audio/ogg", "m4a": "audio/mp4", "mp3": "audio/mpeg"}
 
 
-class Bookstore:
+class Workshop:
     def base(self) -> str:
-        return clean_url(storage.get_settings().get("bookstoreUrl") or DEFAULT_URL)
+        url = clean_url(storage.get_settings().get("bookstoreUrl") or DEFAULT_URL)
+        return DEFAULT_URL if url == OLD_URL else url  # the Bookstore's old address
 
     def _request(self, method: str, path: str, body=None, raw: bytes = None, auth: bool = True):
         data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
@@ -37,9 +39,9 @@ class Bookstore:
                 msg = json.loads(e.read()).get("error")
             except Exception:
                 msg = None
-            raise RuntimeError(msg or f"Bookstore error {e.code}")
+            raise RuntimeError(msg or f"Workshop error {e.code}")
         except urllib.error.URLError as e:
-            raise RuntimeError(f"Can't reach the Bookstore: {e.reason}")
+            raise RuntimeError(f"Can't reach the Workshop: {e.reason}")
         return json.loads(payload or b"null") if ctype.startswith("application/json") else payload
 
     # ---- browsing ----
@@ -54,7 +56,7 @@ class Bookstore:
         return self._request("GET", f"/api/entries/{urllib.parse.quote(entry_id)}")
 
     def media(self, file: str):
-        """A Bookstore image or recording as a data URL, cached on disk (files never change)."""
+        """A Workshop image or recording as a data URL, cached on disk (files never change)."""
         name = os.path.basename(file)
         os.makedirs(CACHE_DIR, exist_ok=True)
         path = os.path.join(CACHE_DIR, name)
@@ -114,7 +116,7 @@ class Bookstore:
             return self._request("POST", "/api/uploads" + q, raw=f.read())["file"]
 
     def publish(self, appid: str, note_id: str, options: dict) -> dict:
-        """Upload a local note (with its media) as a new Bookstore entry, or update the one it was published as."""
+        """Upload a local note (with its media) as a new Workshop entry, or update the one it was published as."""
         game = storage.load_game(appid)
         note = next((n for n in game.get("notes", []) if n["id"] == note_id), None)
         if not note:

@@ -12,7 +12,7 @@ function setMode(on: boolean) {
   try {
     (window as any).SteamClient?.Input?.SetWebBrowserActionset?.(on);
   } catch (e) {
-    console.warn("Session Notes: couldn't switch the trackpad mode", e);
+    console.warn("Desk of Madness: couldn't switch the trackpad mode", e);
   }
 }
 

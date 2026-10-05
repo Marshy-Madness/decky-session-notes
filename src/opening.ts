@@ -32,7 +32,7 @@ function withSteamInFront(then: () => void) {
     const waited = Date.now() - started;
     if (front === null) return void setTimeout(then, Math.max(0, FALLBACK_WAIT_MS - waited));
     if ((front && mainMenuOpen() !== false) || waited >= MAX_WAIT_MS) {
-      console.info(`Session Notes: Steam UI in front after ${waited} ms${front ? "" : " (gave up waiting)"}`);
+      console.info(`Desk of Madness: Steam UI in front after ${waited} ms${front ? "" : " (gave up waiting)"}`);
       return then();
     }
     setTimeout(check, POLL_MS);
@@ -84,7 +84,7 @@ export function closeNotesPage() {
   }, 50);
 }
 
-/** Goes back to the page you were on before Session Notes (past the notes page and the browser both). */
+/** Goes back to the page you were on before Desk of Madness (past the notes page and the browser both). */
 function leaveOurPages() {
   const h = steamHistory() as any;
   if (!Array.isArray(h?.entries) || typeof h.index !== "number" || typeof h.go !== "function") return Navigation.NavigateBack();

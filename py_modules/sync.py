@@ -42,7 +42,7 @@ def _q(s: str) -> str:
 
 
 class Sync:
-    """Two-way sync of notes + media with the Session Notes server."""
+    """Two-way sync of notes + media with the Desk of Madness server."""
 
     def __init__(self):
         self.dirty_at = time.time()  # sync once soon after boot

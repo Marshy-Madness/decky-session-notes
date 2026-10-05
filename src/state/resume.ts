@@ -4,7 +4,7 @@ import { ChecklistItem, NoteKind, Recording, Screenshot } from "../types";
 import { holdTrackpadMouse } from "../trackpads";
 import { NotesPlace, setPlace } from "./place";
 
-// Where you were in Session Notes, so closing it with the button combo and opening it again puts you back
+// Where you were in Desk of Madness, so closing it with the button combo and opening it again puts you back
 // in the same place: same folder, same note open, and any unsaved edits still there. Kept in memory for as
 // long as the plugin is loaded.
 
@@ -50,7 +50,7 @@ export function seedFromPlace(p: NotesPlace) {
   }
 }
 
-/** The note to reopen for this game, if one was open when Session Notes was put away. */
+/** The note to reopen for this game, if one was open when Desk of Madness was put away. */
 export function noteToReopen(appId: string): OpenNote | null {
   return !modal && open?.appId === appId ? open : null;
 }
@@ -59,7 +59,7 @@ export function saveDraft(draft: EditorDraft) {
   if (open?.type === "edit") open.draft = draft;
 }
 
-/** Forgets the open note once its window goes away, unless we're the ones closing it to put Session Notes away. */
+/** Forgets the open note once its window goes away, unless we're the ones closing it to put Desk of Madness away. */
 const Tracked: FC<{ note: OpenNote; element: ReactElement; closeModal?: () => void }> = ({ note, element, closeModal }) => {
   useEffect(() => {
     const release = holdTrackpadMouse();

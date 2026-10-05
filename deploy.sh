@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Usage: DECK_HOST=deck@192.168.1.50 ./deploy.sh
 DECK_HOST="${DECK_HOST:?Set DECK_HOST, e.g. DECK_HOST=deck@192.168.1.50 ./deploy.sh}"
-PLUGIN_NAME="decky-session-notes"
+PLUGIN_NAME="desk-of-madness"
 REMOTE_DIR="homebrew/plugins/${PLUGIN_NAME}"
 
 echo "Building..."

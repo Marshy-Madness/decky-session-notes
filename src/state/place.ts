@@ -1,15 +1,15 @@
 import { replacePath } from "../steamWindow";
 
-// Where you are in Session Notes, written into the page's address on the full-screen page:
-//   /session-notes/<tab>[/<appId>[/folder/<folderId>][/note/<noteId> | /edit/<noteId or "new">]]
+// Where you are in Desk of Madness, written into the page's address on the full-screen page:
+//   /desk-of-madness/<tab>[/<appId>[/folder/<folderId>][/note/<noteId> | /edit/<noteId or "new">]]
 // so Steam's Back, the main-menu entry and the button combo all bring you back to the same spot, and the
-// browser page (its own address, /session-notes-web?url=…) can hand you back to the note you came from.
+// browser page (its own address, /desk-of-madness-web?url=…) can hand you back to the note you came from.
 
-export const NOTES_ROUTE = "/session-notes";
-export const WEB_ROUTE = "/session-notes-web";
+export const NOTES_ROUTE = "/desk-of-madness";
+export const WEB_ROUTE = "/desk-of-madness-web";
 
-export type Tab = "current" | "all" | "bookstore" | "settings";
-const TABS: Tab[] = ["current", "all", "bookstore", "settings"];
+export type Tab = "current" | "all" | "workshop" | "settings";
+const TABS: Tab[] = ["current", "all", "workshop", "settings"];
 
 export interface OpenNoteRef {
   type: "view" | "edit";
@@ -29,7 +29,7 @@ export interface NotesPlace {
 
 const place: NotesPlace = { tab: null, openGame: null, appId: null, folderId: null, note: null };
 let pageShowing = false;
-/** The full address you were last at (notes or browser), to go back to when Session Notes opens again. */
+/** The full address you were last at (notes or browser), to go back to when Desk of Madness opens again. */
 let lastAddress: string | null = null;
 
 export const getPlace = (): Readonly<NotesPlace> => place;
@@ -49,7 +49,7 @@ export function placePath(p: NotesPlace = place): string {
   return path;
 }
 
-/** Reads a notes address; null for the bare /session-notes (no place in it). */
+/** Reads a notes address; null for the bare /desk-of-madness (no place in it). */
 export function parsePlace(path: string): NotesPlace | null {
   const pathname = path.split("?")[0];
   if (!pathname.startsWith(NOTES_ROUTE + "/")) return null;
@@ -89,7 +89,7 @@ export function setPlace(patch: Partial<NotesPlace>) {
   if (changed) write();
 }
 
-/** Takes on the place in a notes address, if it has one (the bare /session-notes doesn't). */
+/** Takes on the place in a notes address, if it has one (the bare /desk-of-madness doesn't). */
 export function takePlaceFromAddress(address: string): NotesPlace | null {
   const fromAddress = parsePlace(address);
   if (fromAddress) Object.assign(place, fromAddress);

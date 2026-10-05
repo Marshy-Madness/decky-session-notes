@@ -23,24 +23,24 @@
 <body>
 <form id="f" novalidate>
   <div class="logo">📝</div>
-  <h1>Welcome to Session Notes</h1>
-  <p class="center">Connect to your Session Notes server to see the notes from your Steam Deck.</p>
+  <h1>Welcome to Desk of Madness</h1>
+  <p class="center">Connect to your Desk of Madness server to see the notes from your Steam Deck.</p>
   <label for="url">Server address</label>
   <input id="url" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="steamnotes.example.com" enterkeyhint="go">
   <div class="hint">Use the address you open the website at, e.g. <b>steamnotes.example.com</b> or <b>192.168.0.10:8430</b>.</div>
   <div class="err" id="err"></div>
   <button id="go">Connect</button>
   <p class="center hint">You'll sign in on the next screen.</p>
-  <details><summary>Advanced: Bookstore address</summary>
-    <input id="store" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://bookstore.marshymadness.com">
-    <div class="hint">Leave empty to use the public Bookstore.</div>
+  <details><summary>Advanced: Madness Workshop address</summary>
+    <input id="store" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="https://workshop.marshymadness.com">
+    <div class="hint">Leave empty to use the public Madness Workshop.</div>
   </details>
 </form>
 <script>
   const params = new URLSearchParams(location.search);
   const $ = (id) => document.getElementById(id);
   $("url").value = params.get("url") || "";
-  $("store").value = SessionNotesApp.bookstoreUrl();
+  $("store").value = DeskApp.bookstoreUrl();
   if (params.get("error")) $("err").textContent = "Couldn't reach that server (" + params.get("error") + "). Check the address and that your phone is online.";
   if (!$("url").value) $("url").focus();
 
@@ -63,8 +63,8 @@
     $("err").textContent = "";
     $("go").disabled = true;
     $("go").textContent = "Connecting…";
-    SessionNotesApp.setBookstore(normalise($("store").value));
-    SessionNotesApp.setServer(url);
+    DeskApp.setBookstore(normalise($("store").value));
+    DeskApp.setServer(url);
   };
 </script>
 </body>

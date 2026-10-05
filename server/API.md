@@ -1,4 +1,4 @@
-# Session Notes server API
+# Desk of Madness server API
 
 Base URL: your server, e.g. `https://steamnotes.marshymadness.com` (or `http://192.168.0.144:8430` on the LAN).
 
@@ -111,11 +111,11 @@ curl -X POST https://steamnotes.marshymadness.com/api/games/1245620/notes \
 Every endpoint accepts any of a game's IDs. Syncs answer under the ID you sent, so a Deck keeps its own shortcut ID.
 `GET /api/games` lists each game once for the website. A device sees each game under the ID(s) it has synced it with.
 
-### Copy a Bookstore post into your notes
-`POST /api/import/bookstore` with `{"id": "<entry id>"}`. The server downloads the post and its media from
-`BOOKSTORE_URL` and adds it to the post's game. Returns `{note, appId, gameName, existing}`. If you already copied that
+### Copy a Madness Workshop post into your notes
+`POST /api/import/workshop` (or the old `/api/import/bookstore`) with `{"id": "<entry id>"}`. The server downloads the post and its media from
+`WORKSHOP_URL` (or the old `BOOKSTORE_URL`) and adds it to the post's game. Returns `{note, appId, gameName, existing}`. If you already copied that
 post, `existing` is `true` and nothing new is added. It returns 403 if the poster turned off copying.
-The website runs this when you open `/?import=bookstore:<id>`, which is where the Bookstore's "Save to my notes" button links.
+The website runs this when you open `/?import=workshop:<id>` (older links: `bookstore:<id>`), which is where the Workshop's "Save to my notes" button links.
 
 ### Full sync (what the Deck and website use)
 `POST /api/sync/{appId}` with a whole game record. The server merges it with its copy and returns `{game, rev}`:
@@ -154,4 +154,4 @@ Set `WEBHOOK_URLS` in docker-compose.yml (comma separated). After every change t
 Events: `note.created`, `note.updated`, `note.deleted`, `leftoff.updated`, `counter.updated`, `game.launched`.
 
 To get the summary as a phone notification through **ntfy**, put `ntfy+` in front of the topic URL:
-`WEBHOOK_URLS=ntfy+https://ntfy.example.com/session-notes`. For **n8n**, use a Webhook node's URL as is.
+`WEBHOOK_URLS=ntfy+https://ntfy.example.com/desk-of-madness`. For **n8n**, use a Webhook node's URL as is.

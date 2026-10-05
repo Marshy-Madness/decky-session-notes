@@ -191,7 +191,7 @@ function startChordWatch(): () => void {
           // Controllers that aren't connected just fail; that's fine.
           Promise.resolve(service.StartControllerStateFlow({ controller_index: i, flow_mode: BUTTON_FLOW })).catch(() => {});
         } catch (e) {
-          console.warn("Session Notes: couldn't start the button feed", i, e);
+          console.warn("Desk of Madness: couldn't start the button feed", i, e);
         }
       }
     };
@@ -227,7 +227,7 @@ function startChordWatch(): () => void {
 
 // ---- main Steam menu ----
 
-const MENU_KEY = "session-notes";
+const MENU_KEY = "desk-of-madness";
 type MenuItem = ReactElement & { key: string | null };
 
 const hasSettings = (list: unknown[]) => list.some((e) => isValidElement(e) && e.key === "settings");
@@ -244,7 +244,7 @@ function withNotesItem(items: unknown): MenuItem[] | null {
     route: NOTES_ROUTE,
     routeState: undefined,
     active: "if-within-route",
-    label: "Session Notes",
+    label: "Desk of Madness",
     icon: <FaRegStickyNote />,
   } as any);
   return [...list.slice(0, after + 1), item, ...list.slice(after + 1)];
@@ -275,7 +275,7 @@ function patchMainMenu(): (() => void) | null {
           };
         }
       } catch (e) {
-        console.warn("Session Notes: couldn't add the Steam menu entry", e);
+        console.warn("Desk of Madness: couldn't add the Steam menu entry", e);
       }
     }
     return original.call(this, type, props, ...children);
@@ -305,7 +305,7 @@ function patchQamTabs(): Patch | null {
       if (i < 0) {
         tabs.push({
           key: QAM_TAB_KEY,
-          title: "Session Notes",
+          title: "Desk of Madness",
           tab: <FaRegStickyNote />,
           panel: (
             <ErrorBoundary>

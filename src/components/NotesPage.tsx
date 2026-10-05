@@ -6,9 +6,9 @@ import { seedFromPlace } from "../state/resume";
 import { currentPath, useChromeHeights } from "../steamWindow";
 import { useTrackpadMouse } from "../trackpads";
 
-/** Full-screen Session Notes, opened from the main menu, the button combo or the Quick Access panel. */
+/** Full-screen Desk of Madness, opened from the main menu, the button combo or the Quick Access panel. */
 export const NotesPage: FC = () => {
-  // A place in the address (/session-notes/all/123/note/abc) is taken on before the tabs first draw.
+  // A place in the address (/desk-of-madness/all/123/note/abc) is taken on before the tabs first draw.
   useState(() => {
     const place = takePlaceFromAddress(currentPath());
     if (place) seedFromPlace(place);
@@ -29,7 +29,7 @@ export const NotesPage: FC = () => {
   return (
     <div style={{ marginTop: `${header}px`, height: `calc(100% - ${header}px)`, overflowY: "scroll", boxSizing: "border-box" }}>
       <div style={{ maxWidth: "960px", margin: "0 auto", padding: `16px 24px ${footer + 40}px` }}>
-        <div style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "12px" }}>Session Notes</div>
+        <div style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "12px" }}>Desk of Madness</div>
         <NotesBrowser fullScreen />
       </div>
     </div>

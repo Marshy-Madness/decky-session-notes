@@ -4,7 +4,7 @@ import { WEB_ROUTE } from "./state/place";
 import { showPage } from "./opening";
 import { BrowserMode } from "./types";
 
-// Opening links from notes in Session Notes' own browser page (components/BrowserPage.tsx).
+// Opening links from notes in Desk of Madness' own browser page (components/BrowserPage.tsx).
 
 export interface LinkSource {
   appId: string;

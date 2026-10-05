@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1b1722">
-<title>Session Notes Bookstore</title>
+<title>Madness Workshop</title>
 <style>
   :root { color-scheme: dark; --bg: #15131a; --panel: #1f1b27; --line: #2e2939; --chip: #2f2a3b; --accent: #b98cff; --danger: #e5484d; }
   * { box-sizing: border-box; }
@@ -91,7 +91,7 @@
 </head>
 <body>
 <header>
-  <h1 id="home">📚 Bookstore</h1>
+  <h1 id="home">🏭 Madness Workshop</h1>
   <input id="gameSearch" class="grow" placeholder="Search games…">
   <button id="adminBtn" class="hidden">🛡 Admin</button>
   <span id="userBox"></span>
@@ -102,6 +102,8 @@
 <dialog id="dlg2"></dialog>
 
 <script>
+window.DeskApp = window.DeskApp || window.SessionNotesApp; // the Android app's bridge (SessionNotesApp in apps before the rename)
+
 const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const date = (ms) => (ms ? new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—");
@@ -116,7 +118,7 @@ const kindOf = (k) => KINDS.find((x) => x[0] === k) || KINDS[0];
 let me = null, admin = false, ownerAdmin = false, badges = {}, siteInfo = {}, view = { appId: null, gameName: "", kinds: [], has: [], sort: "top", q: "" };
 
 async function api(path, opts = {}) {
-  const r = await fetch(path, { ...opts, headers: { "X-Requested-With": "bookstore", ...(opts.json ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) },
+  const r = await fetch(path, { ...opts, headers: { "X-Requested-With": "workshop", ...(opts.json ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) },
     body: opts.json ? JSON.stringify(opts.json) : opts.body });
   const data = await r.json().catch(() => null);
   if (!r.ok) throw new Error(data?.error || r.statusText);
@@ -139,7 +141,7 @@ function paintHeader() {
   $("#adminBtn").classList.toggle("hidden", !admin);
   $("#adminBtn").innerHTML = `🛡 Admin${n ? `<span class="badge">${n}</span>` : ""}`;
   $("#adminBtn").onclick = () => adminPage();
-  const text = [siteInfo.announcement, siteInfo.readOnly ? "🔒 The Bookstore is read-only for now: you can browse and save posts, but not post or comment." : ""].filter(Boolean).join("\n");
+  const text = [siteInfo.announcement, siteInfo.readOnly ? "🔒 The Madness Workshop is read-only for now: you can browse and save posts, but not post or comment." : ""].filter(Boolean).join("\n");
   const hidden = localStorage.getItem("bs-announce-hidden") === text;
   $("#announce").classList.toggle("hidden", !text || hidden);
   $("#announceText").textContent = text;
@@ -166,7 +168,7 @@ async function home(q = "") {
   history.replaceState(null, "", "/");
   const [games, recent] = await Promise.all([api(`/api/games?q=${encodeURIComponent(q)}`), q ? [] : api("/api/entries?sort=new")]);
   $("#main").innerHTML = `
-    <p>Notes, guides and tips for your games, shared by players. Open one on your Deck from the <b>Bookstore</b> tab in Session Notes.</p>
+    <p>More things for your Desk. Discover, download, and share notes, guides and collections for your games. Open one on your Deck from the <b>Workshop</b> tab in Desk of Madness.</p>
     <h2>${q ? "Games matching “" + esc(q) + "”" : "Games"}</h2>
     <div class="grid">${games.map((g) => `<div class="game" data-app="${esc(g.appId)}" data-name="${esc(g.gameName)}"><img src="${art(g.appId)}" onerror="this.style.visibility='hidden'"><div><b>${esc(g.gameName)}</b><br><small>${g.count} posts</small></div></div>`).join("") || '<p class="meta">Nothing yet. Be the first to post!</p>'}</div>
     ${canPost() ? '<div class="toolbar"><button class="primary" id="newAny">+ Post something</button></div>' : ""}
@@ -249,7 +251,7 @@ async function openEntry(id, revealed = false, prefetched = null) {
       <button id="like" class="${e.liked ? "on" : ""}">♥ ${e.likes}</button>
       ${e.canEdit ? '<button id="edit">✏️ Edit</button>' : ""}<button id="history">🕘 History</button>
       ${e.canDelete ? '<button id="del" class="danger">Delete</button>' : ""}${me && !e.isAuthor ? '<button id="report" title="Report to the admins">🚩 Report</button>' : ""}
-      <span style="flex:1"></span>${e.allowCopy ? `<button class="primary" id="save">📥 Save to my notes</button>${window.SessionNotesApp ? "" : '<button id="saveWhere" title="Change your Session Notes address">⚙️</button>'}` : ""}
+      <span style="flex:1"></span>${e.allowCopy ? `<button class="primary" id="save">📥 Save to my notes</button>${window.DeskApp ? "" : '<button id="saveWhere" title="Change your Desk of Madness address">⚙️</button>'}` : ""}
     </div>
     <h3>Comments (${e.commentList.length})</h3>
     ${e.commentList.map((c) => `<div class="comment">${who(c.author)} <small>${date(c.createdAt)}</small> ${c.canDelete ? `<button class="danger" data-delc="${esc(c.id)}" style="float:right">✕</button>` : ""}${me && c.author.steamId !== me.steamId ? `<button data-repc="${esc(c.id)}" style="float:right;margin-right:6px" title="Report">🚩</button>` : ""}<p>${esc(c.text)}</p></div>`).join("") || '<p class="meta">No comments yet.</p>'}
@@ -281,12 +283,12 @@ async function openEntry(id, revealed = false, prefetched = null) {
   if (!dlg.open) dlg.showModal();
 }
 
-// ---------- copy into your own Session Notes ----------
-/** Your Session Notes server address (asked once, remembered in this browser). */
+// ---------- copy into your own Desk of Madness ----------
+/** Your Desk of Madness server address (asked once, remembered in this browser). */
 function notesUrl(ask = false) {
   let url = localStorage.getItem("bs-notes-url") || "";
   if (ask || !url) {
-    const typed = prompt("Address of your Session Notes server (the website you edit your notes on):", url || "https://");
+    const typed = prompt("Address of your Desk of Madness server (the website you edit your notes on):", url || "https://");
     if (!typed) return null;
     url = typed.trim().replace(/\/+$/, "");
     if (!/^https?:\/\//i.test(url)) url = "https://" + url;
@@ -295,11 +297,11 @@ function notesUrl(ask = false) {
   return url;
 }
 
-/** The Session Notes site does the copy (it downloads the post and its media into your notes). */
+/** The Desk of Madness site does the copy (it downloads the post and its media into your notes). */
 function saveToNotes(id) {
-  if (window.SessionNotesApp?.saveToNotes) return window.SessionNotesApp.saveToNotes(id); // Android app: switches to the Notes tab
+  if (window.DeskApp?.saveToNotes) return window.DeskApp.saveToNotes(id); // Android app: switches to the Notes tab
   const url = notesUrl();
-  if (url) window.open(`${url}/?import=bookstore:${encodeURIComponent(id)}`, "_blank", "noopener");
+  if (url) window.open(`${url}/?import=workshop:${encodeURIComponent(id)}`, "_blank", "noopener");
 }
 
 async function showHistory(e) {
@@ -384,7 +386,7 @@ function editEntry(orig, defaults) {
     };
     if ($("#fUserFind", d)) $("#fUserFind", d).onclick = async () => {
       const users = await api(`/api/users?q=${encodeURIComponent($("#fUserQ", d).value)}`);
-      $("#fUserResults", d).innerHTML = users.filter((u) => u.steamId !== me.steamId).map((u) => `<div class="toolbar">${who(u)} <button data-addu='${esc(JSON.stringify(u))}'>Add</button></div>`).join("") || '<p class="meta">No one found. They need to sign in to the Bookstore once.</p>';
+      $("#fUserResults", d).innerHTML = users.filter((u) => u.steamId !== me.steamId).map((u) => `<div class="toolbar">${who(u)} <button data-addu='${esc(JSON.stringify(u))}'>Add</button></div>`).join("") || '<p class="meta">No one found. They need to sign in to the Madness Workshop once.</p>';
       d.querySelectorAll("[data-addu]").forEach((b) => (b.onclick = () => { collect(); const u = JSON.parse(b.dataset.addu); if (!e.editors.some((x) => x.steamId === u.steamId)) e.editors.push(u); draw(); }));
     };
     $("#fSave", d).onclick = async () => {
@@ -409,7 +411,7 @@ function editEntry(orig, defaults) {
 function linkPage() {
   $("#main").innerHTML = `<div style="max-width:420px;margin:8vh auto;text-align:center">
     <h2>Link your Steam Deck</h2>
-    ${me ? `<p>Type the code shown in Session Notes on your Deck.</p><input id="code" class="code-input" maxlength="9" placeholder="ABCD-1234" autofocus>
+    ${me ? `<p>Type the code shown in Desk of Madness on your Deck.</p><input id="code" class="code-input" maxlength="9" placeholder="ABCD-1234" autofocus>
       <div class="toolbar" style="justify-content:center"><button class="primary" id="approve">Link it</button></div><p id="msg"></p>`
     : `<p>First sign in with the Steam account you want to use on your Deck.</p><a class="steam-btn" href="${signIn("/link")}">Sign in with Steam</a>`}</div>`;
   if (!me) return;
@@ -451,7 +453,7 @@ async function adminPage(page) {
   if (p === "overview") {
     const o = await api("/api/admin/overview");
     html = `<h2>Overview</h2>
-      ${o.readOnly ? '<div class="box warnbox">🔒 The Bookstore is read-only: only admins can post or comment. <a href="#" data-go="general">Change</a></div>' : ""}
+      ${o.readOnly ? '<div class="box warnbox">🔒 The Madness Workshop is read-only: only admins can post or comment. <a href="#" data-go="general">Change</a></div>' : ""}
       ${o.pending ? `<div class="box warnbox">⏳ ${o.pending} posts are waiting for approval. <a href="#" data-go="queue">Review</a></div>` : ""}
       ${o.openReports ? `<div class="box warnbox">🚩 ${o.openReports} open reports. <a href="#" data-go="reports">Review</a></div>` : ""}
       <h4>Content</h4><div class="stats">${stat(o.published, "published posts")}${stat(o.pending, "waiting", o.pending)}${stat(o.hidden, "hidden")}${stat(o.games, "games")}${stat(o.comments, "comments")}${stat(o.likes, "likes")}</div>
@@ -590,7 +592,7 @@ function report(kind, id) {
 
 $("#home").onclick = () => home();
 $("#gameSearch").onchange = (e) => home(e.target.value.trim());
-/** Android back button (Session Notes app): close the top dialog if one is open. */
+/** Android back button (Desk of Madness app): close the top dialog if one is open. */
 window.snBack = () => {
   for (const d of [$("#dlg2"), $("#dlg")]) if (d.open) { d.close(); return true; }
   return false;
