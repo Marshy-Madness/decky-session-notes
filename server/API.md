@@ -26,7 +26,9 @@ to the activity log.
 | `GET /api/admin/activity` | The last 500 sign-ups, approvals and admin actions, newest first |
 | `GET /api/admin/shares` / `DELETE /api/admin/shares/{id}` | Every shared note / stop one share |
 | `GET /api/admin/backup[?media=1]` | Zip of the data folder (accounts, notes, history; `media=1` adds screenshots and voice notes) |
-| `POST /api/admin/settings` | Any of `{signupMode: open\|approval\|invite, emailSignups, speechDefault, quotaMb, maxDevices, announcement}`. `quotaMb` and `maxDevices` are per user, 0 = no limit, and don't apply to admins |
+| `POST /api/admin/settings` | Any of `{signupMode: open\|approval\|invite, emailSignups, speechDefault, quotaMb, maxDevices, announcement, readerCacheDays}`. `quotaMb` and `maxDevices` are per user, 0 = no limit, and don't apply to admins. `readerCacheDays` is one of 30, 60, 90, 180, 365 or 0 (never): reader pages nobody has opened for that long are deleted (default 90) |
+| `GET /api/admin/reader` | `{readerCacheDays, readerCacheChoices, readerCache: {pages, bytes}}` |
+| `POST /api/admin/reader/clear` | Delete every saved reader page: `{removed, readerCache}` |
 | `POST /api/admin/invites` `{steamId}` / `DELETE /api/admin/invites/{steamId}` | Invite a Steam account / cancel |
 | `POST /api/admin/approve-all` | Approve every pending account |
 | `POST /api/admin/signout-all` | End every website session except yours (devices stay linked) |
@@ -61,7 +63,8 @@ Optional: `X-Client: n8n` (or any name) labels where a change came from in webho
 | `GET /api/games/{appId}` | `{game, rev}`: the whole record (notes, folders, counters, sessions, leftOff). Works with any of the game's IDs |
 | `GET /api/steam/apps/{appId}` | `{appId, name, found, icon, image, steamApp, yours}`: what Steam calls an app ID, plus its icon and header art. `yours` is your game for that ID, if you have one |
 | `GET /api/search?q=boss` | `[{appId, game, note}]`: matches in titles, information, tags and voice-note transcripts across all games |
-| `GET /api/account` | `{user, speech}`: who the token belongs to, and whether speech to text is on for them |
+| `GET /api/account` | `{user, speech, admin}`: who the token belongs to, whether speech to text is on for them, and whether they're an admin |
+| `GET /api/reader?url=…[&refresh=1]` | A web page boiled down to its article, without ads, menus or scripts: `{url, title, site, image, excerpt, html, length, fetchedAt, cached}`. `html` uses plain tags only (no styles or scripts, http(s) links and images only). Pages are kept on the server and served from there next time (`cached: true`); `refresh=1` makes it again. Fandom, wiki.gg and Wikipedia pages come from their MediaWiki API. 422 `{error}` when the site blocks it or isn't a web page |
 | `GET /api/history/{appId}/{noteId}` | Earlier versions of a note, newest first: `[{savedAt, reason, note}]` |
 | `GET /api/deleted/{appId}` | Deleted notes that can be restored: `[{deletedAt, note}]` |
 | `GET /api/media/{appId}` | File names of screenshots and voice notes |

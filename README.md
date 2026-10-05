@@ -43,6 +43,20 @@ Four parts, all in this repo:
 - **Version history**: every edit keeps the previous version. Preview any version and restore it.
 - **Recently deleted**: bring back notes you deleted.
 
+### Links and the browser
+- **Links in notes** (`https://…` or `www.…`) can be selected and open in Session Notes' own browser page.
+- **Reader view** (default): just the article, without ads, menus, pop-ups or cookie banners. The sync server makes it
+  and keeps a copy, so a page opens instantly the next time on any device; without a server the Deck makes it itself.
+  Fandom, wiki.gg and Wikipedia pages come straight from their wiki API. Pages the reader can't handle open in full.
+- **Full page**: the real site in Steam's browser, with Steam's keyboard for text boxes.
+- **Buttons:** B back (closes at the first page) · X reader / full page · Y menu (address or search, add the page to
+  the note, save it as a new note, text size) · L1 / R1 back / forward · L2 / R2 page up / down. In the reader the
+  D-pad scrolls (up/down) and picks links on screen (left/right), and A opens the picked link.
+- **Trackpads** work as on Steam's store pages on the notes page, in notes and in the browser: the left one scrolls,
+  the right one is a mouse and clicking it clicks. Turn it off under Settings → Browser and controls.
+- Server admins choose how long unread reader pages are kept (30, 60, 90, 180 or 365 days, or never) on the website
+  (Admin → Features & limits, also in the Android app) or on the Deck (Settings → Browser and controls).
+
 ### While playing
 - **Where I left off.** A pinned note per game that pops up every time you launch it.
 - **Session recap** (optional): when you quit a game, it asks where you left off and pins your answer for next time.

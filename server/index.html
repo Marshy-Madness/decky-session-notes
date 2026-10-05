@@ -985,7 +985,11 @@ async function adminDialog(page) {
         <label>Space per user (MB, 0 = no limit)</label><input id="sQuota" type="number" min="0" value="${st.quotaMb || 0}" style="width:160px">
         <p class="meta">Counts screenshots, voice notes and history. New uploads are refused once someone is over it.</p>
         <label>Linked devices per user (0 = no limit)</label><input id="sDevices" type="number" min="0" value="${st.maxDevices || 0}" style="width:160px">
-        <div class="toolbar"><button class="primary" id="sSaveLimits">Save</button></div>`;
+        <div class="toolbar"><button class="primary" id="sSaveLimits">Save</button></div>
+        <h4>📖 Reader view cache</h4><p class="meta">Links opened in the Deck's browser are turned into clean pages without ads and kept here, so they open instantly next time. Pages nobody has opened for this long are deleted.</p>
+        <select id="sReaderDays">${(st.readerCacheChoices || [30, 60, 90, 180, 365, 0]).map((d) => `<option value="${d}" ${d === st.readerCacheDays ? "selected" : ""}>${d ? `After ${d} days` : "Never"}</option>`).join("")}</select>
+        <p class="meta">${st.readerCache ? `${st.readerCache.pages} page${st.readerCache.pages === 1 ? "" : "s"} kept · ${bytes(st.readerCache.bytes)}` : ""}</p>
+        <div class="toolbar"><button id="sReaderClear">Clear cache now</button></div>`;
     } else if (page === "announce") {
       html = `<h3>Announcement</h3><p class="meta">A message at the top of the website for everyone who's signed in, e.g. planned downtime. Leave it empty to hide it.</p>
         <textarea id="sAnnounce" rows="4" maxlength="500">${esc(a.settings.announcement || "")}</textarea>
@@ -1059,6 +1063,8 @@ function wireAdmin(dlg, a, { act, post, del, draw }) {
   if ($("#sEmail", dlg)) $("#sEmail", dlg).onchange = (e) => act(() => post("settings", { emailSignups: e.target.checked }), "Saved");
   if ($("#sSpeechDef", dlg)) $("#sSpeechDef", dlg).onchange = (e) => act(() => post("settings", { speechDefault: e.target.checked }), "Saved");
   if ($("#sSaveLimits", dlg)) $("#sSaveLimits", dlg).onclick = () => act(() => post("settings", { quotaMb: +$("#sQuota", dlg).value || 0, maxDevices: +$("#sDevices", dlg).value || 0 }), "Saved");
+  if ($("#sReaderDays", dlg)) $("#sReaderDays", dlg).onchange = (e) => act(() => post("settings", { readerCacheDays: +e.target.value }), "Saved");
+  if ($("#sReaderClear", dlg)) $("#sReaderClear", dlg).onclick = () => confirm("Delete every saved reader page? They're made again the next time someone opens them.") && act(async () => { const r = await post("reader/clear"); toast(`Removed ${r.removed} pages`); });
   if ($("#sSaveAnnounce", dlg)) $("#sSaveAnnounce", dlg).onclick = () => act(async () => { await post("settings", { announcement: $("#sAnnounce", dlg).value }); paintAnnouncement($("#sAnnounce", dlg).value); }, "Saved");
   if ($("#sClearAnnounce", dlg)) $("#sClearAnnounce", dlg).onclick = () => act(async () => { await post("settings", { announcement: "" }); paintAnnouncement(""); }, "Cleared");
   if ($("#sSignoutAll", dlg)) $("#sSignoutAll", dlg).onclick = () => confirm("Sign everyone except you out of the website?") && act(async () => { const r = await post("signout-all"); toast(`Ended ${r.ended} sessions`); });

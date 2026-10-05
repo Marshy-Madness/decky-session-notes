@@ -33,6 +33,7 @@ export const SharedNoteViewer: FC<{ appId: string; shared: SharedNote; closeModa
   return (
     <ModalRoot onCancel={closeModal} bAllowFullSize>
       <ReadOnlyNote
+        closeModal={closeModal}
         appId={appId}
         note={shared.note}
         chips={<span style={{ ...s.chip, background: "#1f5c45" }}>👥 Shared by {shared.fromName}</span>}

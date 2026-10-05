@@ -1,4 +1,4 @@
-import { FC, useState } from "react";
+import { FC, useEffect, useState } from "react";
 import { DialogButton, Focusable } from "@decky/ui";
 import { FaCog, FaExpand, FaGamepad, FaStore, FaThList } from "react-icons/fa";
 import { openNotesPage } from "../opening";
@@ -8,12 +8,7 @@ import { NoteList } from "./NoteList";
 import { Library } from "./Library";
 import { SettingsView } from "./SettingsView";
 import { BookstoreView } from "./Bookstore";
-
-type Tab = "current" | "all" | "bookstore" | "settings";
-
-// Remember where you were between QAM opens.
-let lastTab: Tab | null = null;
-let lastOpenedGame: string | null = null;
+import { getPlace, setPlace, Tab } from "../state/place";
 
 const TabButton: FC<{ active: boolean; onClick: () => void; children: React.ReactNode; grow?: boolean; label?: string }> = ({
   active,
@@ -63,15 +58,17 @@ export const QuickAccessPanel: FC = () => {
 /** The tabs and their contents; shared by the Quick Access panel and the full-screen page. */
 export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false }) => {
   const running = useRunningGame();
-  const [tab, setTabState] = useState<Tab>(lastTab ?? (running ? "current" : "all"));
-  const [openGame, setOpenGameState] = useState<string | null>(lastOpenedGame);
+  // Where you were is remembered between Quick Access opens, and on the full-screen page it's in the address.
+  const [tab, setTabState] = useState<Tab>(() => getPlace().tab ?? (running ? "current" : "all"));
+  const [openGame, setOpenGameState] = useState<string | null>(() => getPlace().openGame);
+  useEffect(() => setPlace({ tab }), []);
 
   const setTab = (t: Tab) => {
-    lastTab = t;
+    setPlace({ tab: t, note: null });
     setTabState(t);
   };
   const setOpenGame = (id: string | null) => {
-    lastOpenedGame = id;
+    setPlace({ openGame: id, note: null });
     setOpenGameState(id);
   };
 

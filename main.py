@@ -1,13 +1,15 @@
 import asyncio
 import os
+import re
 
 import decky
 import storage
 from recorder import Recorder
-from sync import Sync
+from sync import Sync, _SSL as SSL_CONTEXT
 from bookstore import Bookstore
 from overlay import Overlay
 from buttons import Buttons
+import reader
 import screenshot
 
 
@@ -252,6 +254,33 @@ class Plugin:
 
     async def backup_status(self):
         return self.sync.status()
+
+    # reader view for links in notes: made and cached by the server, or right here if there's no server
+    async def reader_page(self, url: str, refresh: bool = False):
+        def run():
+            if storage.get_settings().get("syncUrl"):
+                try:
+                    return {**self.sync.reader_page(url, refresh), "source": "server"}
+                except RuntimeError as e:
+                    # The server already tried the site; only an unreachable or older server is worth retrying here.
+                    if not re.search(r"Server error (404|5\d\d)|Can't reach|No server|rejected", str(e)):
+                        raise
+            try:
+                return {**reader.extract(url, context=SSL_CONTEXT), "cached": False, "source": "device"}
+            except ValueError as e:
+                raise RuntimeError(str(e))
+        return await asyncio.to_thread(run)
+
+    async def reader_settings(self):
+        if not storage.get_settings().get("syncUrl"):
+            return None
+        return await asyncio.to_thread(self.sync.reader_settings)
+
+    async def set_reader_cache_days(self, days: int):
+        return await asyncio.to_thread(self.sync.set_reader_cache_days, days)
+
+    async def clear_reader_cache(self):
+        return await asyncio.to_thread(self.sync.clear_reader_cache)
 
     # Bookstore (public library of notes, guides and tips)
     async def bs_games(self, q: str = ""):

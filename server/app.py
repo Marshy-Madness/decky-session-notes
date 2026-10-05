@@ -26,6 +26,7 @@ from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import merge
+import reader_cache
 import speech
 import steam
 from accounts import OWNER_ID, Accounts, check_password
@@ -55,7 +56,11 @@ shares_lock = threading.Lock()
 failed_logins: dict = {}
 STARTED = time.time()
 SETTING_KEYS = {"emailSignups": bool, "speechDefault": bool, "quotaMb": int, "announcement": str, "maxDevices": int}
+readers = reader_cache.ReaderCache(DATA)
 
+
+def reader_cache_days() -> int:
+    return reader_cache.clean_days(accounts.setting("readerCacheDays", reader_cache.DEFAULT_DAYS))
 
 
 def now_ms() -> int:
@@ -547,7 +552,9 @@ def admin_user(u: dict, sessions: dict, stats: bool = True) -> dict:
 def admin_settings() -> dict:
     return {"signupMode": accounts.signup_mode(), "emailSignups": accounts.setting("emailSignups", True),
             "speechDefault": accounts.setting("speechDefault", False), "quotaMb": accounts.setting("quotaMb", 0),
-            "maxDevices": accounts.setting("maxDevices", 0), "announcement": accounts.setting("announcement", "")}
+            "maxDevices": accounts.setting("maxDevices", 0), "announcement": accounts.setting("announcement", ""),
+            "readerCacheDays": reader_cache_days(), "readerCacheChoices": list(reader_cache.DAY_CHOICES),
+            "readerCache": readers.stats()}
 
 
 def overview() -> dict:
@@ -754,6 +761,14 @@ class Handler(BaseHTTPRequestHandler):
         if p[1:] == ["account"]:  # for devices: who am I, and what may I use
             return self.send(200, {"user": accounts.public(user), "speech": speech_on(user),
                                    "announcement": accounts.setting("announcement", ""), "admin": accounts.is_admin(user)})
+        if p[1:] == ["reader"]:  # GET /api/reader?url=…[&refresh=1]: a page as a clean reader view
+            url = self.query().get("url", "")
+            try:
+                return self.send(200, readers.get(url, refresh=self.query().get("refresh") == "1"))
+            except ValueError as err:
+                return self.send(422, {"error": str(err)})
+            except Exception as err:
+                return self.send(502, {"error": f"Couldn't make a reader view: {err}"})
         if p[1:] == ["games"]:
             return self.send(200, self.list_games(store))
         if len(p) == 3 and p[1] == "games":
@@ -836,6 +851,9 @@ class Handler(BaseHTTPRequestHandler):
                                    "invites": accounts.db.get("invites", []), "allowSignups": accounts.signup_mode() == "open",
                                    "settings": admin_settings(), "speechAvailable": speech.enabled(), "you": user["id"],
                                    "youAreOwner": user.get("role") == "owner"})
+        if rest == ["reader"]:  # just the reader cache settings, for the Deck's Settings page
+            st = admin_settings()
+            return self.send(200, {k: st[k] for k in ("readerCacheDays", "readerCacheChoices", "readerCache")})
         if rest == ["overview"]:
             return self.send(200, overview())
         if rest == ["activity"]:
@@ -1071,10 +1089,20 @@ class Handler(BaseHTTPRequestHandler):
                     if settings.get(key) != value:
                         settings[key] = value
                         changed.append(f"{key}: {value if kind is not str else (value[:40] or 'cleared')}")
+            if "readerCacheDays" in data:
+                days = reader_cache.clean_days(data["readerCacheDays"])
+                if days != reader_cache_days():
+                    settings["readerCacheDays"] = days
+                    changed.append(f"reader cache: {f'{days} days' if days else 'keep forever'}")
+                    readers.prune(days)
             accounts.save()
             if changed:
                 accounts.log("settings", "changed " + ", ".join(changed), actor=me)
             return self.send(200, {**admin_settings(), "allowSignups": accounts.signup_mode() == "open"})
+        if rest == ["reader", "clear"]:
+            n = readers.clear()
+            accounts.log("settings", f"cleared the reader cache ({n} pages)", actor=me)
+            return self.send(200, {"removed": n, "readerCache": readers.stats()})
         if rest == ["signout-all"]:
             n = accounts.sign_out_others(me)
             accounts.log("server.signout", f"signed everyone else out of the website ({n} sessions)", actor=me)
@@ -1301,6 +1329,7 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if WEB_PASSWORD == "AdminPassword" and not (accounts.get(OWNER_ID) or {}).get("password"):
         print("NOTE: the owner password is the default (AdminPassword). Set WEB_PASSWORD to change it.", flush=True)
+    readers.start_pruning(reader_cache_days)
     port = int(os.environ.get("PORT", "8430"))
     print(f"Session Notes server on :{port}, data in {DATA}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

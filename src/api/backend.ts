@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import { BookstoreEntry, BookstoreGame, BookstoreSummary, BookstoreUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot } from "../types";
+import { BookstoreEntry, BookstoreGame, BookstoreSummary, BookstoreUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings } from "../types";
 
 export const backend = {
   listGames: () => call<[], GameSummary[]>("list_games"),
@@ -59,6 +59,12 @@ export const backend = {
   unshareNote: (shareId: string) => call<[string], void>("unshare_note", shareId),
   testBackupServer: () => call<[], { ok: boolean }>("test_backup_server"),
   backupStatus: () => call<[], BackupStatus>("backup_status"),
+
+  readerPage: (url: string, refresh = false) => call<[string, boolean], ReaderPage>("reader_page", url, refresh),
+  /** null when there's no server or this account isn't an admin on it. */
+  readerSettings: () => call<[], ReaderCacheSettings | null>("reader_settings"),
+  setReaderCacheDays: (days: number) => call<[number], ReaderCacheSettings>("set_reader_cache_days", days),
+  clearReaderCache: () => call<[], { removed: number; readerCache: ReaderCacheSettings["readerCache"] }>("clear_reader_cache"),
 
   bsGames: (q = "") => call<[string], BookstoreGame[]>("bs_games", q),
   bsEntries: (params: Record<string, string>) => call<[Record<string, string>], BookstoreSummary[]>("bs_entries", params),

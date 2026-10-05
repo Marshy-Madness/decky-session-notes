@@ -128,6 +128,7 @@ const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void }> = (
   return (
     <ModalRoot onCancel={closeModal} bAllowFullSize>
       <ReadOnlyNote
+        closeModal={closeModal}
         appId={appId}
         note={note}
         loader={bookstoreMedia}

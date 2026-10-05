@@ -33,6 +33,7 @@ import { AttachScreenshotsModal } from "./AttachScreenshotsModal";
 import { DeletedNotesModal, VersionHistoryModal } from "./VersionHistory";
 import { usePendingScreenshots } from "../state/pendingScreenshots";
 import { lastFolder, noteToReopen, rememberFolder, showNoteModal, EditorDraft } from "../state/resume";
+import { setPlace } from "../state/place";
 import * as s from "./styles";
 
 const GUIDES = "__guides";
@@ -62,6 +63,9 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeKinds, setActiveKinds] = useState<string[]>([]);
   const pending = usePendingScreenshots();
+
+  // This game's notes are what's showing: that goes in the address on the full-screen page.
+  useEffect(() => setPlace({ appId, folderId }), [appId]);
 
   // Bring back the note that was open when Session Notes was put away.
   useEffect(() => {

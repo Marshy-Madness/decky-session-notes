@@ -3,10 +3,12 @@ import { addEventListener, removeEventListener, routerHook } from "@decky/api";
 import { afterPatch, ErrorBoundary, findModuleExport, Focusable, Patch } from "@decky/ui";
 import { FaRegStickyNote } from "react-icons/fa";
 import { NotesPage } from "./components/NotesPage";
+import { BrowserPage } from "./components/BrowserPage";
 import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { getSettings } from "./state/notesStore";
 import { dictationBusy, dictationChordEnabled, stopAnywhereDictation, toggleAnywhereDictation } from "./dictation";
-import { NOTES_ROUTE, reportButtons, toggleNotesPage } from "./opening";
+import { NOTES_ROUTE, WEB_ROUTE, reportButtons, toggleNotesPage } from "./opening";
+import { releaseTrackpads } from "./trackpads";
 import { Button, feedRecording, getCombo, isRecordingCombo, sortButtons } from "./combos";
 import { speechAllowed } from "./state/speech";
 import { stopVoiceCommand, toggleVoiceCommand, voiceBusy } from "./voice";
@@ -321,7 +323,9 @@ function patchQamTabs(): Patch | null {
 
 /** Sets up the full-screen page, button combo, main-menu entry and Quick Access tab. Returns a cleanup. */
 export function startIntegrations(): () => void {
-  routerHook.addRoute(NOTES_ROUTE, NotesPage, { exact: true });
+  // Not exact: the rest of the address is where you are (state/place.ts).
+  routerHook.addRoute(NOTES_ROUTE, NotesPage);
+  routerHook.addRoute(WEB_ROUTE, BrowserPage, { exact: true });
   const stopChord = startChordWatch();
   const patches = [patchQamTabs()];
   const unpatchMenu = patchMainMenu();
@@ -330,5 +334,7 @@ export function startIntegrations(): () => void {
     patches.forEach((p) => p?.unpatch());
     unpatchMenu?.();
     routerHook.removeRoute(NOTES_ROUTE);
+    routerHook.removeRoute(WEB_ROUTE);
+    releaseTrackpads();
   };
 }

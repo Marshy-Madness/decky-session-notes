@@ -2,7 +2,7 @@ import { FC, useEffect, useState } from "react";
 import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
-import { BackupStatus, DictateTarget, VoiceFallback } from "../types";
+import { BackupStatus, BrowserMode, DictateTarget, ReaderCacheSettings, VoiceFallback } from "../types";
 import { ComboRow, VoiceCommandList } from "./ComboSettings";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Bookstore";
@@ -30,6 +30,15 @@ const SPEECH_LANGUAGES = [
 ];
 
 const PAIR_CODE = /^[A-Z0-9]{3}-?[A-Z0-9]{3}$/i;
+
+const BROWSER_MODES: { label: string; data: BrowserMode }[] = [
+  { label: "Reader view (no ads)", data: "reader" },
+  { label: "Full page", data: "full" },
+];
+
+const TEXT_SIZES = [13, 15, 17, 19, 21, 24].map((n) => ({ label: `${n} px${n === 17 ? " (normal)" : ""}`, data: n }));
+
+const cacheDaysLabel = (d: number) => (d ? `After ${d} days` : "Never");
 
 const INTERVAL_OPTIONS = [
   { label: "Every minute", data: 1 },
@@ -227,6 +236,34 @@ export const SettingsView: FC = () => {
         </>
       )}
 
+      <Heading>Browser and controls</Heading>
+      <PanelSectionRow>
+        <ToggleField
+          label="Trackpads like the Steam store"
+          description="On the notes page, in notes and in the browser: the left trackpad scrolls and the right one is a mouse (click it to click). Takes effect the next time a page opens."
+          checked={settings.trackpadMouse ?? true}
+          onChange={(v) => updateSettings({ trackpadMouse: v })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <DropdownItem
+          label="Open links in notes as"
+          description="The reader shows just the article, without ads or pop-ups. X switches between the two in the browser."
+          rgOptions={BROWSER_MODES}
+          selectedOption={settings.browserMode ?? "reader"}
+          onChange={(o) => updateSettings({ browserMode: o.data })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <DropdownItem
+          label="Reader text size"
+          rgOptions={TEXT_SIZES}
+          selectedOption={settings.readerTextSize ?? 17}
+          onChange={(o) => updateSettings({ readerTextSize: o.data })}
+        />
+      </PanelSectionRow>
+      {settings.syncUrl && <ReaderCacheAdmin />}
+
       <Heading>Pin to screen</Heading>
       <PanelSectionRow>
         <ButtonItem
@@ -335,5 +372,53 @@ const ButtonsSeen: FC = () => {
       )}
       <div style={{ opacity: 0.7 }}>Hold your combo and its buttons should show up here.</div>
     </div>
+  );
+};
+
+/** For server admins: how long the server keeps reader pages nobody opens. Hidden for everyone else. */
+const ReaderCacheAdmin: FC = () => {
+  const [st, setSt] = useState<ReaderCacheSettings | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    backend.readerSettings().then(setSt).catch(() => setSt(null));
+  }, []);
+  if (!st) return null;
+  const size = st.readerCache.bytes < 1048576 ? `${Math.round(st.readerCache.bytes / 1024)} KB` : `${(st.readerCache.bytes / 1048576).toFixed(1)} MB`;
+  return (
+    <>
+      <PanelSectionRow>
+        <DropdownItem
+          label="Server: delete unread reader pages"
+          description={`Admin setting for everyone on the server. Pages nobody has opened for this long are deleted. ${st.readerCache.pages} saved (${size}).`}
+          rgOptions={st.readerCacheChoices.map((d) => ({ label: cacheDaysLabel(d), data: d }))}
+          selectedOption={st.readerCacheDays}
+          onChange={async (o) => {
+            try {
+              setSt(await backend.setReaderCacheDays(o.data));
+              setNote(null);
+            } catch (e) {
+              setNote(`⚠️ ${errText(e)}`);
+            }
+          }}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ButtonItem
+          layout="below"
+          description={note ?? undefined}
+          onClick={async () => {
+            try {
+              const r = await backend.clearReaderCache();
+              setSt({ ...st, readerCache: r.readerCache });
+              setNote(`Removed ${r.removed} pages`);
+            } catch (e) {
+              setNote(`⚠️ ${errText(e)}`);
+            }
+          }}
+        >
+          Clear the reader cache now
+        </ButtonItem>
+      </PanelSectionRow>
+    </>
   );
 };

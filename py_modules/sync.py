@@ -95,7 +95,7 @@ class Sync:
                 message = json.loads(e.read()).get("error")
             except Exception:
                 message = None
-            raise RuntimeError(message if message and e.code in (403, 413, 429, 502) else f"Server error {e.code}")
+            raise RuntimeError(message if message and e.code in (403, 413, 422, 429, 502) else f"Server error {e.code}")
         except urllib.error.URLError as e:
             raise RuntimeError(f"Can't reach server: {e.reason}")
         return json.loads(data or b"null") if ctype.startswith("application/json") else data
@@ -212,6 +212,27 @@ class Sync:
         return (self._request("POST", f"/api/transcribe/{_q(appid)}/{_q(file)}", {}, timeout=180) or {}).get("text", "")
 
     # ---- pairing & sharing (blocking helpers) ----
+
+    # ---- reader view (the server makes the page and keeps it, so it opens instantly next time) ----
+
+    def reader_page(self, url: str, refresh: bool = False) -> dict:
+        return self._request("GET", f"/api/reader?url={_q(url)}" + ("&refresh=1" if refresh else ""), timeout=45)
+
+    def reader_settings(self):
+        """The server's reader cache settings, or None if this account isn't an admin there."""
+        try:
+            return self._request("GET", "/api/admin/reader")
+        except RuntimeError as e:
+            if "404" in str(e) or "403" in str(e):
+                return None
+            raise
+
+    def set_reader_cache_days(self, days: int) -> dict:
+        st = self._request("POST", "/api/admin/settings", {"readerCacheDays": int(days)})
+        return {k: st.get(k) for k in ("readerCacheDays", "readerCacheChoices", "readerCache")}
+
+    def clear_reader_cache(self) -> dict:
+        return self._request("POST", "/api/admin/reader/clear", {})
 
     def pair(self, code: str) -> dict:
         resp = self._request("POST", "/api/pair", {"code": code, "label": "Steam Deck"})

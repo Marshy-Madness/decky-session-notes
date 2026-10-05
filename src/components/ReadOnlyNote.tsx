@@ -8,6 +8,7 @@ import { AudioButton } from "./AudioButton";
 import { Transcripts } from "./Transcripts";
 import { MediaImage, MediaLoader } from "./MediaImage";
 import * as s from "./styles";
+import { LinkedText } from "./LinkedText";
 
 const ImageModal: FC<{ appId: string; file: string; loader?: MediaLoader; closeModal?: () => void }> = ({
   appId,
@@ -31,7 +32,9 @@ export const ReadOnlyNote: FC<{
   chips?: ReactNode;
   /** Spoiler label shown on the gate, e.g. "Beat the first boss". */
   spoilerLabel?: string;
-}> = ({ appId, note, loader, chips, spoilerLabel }) => {
+  /** Closes the window this is shown in (before a link opens in the browser). */
+  closeModal?: () => void;
+}> = ({ appId, note, loader, chips, spoilerLabel, closeModal }) => {
   const [revealed, setRevealed] = useState(!note.spoiler);
   const open = (file: string) => showModal(<ImageModal appId={appId} file={file} loader={loader} />);
   const parts = note.body.split(/(\[img:\d+\])/);
@@ -92,9 +95,12 @@ export const ReadOnlyNote: FC<{
                 );
               }
               return part.trim() ? (
-                <div key={i} style={{ whiteSpace: "pre-wrap", fontSize: "14px", lineHeight: 1.4 }}>
-                  {part.replace(/^\n+|\n+$/g, "")}
-                </div>
+                <LinkedText
+                  key={i}
+                  text={part.replace(/^\n+|\n+$/g, "")}
+                  beforeOpen={closeModal}
+                  style={{ whiteSpace: "pre-wrap", fontSize: "14px", lineHeight: 1.4 }}
+                />
               ) : (
                 <Fragment key={i} />
               );

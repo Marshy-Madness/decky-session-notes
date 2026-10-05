@@ -213,6 +213,38 @@ export interface Settings {
   voiceFallback?: VoiceFallback;
   /** Language code for speech to text ("" = detect). */
   speechLanguage?: string;
+  /** While notes or the browser are on screen, the trackpads work as on Steam's store pages: the left one
+   * scrolls, the right one is a mouse (click = left click). On unless turned off. */
+  trackpadMouse?: boolean;
+  /** How links in notes open: "reader" (default: just the article, no ads) or "full" (the whole site). */
+  browserMode?: BrowserMode;
+  /** Reader view text size in pixels; unset = 17. */
+  readerTextSize?: number;
+}
+
+export type BrowserMode = "reader" | "full";
+
+/** A web page boiled down to its article (py_modules/reader.py), made by the server or the Deck itself. */
+export interface ReaderPage {
+  url: string;
+  title: string;
+  site: string;
+  image: string | null;
+  excerpt: string;
+  /** Plain article markup; still filtered again before it's shown. */
+  html: string;
+  /** Characters of text in the article. */
+  length: number;
+  fetchedAt: number;
+  cached?: boolean;
+  source?: "server" | "device";
+}
+
+/** The server's reader cache settings (admins only). readerCacheDays 0 = never delete. */
+export interface ReaderCacheSettings {
+  readerCacheDays: number;
+  readerCacheChoices: number[];
+  readerCache: { pages: number; bytes: number };
 }
 
 export type OverlayPosition =

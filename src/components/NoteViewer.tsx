@@ -11,6 +11,7 @@ import { AudioButton } from "./AudioButton";
 import { Transcripts } from "./Transcripts";
 import * as s from "./styles";
 import { openOverlayModal } from "./OverlayModal";
+import { LinkedText } from "./LinkedText";
 
 const ImageModal: FC<{ appId: string; file: string; closeModal?: () => void }> = ({ appId, file, closeModal }) => (
   <ModalRoot onCancel={closeModal} bAllowFullSize>
@@ -124,9 +125,12 @@ export const NoteViewer: FC<{
             );
           }
           return part.trim() ? (
-            <div key={i} style={{ whiteSpace: "pre-wrap", fontSize: "14px", lineHeight: 1.4 }}>
-              {part.replace(/^\n+|\n+$/g, "")}
-            </div>
+            <LinkedText
+              key={i}
+              text={part.replace(/^\n+|\n+$/g, "")}
+              from={{ appId, noteId: note.id, noteTitle: note.title }}
+              style={{ whiteSpace: "pre-wrap", fontSize: "14px", lineHeight: 1.4 }}
+            />
           ) : (
             <Fragment key={i} />
           );
