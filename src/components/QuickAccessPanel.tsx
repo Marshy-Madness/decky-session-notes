@@ -1,5 +1,5 @@
 import { FC, useEffect, useState } from "react";
-import { DialogButton, Focusable } from "@decky/ui";
+import { DialogButton, Focusable, Navigation } from "@decky/ui";
 import { FaCog, FaExpand, FaGamepad, FaStore, FaThList } from "react-icons/fa";
 import { openNotesPage } from "../opening";
 import { useRunningGame } from "../hooks/useAppLifetime";
@@ -46,6 +46,22 @@ const TabButton: FC<{ active: boolean; onClick: () => void; children: React.Reac
   </DialogButton>
 );
 
+const NEW_REPO = "https://github.com/Marshy-Madness/desk-of-madness";
+
+// Session Notes was renamed; this is the last release under the old name.
+const ReplacedBanner: FC = () => (
+  <div style={{ background: "#3d2a5c", borderRadius: "6px", padding: "10px 12px", marginBottom: "12px", fontSize: "13px" }}>
+    <div style={{ fontWeight: "bold", marginBottom: "4px" }}>Replaced by Desk of Madness</div>
+    <div style={{ opacity: 0.9, marginBottom: "8px" }}>
+      Session Notes is now Desk of Madness. Install it from the Madness Decky Store; it brings your notes and settings
+      across on first start. Then uninstall Session Notes.
+    </div>
+    <DialogButton style={{ margin: 0, height: "36px", minHeight: "36px" }} onClick={() => Navigation.NavigateToExternalWeb(NEW_REPO)}>
+      Open Desk of Madness on GitHub
+    </DialogButton>
+  </div>
+);
+
 // Fits Steam's normal Quick Access width; for more room, use the full-screen page.
 export const QuickAccessPanel: FC = () => {
   return (
@@ -74,6 +90,7 @@ export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false 
 
   return (
     <>
+      <ReplacedBanner />
       <Focusable
         flow-children="row"
         style={{ display: "flex", flexWrap: "nowrap", alignItems: "stretch", gap: "6px", marginBottom: "14px", width: "100%" }}
