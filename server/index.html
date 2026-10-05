@@ -80,6 +80,33 @@
   dialog .actions { position: sticky; bottom: -20px; z-index: 1; background: var(--panel); border-top: 1px solid var(--line); margin: 18px -20px -20px; padding: 12px 20px; }
   .counter-add summary { cursor: pointer; font-size: 13px; opacity: .8; padding: 8px 0 2px; }
   .dlghead { display: flex; align-items: center; gap: 10px; } .dlghead .person { flex: 1; }
+  /* ---- admin ---- */
+  dialog.wide { width: min(1100px, 96vw); height: min(820px, 92vh); display: none; flex-direction: column; }
+  dialog.wide[open] { display: flex; }
+  .admin { display: grid; grid-template-columns: 210px 1fr; gap: 18px; flex: 1; min-height: 0; margin-top: 12px; }
+  .aside { overflow-y: auto; border-right: 1px solid var(--line); padding-right: 10px; }
+  .aside .agroup { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; opacity: .55; margin: 14px 8px 4px; }
+  .aside .agroup:first-child { margin-top: 0; }
+  .aside button { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: none; border: 0; padding: 8px 10px; }
+  .aside button:hover { background: #262b35; } .aside button.active { background: #1e3a55; color: #fff; }
+  .aside .badge { margin-left: auto; }
+  .apage { overflow-y: auto; padding-right: 6px; } .apage h3 { margin-top: 0; } .apage h4 { margin: 18px 0 6px; font-size: 14px; opacity: .85; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+  .stat { background: #171a20; border-radius: 8px; padding: 10px 12px; } .stat b { display: block; font-size: 22px; } .stat span { font-size: 12px; opacity: .65; }
+  .stat.warn b { color: #f5a524; } .warnbox { background: #3a2c12; } .warnbox a { color: #f5c46b; }
+  .logrow { display: grid; grid-template-columns: 170px 1fr; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .ucard { background: #171a20; border-radius: 8px; margin-bottom: 8px; }
+  .ucard summary { display: flex; gap: 10px; align-items: center; padding: 10px 12px; cursor: pointer; list-style: none; }
+  .ucard summary::-webkit-details-marker { display: none; }
+  .ucard summary img, .ucard summary .ph { width: 36px; height: 36px; border-radius: 4px; background: #2c323d; flex: none; }
+  .ucard summary .who { flex: 1; min-width: 0; } .ucard[open] summary { border-bottom: 1px solid var(--line); }
+  .uactions { padding: 4px 12px 10px; } .uactions .toolbar { margin: 8px 0; } .uactions .toolbar > .meta:first-child { width: 70px; }
+  label.inline, label.radio { display: flex; gap: 8px; align-items: center; opacity: 1; margin: 0; font-size: 14px; }
+  label.radio { align-items: flex-start; background: #171a20; border-radius: 8px; padding: 10px 12px; margin: 8px 0; cursor: pointer; }
+  label.radio input { margin-top: 3px; }
+  .kv { display: grid; grid-template-columns: 170px 1fr; gap: 6px 12px; font-size: 14px; } .kv span { opacity: .65; } .kv b { font-weight: 500; word-break: break-all; }
+  #announce { background: #1e3a55; padding: 10px 20px; display: flex; gap: 12px; align-items: center; }
+  #announce span { flex: 1; white-space: pre-wrap; }
   /* ---- phones ---- */
   @media (max-width: 760px) {
     .hide-sm { display: none; }
@@ -118,6 +145,13 @@
     .shot, .shot img { width: calc(50vw - 24px); } .shot img { height: calc((50vw - 24px) * 0.5625); }
     audio { max-width: 100%; }
     .saving { left: 12px; right: 12px; text-align: center; }
+    dialog.wide { width: 100vw; height: 100dvh; }
+    .admin { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; gap: 10px; }
+    .aside { display: flex; overflow-x: auto; border: 0; border-bottom: 1px solid var(--line); padding: 0 0 8px; gap: 4px; }
+    .aside .agroup { display: none; }
+    .aside button { width: auto; white-space: nowrap; flex: none; border-radius: 18px; background: #262b35; }
+    .logrow, .kv { grid-template-columns: minmax(0, 1fr); gap: 2px; } .kv b { margin-bottom: 8px; }
+    .uactions .toolbar > .meta:first-child { width: 100%; }
   }
 </style>
 </head>
@@ -145,14 +179,17 @@
     <a id="bookstoreLink" class="hidden" target="_blank" rel="noopener"><button>📚 Bookstore</button></a>
     <a id="getApp" class="hidden" href="/download/android"><button>📱 Android app</button></a>
     <button id="changeServer" class="hidden">Server</button>
+    <button id="adminBtn" class="hidden">🛡<span class="hide-sm"> Admin</span></button>
     <button id="account">Account</button>
   </header>
+  <div id="announce" class="hidden"><span>📣 <span id="announceText"></span></span><button id="announceClose" class="icon" aria-label="Hide">✕</button></div>
   <main><nav id="games"></nav><section id="content"><p class="meta">Pick a game.</p></section></main>
   <button class="fab" id="fabNote">＋ New note</button>
 </div>
 
 <dialog id="editor"></dialog>
 <dialog id="panel"></dialog>
+<dialog id="admin" class="wide"></dialog>
 <div id="saving" class="saving hidden">Saving…</div>
 
 <script>
@@ -173,13 +210,13 @@ async function api(path, opts = {}) {
 
 // ---------- login ----------
 function showLogin() { $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); $("#email").focus(); }
-let signingUp = false;
+let signingUp = false, signupMode = "approval";
 function setSignup(on) {
   signingUp = on;
   $("#signupName").classList.toggle("hidden", !on);
   $("#ownerHint").classList.toggle("hidden", on);
   $("#signupNote").classList.toggle("hidden", !on);
-  $("#signupNote").textContent = "The server owner approves new accounts before you can sign in.";
+  $("#signupNote").textContent = signupMode === "open" ? "" : "The server owner approves new accounts before you can sign in.";
   $("#loginBtn").textContent = on ? "Create account" : "Log in";
   $("#toggleSignup").textContent = on ? "Already have an account? Log in" : "New here? Create an account";
   $("#password").autocomplete = on ? "new-password" : "current-password";
@@ -221,13 +258,20 @@ const GUIDE_KINDS = ["guide", "walkthrough", "achievement"];
 const kindOf = (k) => KINDS.find((x) => x[0] === (k || "note")) || KINDS[0];
 
 function paintAccount() {
-  $("#account").innerHTML = `${me.avatar ? `<img src="${esc(me.avatar)}">` : "👤"}<span class="hide-sm">${esc(me.name)}</span>${pendingUsers ? `<span class="badge" title="People waiting for approval">${pendingUsers}</span>` : ""}`;
+  $("#account").innerHTML = `${me.avatar ? `<img src="${esc(me.avatar)}">` : "👤"}<span class="hide-sm">${esc(me.name)}</span>`;
+  $("#adminBtn").innerHTML = `🛡<span class="hide-sm"> Admin</span>${pendingUsers ? `<span class="badge" title="People waiting for approval">${pendingUsers}</span>` : ""}`;
 }
 
 async function start() {
   const info = await (await fetch("/api/me")).json();
+  $("#toggleSignup").classList.toggle("hidden", info.emailSignups === false);
+  signupMode = info.signups || "approval";
   if (!info.loggedIn) return showLogin();
   me = info.user;
+  me.admin = !!info.admin;
+  $("#adminBtn").classList.toggle("hidden", !me.admin);
+  $("#adminBtn").onclick = () => adminDialog();
+  paintAnnouncement(info.announcement);
   speechOn = !!info.speech;
   pendingUsers = info.pendingUsers || 0;
   paintAccount();
@@ -834,22 +878,11 @@ async function accountDialog() {
         ${me.hasPassword ? '<label>Current password</label><input id="aCurrent" type="password" autocomplete="current-password" style="width:100%">' : ""}
         <label>${me.hasPassword ? "New password (leave empty to keep it)" : "Password (8+ characters)"}</label><input id="aPass" type="password" autocomplete="new-password" style="width:100%">
         <div class="err" id="aLoginErr"></div><div class="toolbar"><button class="primary" id="aSaveLogin">Save</button></div>`;
-    } else if (tab === "users") {
-      const a = await api("/api/admin");
-      const waiting = a.users.filter((u) => u.status === "pending");
-      pendingUsers = waiting.length;
-      html = `${waiting.length ? `<h3 style="margin-top:0">Waiting for approval</h3>${waiting.map((u) => personRow({ ...u, steamId: u.email || u.steamId }, `<span class="meta">${day(u.createdAt)}</span><button class="primary" data-approve="${esc(u.id)}">Approve</button><button class="danger" data-reject="${esc(u.id)}">Reject</button>`)).join("")}` : ""}
-        <label style="margin:0"><input type="checkbox" id="aSignups" ${a.allowSignups ? "checked" : ""}> Let new people in without approval</label>
-        <p class="meta">When this is off, anyone can still ask for an account (with Steam or an email), and they show up above for you to approve.</p>
-        <h3>Invite</h3><div class="toolbar"><input id="aInvite" placeholder="Steam ID or steamcommunity.com/profiles/… link" style="flex:1"><button id="aInviteBtn" class="primary">Invite</button></div>
-        ${a.invites.map((i) => `<div class="person"><div class="who">${esc(i)} <span class="meta">invited, hasn't signed in yet</span></div><button data-uninvite="${esc(i)}">Cancel</button></div>`).join("")}
-        <h3>Users</h3>${a.speechAvailable ? '<p class="meta">🎤 Speech to text runs on this server\'s GPU. Tick who may use it.</p>' : '<p class="meta">🎤 Speech to text is off: set WHISPER_URL on the server to turn it on.</p>'}
-        ${a.users.filter((u) => u.status !== "pending").map((u) => personRow({ ...u, steamId: [u.email, u.steamId && "Steam " + u.steamId].filter(Boolean).join(" · ") }, u.role === "owner" ? '<span class="chip">owner</span>' : `<label style="margin:0;opacity:1"><input type="checkbox" data-speech="${esc(u.id)}" ${u.speech ? "checked" : ""}> 🎤 Speech</label>${u.email ? `<button data-setpass="${esc(u.id)}" title="Set a new password for them">Password</button>` : ""}<button class="danger" data-remove="${esc(u.id)}">Remove</button>`)).join("")}`;
     }
     const app = window.SessionNotesApp;
     dlg.innerHTML = `<div class="dlghead"><div class="person" style="border:0">${me.avatar ? `<img src="${esc(me.avatar)}">` : '<div class="ph"></div>'}<div class="who"><b>${esc(me.name)}</b><div class="meta">${[me.email, me.steamId ? "Steam " + me.steamId : "Not linked to Steam"].filter(Boolean).map(esc).join(" · ")}</div></div></div>
         <button id="pClose" class="icon" aria-label="Close">✕</button></div>
-      <div class="toolbar"><button data-tab="devices">📱 Devices</button><button data-tab="login">🔑 Sign-in</button><button data-tab="notify">🔔 Notifications</button>${speechOn ? '<button data-tab="speech">🎤 Speech</button>' : ""}${me.role === "owner" ? `<button data-tab="users">👥 Users${pendingUsers ? `<span class="badge">${pendingUsers}</span>` : ""}</button>` : ""}
+      <div class="toolbar"><button data-tab="devices">📱 Devices</button><button data-tab="login">🔑 Sign-in</button><button data-tab="notify">🔔 Notifications</button>${speechOn ? '<button data-tab="speech">🎤 Speech</button>' : ""}${me.admin ? '<button id="aAdmin">🛡 Admin</button>' : ""}
         ${!me.steamId ? '<a href="/auth/steam?link=1"><button>Link Steam account</button></a>' : ""}</div>${html}
       <div class="toolbar" style="margin-top:24px;border-top:1px solid var(--line);padding-top:14px">${app ? '<button id="aServer">🌐 Change server</button>' : ""}<button id="aLogout" class="danger">Log out</button>
         ${app?.version ? `<span class="meta" style="margin-left:auto">App ${esc(app.version())}</span>` : ""}</div>`;
@@ -863,14 +896,7 @@ async function accountDialog() {
     };
     dlg.querySelectorAll("[data-revoke]").forEach((b) => (b.onclick = async () => { if (confirm("Unlink this device?")) { await api(`/api/devices/${b.dataset.revoke}`, { method: "DELETE" }); draw("devices"); } }));
     if ($("#aSaveHooks", dlg)) $("#aSaveHooks", dlg).onclick = async () => { await api("/api/settings", { method: "POST", json: { webhooks: $("#aHooks", dlg).value.split("\n") } }); draw("notify"); };
-    if ($("#aSignups", dlg)) $("#aSignups", dlg).onchange = async (e) => { await api("/api/admin/settings", { method: "POST", json: { allowSignups: e.target.checked } }); };
-    if ($("#aInviteBtn", dlg)) $("#aInviteBtn", dlg).onclick = async () => {
-      try { await api("/api/admin/invites", { method: "POST", json: { steamId: $("#aInvite", dlg).value } }); draw("users"); } catch (err) { alert(err.message); }
-    };
-    dlg.querySelectorAll("[data-speech]").forEach((b) => (b.onchange = async () => {
-      try { await api(`/api/admin/users/${encodeURIComponent(b.dataset.speech)}/speech`, { method: "POST", json: { allowed: b.checked } }); }
-      catch (err) { alert(err.message); b.checked = !b.checked; }
-    }));
+    if ($("#aAdmin", dlg)) $("#aAdmin", dlg).onclick = () => { dlg.close(); adminDialog(); };
     if ($("#aSaveLogin", dlg)) $("#aSaveLogin", dlg).onclick = async () => {
       try {
         const r = await api("/api/account/login", { method: "POST", json: { email: $("#aEmail", dlg).value, password: $("#aPass", dlg).value, current: $("#aCurrent", dlg)?.value || "" } });
@@ -879,22 +905,193 @@ async function accountDialog() {
         alert("Saved.");
       } catch (err) { $("#aLoginErr", dlg).textContent = err.message; }
     };
-    const after = async () => { await draw("users"); paintAccount(); };
-    dlg.querySelectorAll("[data-approve]").forEach((b) => (b.onclick = async () => { await api(`/api/admin/users/${encodeURIComponent(b.dataset.approve)}/approve`, { method: "POST", json: {} }); after(); }));
-    dlg.querySelectorAll("[data-reject]").forEach((b) => (b.onclick = async () => { if (confirm("Reject this request? They can ask again later.")) { await api(`/api/admin/users/${encodeURIComponent(b.dataset.reject)}`, { method: "DELETE" }); after(); } }));
-    dlg.querySelectorAll("[data-setpass]").forEach((b) => (b.onclick = async () => {
-      const pw = prompt("New password for this user (8+ characters). Tell them yourself; they can change it under Account → Sign-in.");
-      if (!pw) return;
-      try { await api(`/api/admin/users/${encodeURIComponent(b.dataset.setpass)}/password`, { method: "POST", json: { password: pw } }); alert("Password changed."); }
-      catch (err) { alert(err.message); }
-    }));
-    dlg.querySelectorAll("[data-uninvite]").forEach((b) => (b.onclick = async () => { await api(`/api/admin/invites/${b.dataset.uninvite}`, { method: "DELETE" }); draw("users"); }));
-    dlg.querySelectorAll("[data-remove]").forEach((b) => (b.onclick = async () => {
-      if (confirm("Remove this user? Their notes are moved to a removed-users folder on the server.")) { await api(`/api/admin/users/${b.dataset.remove}`, { method: "DELETE" }); draw("users"); }
-    }));
   };
   await draw();
   dlg.showModal();
+}
+
+// ---------- admin (owner and admins) ----------
+const ADMIN_PAGES = [
+  ["Dashboard", [["overview", "📊", "Overview"], ["activity", "🕘", "Activity log"]]],
+  ["People", [["requests", "⏳", "Requests"], ["users", "👥", "Users"], ["invites", "✉️", "Invites"]]],
+  ["Settings", [["signups", "🚪", "Sign-ups"], ["limits", "🧩", "Features & limits"], ["announce", "📣", "Announcement"]]],
+  ["Content", [["shares", "🔗", "Shared notes"]]],
+  ["Server", [["server", "🖥️", "Server & backup"]]],
+];
+const bytes = (n) => { if (!n) return "0 B"; const u = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(4, Math.floor(Math.log(n) / Math.log(1024))); return `${(n / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`; };
+const ago = (ms) => { if (!ms) return "never"; const s = (Date.now() - ms) / 1000; if (s < 90) return "just now"; if (s < 5400) return `${Math.round(s / 60)} min ago`; if (s < 129600) return `${Math.round(s / 3600)} h ago`; return `${Math.round(s / 86400)} days ago`; };
+const stat = (n, label, warn) => `<div class="stat${warn ? " warn" : ""}"><b>${n}</b><span>${label}</span></div>`;
+let adminState = { page: null, q: "", filter: "all", open: null };
+
+async function adminDialog(page) {
+  const dlg = $("#admin");
+  adminState.page = page || adminState.page || (pendingUsers ? "requests" : "overview");
+  const go = async (to) => { adminState.page = to; await draw(); $(".apage", dlg)?.scrollTo(0, 0); };
+  const act = async (fn, okMsg) => { try { await fn(); if (okMsg) toast(okMsg); await draw(); } catch (err) { alert(err.message); } };
+  const post = (path, json = {}) => api(`/api/admin/${path}`, { method: "POST", json });
+  const del = (path) => api(`/api/admin/${path}`, { method: "DELETE" });
+
+  async function draw() {
+    const page = adminState.page;
+    const a = ["requests", "users", "invites", "signups", "limits", "announce"].includes(page) ? await api("/api/admin") : null;
+    if (a) { pendingUsers = a.users.filter((u) => u.status === "pending").length; paintAccount(); }
+    let html = "";
+    if (page === "overview") {
+      const o = await api("/api/admin/overview");
+      html = `<h3>Overview</h3>
+        ${o.defaultPassword ? '<div class="box warnbox">⚠️ The owner password is still the default (AdminPassword). Set your own under Account → Sign-in.</div>' : ""}
+        ${o.pending ? `<div class="box warnbox">⏳ ${o.pending} ${o.pending === 1 ? "person is" : "people are"} waiting for approval. <a href="#" data-go="requests">Review</a></div>` : ""}
+        <h4>People</h4><div class="stats">${stat(o.active, "active users")}${stat(o.pending, "waiting", o.pending)}${stat(o.suspended, "suspended")}${stat(o.admins, "admins")}${stat(o.invites, "open invites")}</div>
+        <h4>Notes</h4><div class="stats">${stat(o.games, "games")}${stat(o.notes, "notes")}${stat(o.shares, "shared notes")}${stat(o.devices, "linked devices")}${stat(o.sessions, "website sessions")}</div>
+        <h4>Storage</h4><div class="stats">${stat(bytes(o.dataBytes), "used by notes")}${stat(bytes(o.diskFree), "free on disk", o.diskFree < 2 * 1024 ** 3)}</div>
+        <h4>Services</h4><div class="stats">${stat(o.speech ? "On" : "Off", "speech to text")}${stat(o.androidApp ? "Ready" : "Missing", "Android app download", !o.androidApp)}${stat(Math.floor(o.uptime / 3600) + " h", "server uptime")}</div>`;
+    } else if (page === "activity") {
+      const log = await api("/api/admin/activity");
+      html = `<h3>Activity log</h3><p class="meta">Sign-ups, approvals and every change made here, newest first (the last 500).</p>
+        <input id="logQ" placeholder="Filter…" style="width:100%" value="${esc(adminState.logQ || "")}">
+        <div id="logRows">${log.map((e) => `<div class="logrow" data-text="${esc(((e.actorName || "") + " " + e.text).toLowerCase())}"><span class="meta">${date(e.at)}</span><span>${e.actorName ? `<b>${esc(e.actorName)}</b> ` : ""}${esc(e.text)}</span></div>`).join("") || '<p class="meta">Nothing yet.</p>'}</div>`;
+    } else if (page === "requests") {
+      const waiting = a.users.filter((u) => u.status === "pending");
+      html = `<h3>Requests</h3><p class="meta">People who asked for an account. Approving lets them sign in and sync straight away.</p>
+        ${waiting.length > 1 ? '<div class="toolbar"><button class="primary" id="aApproveAll">Approve all</button></div>' : ""}
+        ${waiting.map((u) => personRow({ ...u, steamId: [u.email, u.steamId && "Steam " + u.steamId, "asked " + ago(u.createdAt)].filter(Boolean).join(" · ") },
+          `<button class="primary" data-approve="${esc(u.id)}">Approve</button><button class="danger" data-reject="${esc(u.id)}">Reject</button>`)).join("") || '<p class="meta">No one is waiting. 🎉</p>'}`;
+    } else if (page === "users") {
+      const q = adminState.q.toLowerCase(), f = adminState.filter;
+      const list = a.users.filter((u) => u.status !== "pending")
+        .filter((u) => f === "all" || (f === "admins" ? ["owner", "admin"].includes(u.role) : f === "speech" ? u.speech : u.status === f))
+        .filter((u) => !q || [u.name, u.email, u.steamId, u.id].some((x) => (x || "").toLowerCase().includes(q)))
+        .sort((x, y) => (y.lastLogin || 0) - (x.lastLogin || 0));
+      html = `<h3>Users</h3>
+        <div class="toolbar"><input id="uQ" placeholder="Search name, email or Steam ID…" style="flex:1" value="${esc(adminState.q)}">
+          <select id="uF">${[["all", "Everyone"], ["active", "Active"], ["suspended", "Suspended"], ["admins", "Admins"], ["speech", "Speech on"]].map(([v, l]) => `<option value="${v}">${l}</option>`).join("")}</select></div>
+        ${a.speechAvailable ? "" : '<p class="meta">🎤 Speech to text is off on this server (set WHISPER_URL to turn it on).</p>'}
+        ${list.map((u) => userCard(u, a)).join("") || '<p class="meta">No one matches.</p>'}`;
+    } else if (page === "invites") {
+      html = `<h3>Invites</h3><p class="meta">Invited Steam accounts get straight in the first time they sign in with Steam, even when sign-ups need approval or are invite-only.</p>
+        <div class="toolbar"><input id="aInvite" placeholder="Steam ID or steamcommunity.com/profiles/… link" style="flex:1"><button id="aInviteBtn" class="primary">Invite</button></div>
+        ${a.invites.map((i) => `<div class="person"><div class="who"><b>Steam ${esc(i)}</b><div class="meta">hasn't signed in yet · <a href="https://steamcommunity.com/profiles/${esc(i)}" target="_blank" rel="noopener">profile</a></div></div><button data-uninvite="${esc(i)}">Cancel</button></div>`).join("") || '<p class="meta">No open invites.</p>'}`;
+    } else if (page === "signups") {
+      const st = a.settings;
+      html = `<h3>Sign-ups</h3><p class="meta">Who can get an account on this server.</p>
+        ${[["open", "Open", "Anyone who signs up gets in straight away."], ["approval", "Approval", "Anyone can ask; they wait under Requests until an admin approves them."], ["invite", "Invite only", "Only Steam accounts on the Invites page can join. Nobody else can ask."]]
+          .map(([v, l, d]) => `<label class="radio"><input type="radio" name="mode" value="${v}" ${st.signupMode === v ? "checked" : ""}><span><b>${l}</b><br><span class="meta">${d}</span></span></label>`).join("")}
+        <h4>Ways to sign up</h4>
+        <label class="radio"><input type="checkbox" id="sEmail" ${st.emailSignups ? "checked" : ""}><span><b>Email and password</b><br><span class="meta">Turn off to only allow Steam sign-ins for new accounts. Existing email accounts keep working.</span></span></label>`;
+    } else if (page === "limits") {
+      const st = a.settings;
+      html = `<h3>Features & limits</h3><p class="meta">Admins aren't limited.</p>
+        <label class="radio"><input type="checkbox" id="sSpeechDef" ${st.speechDefault ? "checked" : ""} ${a.speechAvailable ? "" : "disabled"}><span><b>🎤 Give new accounts speech to text</b><br><span class="meta">It uses this server's GPU. You can still turn it off per person under Users.</span></span></label>
+        <label>Space per user (MB, 0 = no limit)</label><input id="sQuota" type="number" min="0" value="${st.quotaMb || 0}" style="width:160px">
+        <p class="meta">Counts screenshots, voice notes and history. New uploads are refused once someone is over it.</p>
+        <label>Linked devices per user (0 = no limit)</label><input id="sDevices" type="number" min="0" value="${st.maxDevices || 0}" style="width:160px">
+        <div class="toolbar"><button class="primary" id="sSaveLimits">Save</button></div>`;
+    } else if (page === "announce") {
+      html = `<h3>Announcement</h3><p class="meta">A message at the top of the website for everyone who's signed in, e.g. planned downtime. Leave it empty to hide it.</p>
+        <textarea id="sAnnounce" rows="4" maxlength="500">${esc(a.settings.announcement || "")}</textarea>
+        <div class="toolbar"><button class="primary" id="sSaveAnnounce">Save</button><button id="sClearAnnounce">Clear</button></div>`;
+    } else if (page === "shares") {
+      const shares = await api("/api/admin/shares");
+      html = `<h3>Shared notes</h3><p class="meta">Every note people have shared with each other. Removing a share only stops sharing; the note stays with its owner.</p>
+        ${shares.map((s) => `<div class="person"><div class="who"><b>${esc(s.noteTitle || "(deleted note)")}</b><div class="meta">${esc(s.gameName || s.appId)} · ${esc(s.fromName)} → ${esc(s.toName)} · ${day(s.createdAt)}${s.missing ? " · ⚠️ note no longer exists" : ""}</div></div><button class="danger" data-unshare="${esc(s.id)}">Remove</button></div>`).join("") || '<p class="meta">Nothing is shared.</p>'}`;
+    } else if (page === "server") {
+      const o = await api("/api/admin/overview");
+      html = `<h3>Server & backup</h3>
+        <div class="kv"><span>Website address</span><b>${esc(o.publicUrl || location.origin)}</b><span>Bookstore</span><b>${esc(o.bookstoreUrl || "—")}</b>
+          <span>Page version</span><b>${esc(o.page)}</b><span>Up for</span><b>${Math.floor(o.uptime / 86400)} d ${Math.floor((o.uptime % 86400) / 3600)} h</b>
+          <span>Android app</span><b>${o.androidApp ? "uploaded " + day(o.androidAppAt) : "not uploaded (put it in data/app/SessionNotes.apk)"}</b>
+          <span>Speech to text</span><b>${o.speech ? "on" : "off"}</b><span>Legacy API_TOKEN</span><b>${o.legacyToken ? "set (works as the owner)" : "not set"}</b>
+          <span>Disk</span><b>${bytes(o.dataBytes)} used by notes · ${bytes(o.diskFree)} free of ${bytes(o.diskTotal)}</b></div>
+        <h4>Backup</h4><p class="meta">Download everything as a zip: accounts, notes, history and settings.</p>
+        <div class="toolbar"><a href="/api/admin/backup"><button class="primary">⬇ Notes only</button></a><a href="/api/admin/backup?media=1"><button>⬇ With screenshots and voice notes</button></a></div>
+        <h4>Sessions</h4><p class="meta">${o.sessions} website sessions are open. Signing everyone out doesn't unlink their devices.</p>
+        <div class="toolbar"><button class="danger" id="sSignoutAll">Sign everyone else out</button></div>`;
+    }
+    const nav = ADMIN_PAGES.map(([group, pages]) => `<div class="agroup">${group}</div>` + pages.map(([id, icon, label]) =>
+      `<button data-go="${id}" class="${id === page ? "active" : ""}">${icon} ${label}${id === "requests" && pendingUsers ? `<span class="badge">${pendingUsers}</span>` : ""}</button>`).join("")).join("");
+    dlg.innerHTML = `<div class="dlghead"><h2 style="margin:0;flex:1">🛡 Admin</h2><button id="adClose" class="icon" aria-label="Close">✕</button></div>
+      <div class="admin"><div class="aside">${nav}</div><div class="apage">${html}</div></div>`;
+    $("#adClose", dlg).onclick = () => dlg.close();
+    dlg.querySelectorAll("[data-go]").forEach((b) => (b.onclick = (e) => { e.preventDefault(); go(b.dataset.go); }));
+    wireAdmin(dlg, a, { act, post, del, draw });
+  }
+  await draw();
+  if (!dlg.open) dlg.showModal();
+}
+
+function userCard(u, a) {
+  const tags = [u.role === "owner" ? "👑 owner" : u.role === "admin" ? "🛡 admin" : "", u.status === "suspended" ? "⛔ suspended" : "", u.speech ? "🎤 speech" : ""].filter(Boolean);
+  const facts = [u.email, u.steamId && "Steam " + u.steamId].filter(Boolean).join(" · ");
+  const open = adminState.open === u.id;
+  return `<details class="ucard" data-user="${esc(u.id)}" ${open ? "open" : ""}><summary>
+      ${u.avatar ? `<img src="${esc(u.avatar)}">` : '<div class="ph"></div>'}
+      <div class="who"><b>${esc(u.name)}</b> ${tags.map((t) => `<span class="chip">${t}</span>`).join("")}<div class="meta">${esc(facts)}</div>
+        <div class="meta">${u.games} games · ${u.notes} notes · ${bytes(u.bytes)} · ${u.devices} devices · last sign-in ${ago(u.lastLogin)}</div></div></summary>
+    <div class="uactions">${!u.canManage ? `<p class="meta">${u.id === a.you ? "This is you. Change your own details under Account." : u.role === "owner" ? "The owner's account can't be changed here." : "Only the owner can change another admin."}</p>` : `
+      <div class="toolbar"><span class="meta">Profile</span><button data-uname="${esc(u.id)}">✏️ Rename</button><button data-uemail="${esc(u.id)}">✉️ Email</button><button data-upass="${esc(u.id)}">🔑 Set password</button></div>
+      <div class="toolbar"><span class="meta">Access</span>
+        <label class="inline"><input type="checkbox" data-uspeech="${esc(u.id)}" ${u.speech ? "checked" : ""} ${a.speechAvailable ? "" : "disabled"}> 🎤 Speech to text</label>
+        ${a.youAreOwner ? `<label class="inline"><input type="checkbox" data-uadmin="${esc(u.id)}" ${u.role === "admin" ? "checked" : ""}> 🛡 Admin</label>` : ""}</div>
+      <div class="toolbar"><span class="meta">Devices</span><button data-udevices="${esc(u.id)}">📱 Show linked devices (${u.devices})</button><button data-usignout="${esc(u.id)}">🚪 Sign out everywhere</button></div>
+      <div class="udevices" id="dev-${esc(u.id)}"></div>
+      <div class="toolbar"><span class="meta">Account</span>${u.status === "suspended" ? `<button class="primary" data-ususpend="${esc(u.id)}" data-on="0">Restore</button>` : `<button class="danger" data-ususpend="${esc(u.id)}" data-on="1">⛔ Suspend</button>`}
+        <button class="danger" data-uremove="${esc(u.id)}">🗑 Remove</button></div>`}</div></details>`;
+}
+
+function wireAdmin(dlg, a, { act, post, del, draw }) {
+  const on = (sel, fn) => dlg.querySelectorAll(sel).forEach((el) => fn(el));
+  const enc = encodeURIComponent;
+  const nameOf = (id) => a?.users.find((u) => u.id === id)?.name || "this user";
+  if ($("#logQ", dlg)) $("#logQ", dlg).oninput = (e) => { adminState.logQ = e.target.value; const q = e.target.value.toLowerCase(); on(".logrow", (r) => r.classList.toggle("hidden", !!q && !r.dataset.text.includes(q))); };
+  if (adminState.logQ && $("#logQ", dlg)) $("#logQ", dlg).oninput({ target: $("#logQ", dlg) });
+  if ($("#uQ", dlg)) {
+    $("#uF", dlg).value = adminState.filter;
+    $("#uF", dlg).onchange = (e) => { adminState.filter = e.target.value; draw(); };
+    let t; $("#uQ", dlg).oninput = (e) => { clearTimeout(t); t = setTimeout(async () => { adminState.q = e.target.value; await draw(); const i = $("#uQ", dlg); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }, 250); };
+  }
+  on("details.ucard", (d) => (d.ontoggle = () => { if (d.open) adminState.open = d.dataset.user; else if (adminState.open === d.dataset.user) adminState.open = null; }));
+  if ($("#aApproveAll", dlg)) $("#aApproveAll", dlg).onclick = () => act(() => post("approve-all"));
+  on("[data-approve]", (b) => (b.onclick = () => act(() => post(`users/${enc(b.dataset.approve)}/approve`))));
+  on("[data-reject]", (b) => (b.onclick = () => confirm("Reject this request? They can ask again later.") && act(() => del(`users/${enc(b.dataset.reject)}`))));
+  if ($("#aInviteBtn", dlg)) $("#aInviteBtn", dlg).onclick = () => act(() => post("invites", { steamId: $("#aInvite", dlg).value }));
+  on("[data-uninvite]", (b) => (b.onclick = () => act(() => del(`invites/${enc(b.dataset.uninvite)}`))));
+  on("input[name=mode]", (r) => (r.onchange = () => act(() => post("settings", { signupMode: r.value }), "Saved")));
+  if ($("#sEmail", dlg)) $("#sEmail", dlg).onchange = (e) => act(() => post("settings", { emailSignups: e.target.checked }), "Saved");
+  if ($("#sSpeechDef", dlg)) $("#sSpeechDef", dlg).onchange = (e) => act(() => post("settings", { speechDefault: e.target.checked }), "Saved");
+  if ($("#sSaveLimits", dlg)) $("#sSaveLimits", dlg).onclick = () => act(() => post("settings", { quotaMb: +$("#sQuota", dlg).value || 0, maxDevices: +$("#sDevices", dlg).value || 0 }), "Saved");
+  if ($("#sSaveAnnounce", dlg)) $("#sSaveAnnounce", dlg).onclick = () => act(async () => { await post("settings", { announcement: $("#sAnnounce", dlg).value }); paintAnnouncement($("#sAnnounce", dlg).value); }, "Saved");
+  if ($("#sClearAnnounce", dlg)) $("#sClearAnnounce", dlg).onclick = () => act(async () => { await post("settings", { announcement: "" }); paintAnnouncement(""); }, "Cleared");
+  if ($("#sSignoutAll", dlg)) $("#sSignoutAll", dlg).onclick = () => confirm("Sign everyone except you out of the website?") && act(async () => { const r = await post("signout-all"); toast(`Ended ${r.ended} sessions`); });
+  on("[data-unshare]", (b) => (b.onclick = () => confirm("Stop sharing this note?") && act(() => del(`shares/${enc(b.dataset.unshare)}`))));
+  // per-user actions
+  on("[data-uname]", (b) => (b.onclick = () => { const n = prompt("New name:", nameOf(b.dataset.uname)); if (n) act(() => post(`users/${enc(b.dataset.uname)}/name`, { name: n }), "Renamed"); }));
+  on("[data-uemail]", (b) => (b.onclick = () => { const u = a.users.find((x) => x.id === b.dataset.uemail); const v = prompt("Email they sign in with (empty to remove it):", u?.email || ""); if (v !== null) act(() => post(`users/${enc(u.id)}/email`, { email: v }), "Email saved"); }));
+  on("[data-upass]", (b) => (b.onclick = () => { const pw = prompt(`New password for ${nameOf(b.dataset.upass)} (8+ characters). Tell them yourself; they can change it under Account → Sign-in.`); if (pw) act(() => post(`users/${enc(b.dataset.upass)}/password`, { password: pw }), "Password changed"); }));
+  on("[data-uspeech]", (c) => (c.onchange = () => act(() => post(`users/${enc(c.dataset.uspeech)}/speech`, { allowed: c.checked }))));
+  on("[data-uadmin]", (c) => (c.onchange = () => { if (!confirm(c.checked ? `Make ${nameOf(c.dataset.uadmin)} an admin? They can approve, suspend and remove ordinary users and change server settings.` : `Remove admin from ${nameOf(c.dataset.uadmin)}?`)) { c.checked = !c.checked; return; } act(() => post(`users/${enc(c.dataset.uadmin)}/role`, { admin: c.checked })); }));
+  on("[data-usignout]", (b) => (b.onclick = () => confirm(`Sign ${nameOf(b.dataset.usignout)} out everywhere? Their Deck and phone have to be linked again.`) && act(() => post(`users/${enc(b.dataset.usignout)}/signout`), "Signed out")));
+  on("[data-ususpend]", (b) => (b.onclick = () => { const s = b.dataset.on === "1"; if (s && !confirm(`Suspend ${nameOf(b.dataset.ususpend)}? They're signed out, their devices are unlinked, and they can't sign in until you restore them. Their notes are kept.`)) return; act(() => post(`users/${enc(b.dataset.ususpend)}/status`, { suspended: s })); }));
+  on("[data-uremove]", (b) => (b.onclick = () => confirm(`Remove ${nameOf(b.dataset.uremove)}? Their notes are moved to a removed-users folder on the server.`) && act(() => del(`users/${enc(b.dataset.uremove)}`))));
+  on("[data-udevices]", (b) => (b.onclick = async () => {
+    const id = b.dataset.udevices, box = $(`#dev-${CSS.escape(id)}`, dlg);
+    const list = await api(`/api/admin/users/${enc(id)}/devices`);
+    box.innerHTML = list.map((d) => `<div class="person"><div class="who"><b>${esc(d.label)}</b><div class="meta">added ${day(d.createdAt)} · last used ${ago(d.lastUsed)}</div></div><button class="danger" data-udevdel="${esc(d.id)}">Unlink</button></div>`).join("") || '<p class="meta">No linked devices.</p>';
+    box.querySelectorAll("[data-udevdel]").forEach((x) => (x.onclick = () => act(() => del(`users/${enc(id)}/devices/${enc(x.dataset.udevdel)}`))));
+  }));
+}
+
+function toast(text) {
+  const t = $("#saving");
+  t.textContent = text; t.classList.remove("hidden");
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => { t.classList.add("hidden"); t.textContent = "Saving…"; }, 1800);
+}
+
+function paintAnnouncement(text) {
+  const el = $("#announce");
+  const dismissed = localStorage.getItem("sn-announce-hidden");
+  el.classList.toggle("hidden", !text || dismissed === text);
+  $("#announceText").textContent = text || "";
+  $("#announceClose").onclick = () => { localStorage.setItem("sn-announce-hidden", text); el.classList.add("hidden"); };
 }
 
 // ---------- speech to text ----------
@@ -1099,7 +1296,7 @@ window.snReceiveShareNative = (payload) => {
 /** Android back button (native app): close the top dialog if one is open. */
 window.snBack = () => {
   if (dictation) { cancelDictation(); return true; }
-  for (const d of [$("#panel"), $("#editor")]) if (d.open) { d.close(); return true; }
+  for (const d of [$("#panel"), $("#admin"), $("#editor")]) if (d.open) { d.close(); return true; }
   if (document.body.classList.contains("ingame") && matchMedia("(max-width: 760px)").matches) { closeGame(); return true; }
   return false;
 };
@@ -1109,12 +1306,13 @@ const PAGE_VERSION = "__PAGE_VERSION__";
 let lastRefresh = Date.now();
 window.snResume = async () => {
   if (Date.now() - lastRefresh < 15000 || $("#app").classList.contains("hidden")) return;
-  if (dictation || $("#panel").open || $("#editor").open) return; // don't throw away something half-written
+  if (dictation || $("#panel").open || $("#admin").open || $("#editor").open) return; // don't throw away something half-written
   lastRefresh = Date.now();
   try {
     const info = await (await fetch("/api/me")).json();
     if (info.page && info.page !== PAGE_VERSION) return location.reload();
     if (!info.loggedIn) return showLogin();
+    paintAnnouncement(info.announcement);
     await loadGames();
     if (game && !$("#panel").open && !$("#editor").open) {
       game = (await api(`/api/games/${encodeURIComponent(game.appId)}`)).game;

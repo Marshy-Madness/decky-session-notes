@@ -12,6 +12,9 @@ import time
 DATA = os.environ.get("DATA_DIR", "/data")
 ACCOUNTS_PATH = os.path.join(DATA, "accounts.json")
 SESSIONS_PATH = os.path.join(DATA, "sessions.json")
+LOG_PATH = os.path.join(DATA, "admin_log.json")
+LOG_KEEP = 500
+SIGNUP_MODES = ("open", "approval", "invite")
 SESSION_DAYS = int(os.environ.get("SESSION_DAYS", "30"))
 OWNER_ID = "owner"
 lock = threading.RLock()
@@ -65,6 +68,7 @@ class Accounts:
         # Older builds stored {hash: expiry}; those sessions belonged to the owner.
         self.sessions = {k: (v if isinstance(v, dict) else {"uid": OWNER_ID, "exp": v}) for k, v in sessions.items()}
         self.pairing = {}  # code -> {uid, exp}
+        self.activity = _load(LOG_PATH, [])
         self._migrate_single_user()
 
     # ---- storage ----
@@ -74,6 +78,22 @@ class Accounts:
 
     def _save_sessions(self):
         _save(SESSIONS_PATH, self.sessions)
+
+    # ---- activity log (shown to admins) ----
+    def log(self, event: str, text: str, actor: str = None, target: str = None):
+        with lock:
+            self.activity.append({"at": int(_now() * 1000), "event": event, "text": text, "actor": actor, "target": target})
+            del self.activity[:-LOG_KEEP]
+            _save(LOG_PATH, self.activity)
+
+    # ---- server-wide settings ----
+    def signup_mode(self) -> str:
+        """open: anyone gets in. approval: new accounts wait for an admin. invite: only invited Steam accounts."""
+        mode = self.db.get("signupMode")
+        return mode if mode in SIGNUP_MODES else ("open" if self.db.get("allowSignups") else "approval")
+
+    def setting(self, key: str, default=None):
+        return self.db.get("settings", {}).get(key, default)
 
     def user_dir(self, uid: str) -> str:
         return os.path.join(DATA, "users", uid)
@@ -108,6 +128,10 @@ class Accounts:
         return {"id": u["id"], "name": u.get("name"), "avatar": u.get("avatar", ""), "steamId": u.get("steamId"),
                 "role": u.get("role", "user")}
 
+    @staticmethod
+    def is_admin(u: dict) -> bool:
+        return bool(u) and u.get("role") in ("owner", "admin")
+
     def list_public(self) -> list:
         return [self.public(u) for u in self.db["users"].values() if self.active(u)]
 
@@ -129,10 +153,71 @@ class Accounts:
             self.save()
             return True
 
+    def set_status(self, uid: str, status: str) -> bool:
+        """Suspend (or bring back) an account. Suspended people are signed out and can't sign in or sync."""
+        with lock:
+            u = self.db["users"].get(uid)
+            if not u or u.get("role") == "owner" or status not in ("active", "suspended"):
+                return False
+            u["status"] = status
+            self.save()
+        if status == "suspended":
+            self.sign_out_everywhere(uid)
+        return True
+
+    def set_role(self, uid: str, role: str) -> bool:
+        with lock:
+            u = self.db["users"].get(uid)
+            if not u or u.get("role") == "owner" or role not in ("user", "admin"):
+                return False
+            u["role"] = role
+            self.save()
+            return True
+
+    def rename(self, uid: str, name: str) -> bool:
+        name = (name or "").strip()[:60]
+        with lock:
+            u = self.db["users"].get(uid)
+            if not u or not name:
+                return False
+            u["name"] = name
+            u["customName"] = True  # Steam sign-ins keep this name instead of the Steam one
+            self.save()
+            return True
+
+    def sign_out_everywhere(self, uid: str, keep_session: str = None):
+        """End every website session and unlink every device of one user (except the given session)."""
+        with lock:
+            keep = _h(keep_session) if keep_session else None
+            self.sessions = {k: v for k, v in self.sessions.items() if v["uid"] != uid or k == keep}
+            self._save_sessions()
+            u = self.db["users"].get(uid)
+            if u:
+                u["tokens"] = []
+                self.save()
+
+    def sign_out_others(self, keep_uid: str) -> int:
+        """End everyone's website sessions except one user's. Devices stay linked."""
+        with lock:
+            before = len(self.sessions)
+            self.sessions = {k: v for k, v in self.sessions.items() if v["uid"] == keep_uid}
+            self._save_sessions()
+            return before - len(self.sessions)
+
+    def session_counts(self) -> dict:
+        now = _now()
+        out = {}
+        for v in self.sessions.values():
+            if v["exp"] > now:
+                out[v["uid"]] = out.get(v["uid"], 0) + 1
+        return out
+
     # ---- email + password ----
     def signup_email(self, email: str, password: str, name: str):
         """Returns (user, error). The account waits for approval unless the owner opened sign-ups."""
         email = (email or "").strip().lower()
+        if self.signup_mode() == "invite" or not self.setting("emailSignups", True):
+            return None, "This server isn't taking new email accounts. Ask the owner for an invite."
         if not EMAIL.match(email) or len(email) > 200:
             return None, "Enter a valid email address."
         if len(password or "") < MIN_PASSWORD:
@@ -143,7 +228,8 @@ class Accounts:
             uid = "u-" + secrets.token_hex(6)
             user = {"id": uid, "email": email, "password": hash_password(password),
                     "name": (name or "").strip()[:60] or email.split("@")[0], "avatar": "", "steamId": None, "role": "user",
-                    "status": "active" if self.db.get("allowSignups") else "pending",
+                    "status": "active" if self.signup_mode() == "open" else "pending",
+                    "speech": bool(self.setting("speechDefault", False)),
                     "createdAt": int(_now() * 1000), "tokens": [], "webhooks": []}
             self.db["users"][uid] = user
             self.save()
@@ -155,8 +241,14 @@ class Accounts:
         if not user or not user.get("password") or not check_password(password or "", user["password"]):
             return None, "Wrong email or password"
         if not self.active(user):
-            return None, "Your account is waiting for the server owner to approve it."
+            return None, self.inactive_reason(user)
         return user, None
+
+    @staticmethod
+    def inactive_reason(user: dict) -> str:
+        if user.get("status") == "suspended":
+            return "Your account is suspended. Ask the server owner about it."
+        return "Thanks! The server owner needs to approve your account before you can sign in."
 
     def set_login(self, uid: str, email: str = None, password: str = None):
         """Set (or change) the email and/or password someone signs in with. Returns an error or None."""
@@ -213,17 +305,23 @@ class Accounts:
             else:
                 # Invited people and open sign-ups get straight in; everyone else waits for the owner's approval.
                 invited = steam_id in self.db.get("invites", [])
+                mode = self.signup_mode()
+                if mode == "invite" and not invited:
+                    return None, "This server is invite-only. Ask the owner to invite your Steam account."
                 user = {"id": steam_id, "steamId": steam_id, "role": "user", "createdAt": int(_now() * 1000),
-                        "status": "active" if invited or self.db.get("allowSignups") else "pending",
+                        "status": "active" if invited or mode == "open" else "pending",
+                        "speech": bool(self.setting("speechDefault", False)),
                         "tokens": [], "webhooks": []}
                 self.db["users"][steam_id] = user
                 if invited:
                     self.db["invites"].remove(steam_id)
-            user["name"] = prof.get("name") or user.get("name") or steam_id
+            if not user.get("customName"):
+                user["name"] = prof.get("name") or user.get("name") or steam_id
             user["avatar"] = prof.get("avatar") or user.get("avatar", "")
+            user["lastLogin"] = int(_now() * 1000)
             self.save()
             if not self.active(user):
-                return None, "Thanks! The server owner needs to approve your account before you can sign in."
+                return None, self.inactive_reason(user)
             return user, None
 
     def remove_user(self, uid: str):
@@ -244,6 +342,9 @@ class Accounts:
         sid = secrets.token_urlsafe(32)
         with lock:
             now = _now()
+            if uid in self.db["users"]:
+                self.db["users"][uid]["lastLogin"] = int(now * 1000)
+                self.save()
             self.sessions = {k: v for k, v in self.sessions.items() if v["exp"] > now}
             self.sessions[_h(sid)] = {"uid": uid, "exp": now + SESSION_DAYS * 86400}
             self._save_sessions()

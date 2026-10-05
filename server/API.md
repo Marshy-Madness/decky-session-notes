@@ -4,15 +4,41 @@ Base URL: your server, e.g. `https://steamnotes.marshymadness.com` (or `http://1
 
 ## Accounts
 People sign in on the website with Steam, or with an email and password (`POST /api/signup` `{name, email, password}`,
-then `POST /api/login` `{email, password}`). New accounts are `pending` until the owner approves them under
-Account → Users, unless "Let new people in without approval" is ticked. Invited Steam IDs skip the wait. If
-`WEBHOOK_URLS` is set, the owner gets a `user.pending` notification for each request.
+then `POST /api/login` `{email, password}`). What happens to a new account depends on the sign-up mode
+(website: 🛡 Admin → Sign-ups): `open` lets everyone in, `approval` (the default) keeps new accounts `pending`
+until an admin approves them under Admin → Requests, and `invite` only lets in Steam IDs on the invite list.
+Invited Steam IDs always skip the wait. If `WEBHOOK_URLS` is set, the owner gets a `user.pending` notification
+for each request.
 
 | Request | What it does |
 | --- | --- |
 | `POST /api/account/login` `{email?, password?, current?}` | Set or change your own email and password (`current` is needed once you have a password). For the owner, this password replaces `WEB_PASSWORD` |
-| `POST /api/admin/users/{id}/approve` | Owner only: let a pending account in. Reject it with `DELETE /api/admin/users/{id}` |
-| `POST /api/admin/users/{id}/password` `{password}` | Owner only: set a new password for someone who forgot theirs |
+
+## Admin
+The owner and anyone the owner makes an admin (`role: "admin"`) can use these. Admins look after ordinary
+users; only the owner can change another admin, and nobody can change the owner. Everything here is written
+to the activity log.
+
+| Request | What it does |
+| --- | --- |
+| `GET /api/admin` | Users (with games, notes, storage, devices, last sign-in), invites and settings |
+| `GET /api/admin/overview` | Counts, storage, disk space and service status |
+| `GET /api/admin/activity` | The last 500 sign-ups, approvals and admin actions, newest first |
+| `GET /api/admin/shares` / `DELETE /api/admin/shares/{id}` | Every shared note / stop one share |
+| `GET /api/admin/backup[?media=1]` | Zip of the data folder (accounts, notes, history; `media=1` adds screenshots and voice notes) |
+| `POST /api/admin/settings` | Any of `{signupMode: open\|approval\|invite, emailSignups, speechDefault, quotaMb, maxDevices, announcement}`. `quotaMb` and `maxDevices` are per user, 0 = no limit, and don't apply to admins |
+| `POST /api/admin/invites` `{steamId}` / `DELETE /api/admin/invites/{steamId}` | Invite a Steam account / cancel |
+| `POST /api/admin/approve-all` | Approve every pending account |
+| `POST /api/admin/signout-all` | End every website session except yours (devices stay linked) |
+| `POST /api/admin/users/{id}/approve` | Let a pending account in. Reject it (or remove anyone) with `DELETE /api/admin/users/{id}`; their notes move to `removed-users/` |
+| `POST /api/admin/users/{id}/password` `{password}` · `/email` `{email}` · `/name` `{name}` | Change someone's sign-in details or name |
+| `POST /api/admin/users/{id}/speech` `{allowed}` | Allow or block speech to text |
+| `POST /api/admin/users/{id}/status` `{suspended}` | Suspend (signs them out and unlinks their devices; notes are kept) or restore |
+| `POST /api/admin/users/{id}/role` `{admin}` | Owner only: make someone an admin or take it away |
+| `POST /api/admin/users/{id}/signout` | End their sessions and unlink all their devices |
+| `GET /api/admin/users/{id}/devices` / `DELETE /api/admin/users/{id}/devices/{tokenId}` | See / unlink one of their devices |
+
+`GET /api/me` (website) and `GET /api/account` (devices) include `announcement`, the admin's message to everyone.
 
 ## Auth
 Every request acts as one user. Get a device token for your account:
@@ -107,7 +133,7 @@ ticks 🎤 Speech for them (website → Account → Users). Everyone else gets `
 | --- | --- |
 | `POST /api/transcribe?appId=&game=&lang=` (body: audio, any format) | `{text}`: dictation. `appId`/`game` help it spell game words; `lang` like `en` (empty = detect) |
 | `POST /api/transcribe/{appId}/{file}` | `{text}`: transcribe a stored voice note now and save it on the note |
-| `POST /api/admin/users/{id}/speech` `{allowed}` | Owner only: allow or block a user. Allowing also transcribes their existing voice notes |
+| `POST /api/admin/users/{id}/speech` `{allowed}` | Admins: allow or block a user. Allowing also transcribes their existing voice notes |
 
 Voice notes are transcribed in the background as they sync. The text lands on the recording as
 `recordings[].transcript` and doesn't change the note's `updatedAt`. Dictation is limited to `SPEECH_PER_HOUR`

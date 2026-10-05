@@ -14,12 +14,14 @@ import queue
 import re
 import secrets
 import shutil
+import tempfile
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+import zipfile
 from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -51,6 +53,9 @@ write_lock = threading.RLock()
 speech_limit = speech.RateLimit(SPEECH_PER_HOUR)
 shares_lock = threading.Lock()
 failed_logins: dict = {}
+STARTED = time.time()
+SETTING_KEYS = {"emailSignups": bool, "speechDefault": bool, "quotaMb": int, "announcement": str, "maxDevices": int}
+
 
 
 def now_ms() -> int:
@@ -495,8 +500,111 @@ def notify_owner(event: str, text: str, **extra):
 def user_is_pending(user: dict):
     if user and user.get("status") == "pending":
         how = user.get("email") or f"Steam {user.get('steamId')}"
-        notify_owner("user.pending", f"{user.get('name')} ({how}) asked for an account. Approve it under Account → Users.",
+        notify_owner("user.pending", f"{user.get('name')} ({how}) asked for an account. Approve it under Admin → Requests.",
                      userId=user["id"])
+        accounts.log("user.pending", f"{user.get('name')} ({how}) asked for an account", target=user["id"])
+
+
+# ---------- admin helpers ----------
+
+def dir_size(path: str) -> int:
+    total = 0
+    for root, _, files in os.walk(path):
+        for f in files:
+            try:
+                total += os.path.getsize(os.path.join(root, f))
+            except OSError:
+                pass
+    return total
+
+
+def user_stats(uid: str) -> dict:
+    store = Store(uid)
+    ids = store.appids()
+    notes = 0
+    for appid in ids:
+        g, _ = store.read(appid)
+        notes += len((g or {}).get("notes", []))
+    return {"games": len(ids), "notes": notes, "bytes": dir_size(store.root)}
+
+
+def can_manage(actor: dict, target: dict) -> bool:
+    """Admins look after ordinary users; only the owner looks after other admins. Nobody manages the owner."""
+    if not target or target.get("role") == "owner" or target["id"] == actor["id"]:
+        return False
+    return actor.get("role") == "owner" or target.get("role") != "admin"
+
+
+def admin_user(u: dict, sessions: dict, stats: bool = True) -> dict:
+    out = {**accounts.public(u), "speech": accounts.speech_allowed(u), "email": u.get("email"),
+           "status": u.get("status", "active"), "createdAt": u.get("createdAt"), "lastLogin": u.get("lastLogin"),
+           "devices": len(u.get("tokens", [])), "sessions": sessions.get(u["id"], 0), "hasPassword": bool(u.get("password"))}
+    if stats:
+        out.update(user_stats(u["id"]))
+    return out
+
+
+def admin_settings() -> dict:
+    return {"signupMode": accounts.signup_mode(), "emailSignups": accounts.setting("emailSignups", True),
+            "speechDefault": accounts.setting("speechDefault", False), "quotaMb": accounts.setting("quotaMb", 0),
+            "maxDevices": accounts.setting("maxDevices", 0), "announcement": accounts.setting("announcement", "")}
+
+
+def overview() -> dict:
+    users = list(accounts.db["users"].values())
+    by_status = {}
+    for u in users:
+        by_status[u.get("status", "active")] = by_status.get(u.get("status", "active"), 0) + 1
+    games = notes = 0
+    for u in users:
+        st = user_stats(u["id"])
+        games += st["games"]
+        notes += st["notes"]
+    disk = shutil.disk_usage(DATA)
+    return {"users": len(users), "active": by_status.get("active", 0), "pending": by_status.get("pending", 0),
+            "suspended": by_status.get("suspended", 0), "admins": sum(1 for u in users if accounts.is_admin(u)),
+            "games": games, "notes": notes, "devices": sum(len(u.get("tokens", [])) for u in users),
+            "sessions": sum(accounts.session_counts().values()), "shares": len(load_shares()), "invites": len(accounts.db.get("invites", [])),
+            "dataBytes": dir_size(DATA), "diskFree": disk.free, "diskTotal": disk.total,
+            "speech": speech.enabled(), "androidApp": os.path.exists(APK_PATH),
+            "androidAppAt": int(os.path.getmtime(APK_PATH) * 1000) if os.path.exists(APK_PATH) else None,
+            "page": page_version(), "uptime": int(time.time() - STARTED), "publicUrl": PUBLIC_URL, "bookstoreUrl": BOOKSTORE_URL,
+            "legacyToken": bool(os.environ.get("API_TOKEN")),
+            "defaultPassword": WEB_PASSWORD == "AdminPassword" and not (accounts.get(OWNER_ID) or {}).get("password")}
+
+
+def over_quota(user: dict, adding: int) -> bool:
+    quota = int(accounts.setting("quotaMb", 0) or 0)
+    if not quota or accounts.is_admin(user):
+        return False
+    return dir_size(Store(user["id"]).root) + adding > quota * 1024 * 1024
+
+
+def make_backup(with_media: bool) -> str:
+    """Zip the data folder into a temp file (the caller deletes it). Leaves out removed users and the APK."""
+    fd, path = tempfile.mkstemp(suffix=".zip")
+    os.close(fd)
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        for root, dirs, files in os.walk(DATA):
+            rel = os.path.relpath(root, DATA)
+            top = rel.split(os.sep)[0]
+            if top in ("removed-users", "app"):
+                dirs[:] = []
+                continue
+            if not with_media and "media" in rel.split(os.sep):
+                dirs[:] = []
+                continue
+            for f in files:
+                if f.endswith(".tmp"):
+                    continue
+                full_path = os.path.join(root, f)
+                if os.path.abspath(full_path) == os.path.abspath(path):
+                    continue
+                try:
+                    z.write(full_path, os.path.join(rel, f) if rel != "." else f)
+                except OSError:
+                    pass
+    return path
 
 
 # ---------- HTTP ----------
@@ -633,8 +741,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"loggedIn": bool(u), "user": {**accounts.public(u), "email": u.get("email"),
                                                                   "hasPassword": bool(u.get("password"))} if u else None,
                                    "page": page_version(), "androidApp": os.path.exists(APK_PATH), "bookstoreUrl": BOOKSTORE_URL,
-                                   "speech": speech_on(u), "signups": "open" if accounts.db.get("allowSignups") else "approval",
-                                   "pendingUsers": len(accounts.pending()) if u and u.get("role") == "owner" else 0})
+                                   "speech": speech_on(u), "signups": accounts.signup_mode(),
+                                   "emailSignups": accounts.signup_mode() != "invite" and accounts.setting("emailSignups", True),
+                                   "admin": accounts.is_admin(u), "announcement": accounts.setting("announcement", ""),
+                                   "pendingUsers": len(accounts.pending()) if accounts.is_admin(u) else 0})
 
         user = self.current_user()
         if not user:
@@ -642,7 +752,8 @@ class Handler(BaseHTTPRequestHandler):
         store = Store(user["id"])
 
         if p[1:] == ["account"]:  # for devices: who am I, and what may I use
-            return self.send(200, {"user": accounts.public(user), "speech": speech_on(user)})
+            return self.send(200, {"user": accounts.public(user), "speech": speech_on(user),
+                                   "announcement": accounts.setting("announcement", ""), "admin": accounts.is_admin(user)})
         if p[1:] == ["games"]:
             return self.send(200, self.list_games(store))
         if len(p) == 3 and p[1] == "games":
@@ -713,13 +824,50 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, [{k: t[k] for k in ("id", "label", "createdAt", "lastUsed")} for t in user.get("tokens", [])])
         if p[1:] == ["settings"]:
             return self.send(200, {"webhooks": user.get("webhooks", [])})
-        if p[1:] == ["admin"] and user["role"] == "owner":
-            return self.send(200, {"users": [{**accounts.public(u), "speech": accounts.speech_allowed(u), "email": u.get("email"),
-                                              "status": u.get("status", "active"), "createdAt": u.get("createdAt")}
+        if len(p) >= 2 and p[1] == "admin" and accounts.is_admin(user):
+            return self.admin_get(user, p[2:])
+        return self.send(404, {"error": "not found"})
+
+    def admin_get(self, user: dict, rest: list):
+        if not rest:  # everything the People pages need
+            sessions = accounts.session_counts()
+            return self.send(200, {"users": [{**admin_user(u, sessions), "canManage": can_manage(user, u)}
                                              for u in accounts.db["users"].values()],
-                                   "invites": accounts.db.get("invites", []),
-                                   "allowSignups": accounts.db.get("allowSignups", False),
-                                   "speechAvailable": speech.enabled()})
+                                   "invites": accounts.db.get("invites", []), "allowSignups": accounts.signup_mode() == "open",
+                                   "settings": admin_settings(), "speechAvailable": speech.enabled(), "you": user["id"],
+                                   "youAreOwner": user.get("role") == "owner"})
+        if rest == ["overview"]:
+            return self.send(200, overview())
+        if rest == ["activity"]:
+            names = {u["id"]: u.get("name") for u in accounts.db["users"].values()}
+            return self.send(200, [{**e, "actorName": names.get(e.get("actor"))} for e in reversed(accounts.activity)])
+        if rest == ["shares"]:
+            names = {u["id"]: u.get("name") for u in accounts.db["users"].values()}
+            out = []
+            for s in load_shares():
+                game, note = resolve_share(s)
+                out.append({**s, "fromName": names.get(s["from"], "?"), "toName": names.get(s["to"], "?"),
+                            "gameName": (game or {}).get("name"), "noteTitle": (note or {}).get("title"), "missing": not note})
+            return self.send(200, out)
+        if len(rest) == 3 and rest[0] == "users" and rest[2] == "devices":
+            target = accounts.get(safe(rest[1]))
+            if not target:
+                return self.send(404, {"error": "no such user"})
+            return self.send(200, [{k: t.get(k) for k in ("id", "label", "createdAt", "lastUsed")} for t in target.get("tokens", [])])
+        if rest == ["backup"]:
+            path = make_backup(self.query().get("media") == "1")
+            accounts.log("server.backup", "downloaded a backup" + (" with media" if self.query().get("media") == "1" else ""), actor=user["id"])
+            try:
+                self.send_response(200)
+                self.send_header("Content-Type", "application/zip")
+                self.send_header("Content-Length", str(os.path.getsize(path)))
+                self.send_header("Content-Disposition", f'attachment; filename="session-notes-{time.strftime("%Y%m%d-%H%M")}.zip"')
+                self.end_headers()
+                with open(path, "rb") as f:
+                    shutil.copyfileobj(f, self.wfile)
+            finally:
+                os.remove(path)
+            return None
         return self.send(404, {"error": "not found"})
 
     def list_games(self, store: Store) -> list:
@@ -809,6 +957,7 @@ class Handler(BaseHTTPRequestHandler):
             if not accounts.active(user):
                 user_is_pending(user)
                 return self.send(200, {"pending": True})
+            accounts.log("user.signup", f"{user.get('name')} ({user.get('email')}) signed up", target=user["id"])
             return self.send(200, {"pending": False}, headers={"Set-Cookie": self.cookie_for(accounts.new_session(user["id"]))})
         if p == ["api", "logout"]:
             accounts.end_session(self.session_id())
@@ -862,6 +1011,9 @@ class Handler(BaseHTTPRequestHandler):
         if len(p) >= 2 and p[:2] == ["api", "transcribe"]:
             return self.transcribe(user, store, p[2:])
         if p == ["api", "devices", "code"]:
+            limit = int(accounts.setting("maxDevices", 0) or 0)
+            if limit and not accounts.is_admin(user) and len(user.get("tokens", [])) >= limit:
+                return self.send(400, {"error": f"You can link up to {limit} devices. Unlink one first."})
             return self.send(200, accounts.new_pairing_code(user["id"]))
         if p == ["api", "shares"]:
             data = self.json_body()
@@ -885,35 +1037,102 @@ class Handler(BaseHTTPRequestHandler):
             accounts.get(user["id"])["webhooks"] = hooks
             accounts.save()
             return self.send(200, {"webhooks": hooks})
-        if len(p) >= 3 and p[:2] == ["api", "admin"] and user["role"] == "owner":
-            data = self.json_body()
-            if p[2] == "invites":
-                sid = steam.parse_steam_id(str(data.get("steamId", "")))
-                if not sid:
-                    return self.send(400, {"error": "Enter a 17-digit Steam ID or a steamcommunity.com/profiles/… link"})
-                if sid not in accounts.db.setdefault("invites", []) and not accounts.by_steam(sid):
-                    accounts.db["invites"].append(sid)
-                    accounts.save()
-                return self.send(200, {"invites": accounts.db["invites"]})
-            if p[2] == "users" and len(p) == 5 and p[4] == "approve":
-                return self.send(200, {"ok": accounts.approve(safe(p[3]))})
-            if p[2] == "users" and len(p) == 5 and p[4] == "password":
-                target = accounts.get(safe(p[3]))
-                if not target or target.get("role") == "owner":
-                    return self.send(400, {"error": "no such user"})
-                err = accounts.set_login(target["id"], password=str(data.get("password") or ""))
-                return self.send(400, {"error": err}) if err else self.send(200, {"ok": True})
-            if p[2] == "users" and len(p) == 5 and p[4] == "speech":
-                uid = safe(p[3])
-                if not accounts.set_speech(uid, bool(data.get("allowed"))):
-                    return self.send(400, {"error": "no such user"})
-                if data.get("allowed"):
-                    threading.Thread(target=transcriber.backfill, args=(uid,), daemon=True).start()
-                return self.send(200, {"ok": True})
-            if p[2] == "settings":
-                accounts.db["allowSignups"] = bool(data.get("allowSignups"))
+        if len(p) >= 3 and p[:2] == ["api", "admin"] and accounts.is_admin(user):
+            return self.admin_post(user, p[2:], self.json_body())
+        return self.send(404, {"error": "not found"})
+
+    def admin_post(self, user: dict, rest: list, data: dict):
+        me = user["id"]
+        if rest == ["invites"]:
+            sid = steam.parse_steam_id(str(data.get("steamId", "")))
+            if not sid:
+                return self.send(400, {"error": "Enter a 17-digit Steam ID or a steamcommunity.com/profiles/… link"})
+            if sid not in accounts.db.setdefault("invites", []) and not accounts.by_steam(sid):
+                accounts.db["invites"].append(sid)
                 accounts.save()
-                return self.send(200, {"allowSignups": accounts.db["allowSignups"]})
+                accounts.log("invite.add", f"invited Steam {sid}", actor=me)
+            return self.send(200, {"invites": accounts.db["invites"]})
+        if rest == ["settings"]:
+            if "allowSignups" in data and "signupMode" not in data:  # older pages
+                data["signupMode"] = "open" if data["allowSignups"] else "approval"
+            changed = []
+            if data.get("signupMode") in ("open", "approval", "invite"):
+                accounts.db["signupMode"] = data["signupMode"]
+                accounts.db["allowSignups"] = data["signupMode"] == "open"
+                changed.append(f"sign-ups: {data['signupMode']}")
+            settings = accounts.db.setdefault("settings", {})
+            for key, kind in SETTING_KEYS.items():
+                if key in data:
+                    value = kind(data[key] or (0 if kind is int else "" if kind is str else False))
+                    if kind is int:
+                        value = max(0, min(value, 1_000_000))
+                    if kind is str:
+                        value = value.strip()[:500]
+                    if settings.get(key) != value:
+                        settings[key] = value
+                        changed.append(f"{key}: {value if kind is not str else (value[:40] or 'cleared')}")
+            accounts.save()
+            if changed:
+                accounts.log("settings", "changed " + ", ".join(changed), actor=me)
+            return self.send(200, {**admin_settings(), "allowSignups": accounts.signup_mode() == "open"})
+        if rest == ["signout-all"]:
+            n = accounts.sign_out_others(me)
+            accounts.log("server.signout", f"signed everyone else out of the website ({n} sessions)", actor=me)
+            return self.send(200, {"ended": n})
+        if rest == ["approve-all"]:
+            names = [u.get("name") for u in accounts.pending() if accounts.approve(u["id"])]
+            if names:
+                accounts.log("user.approve", "approved " + ", ".join(names), actor=me)
+            return self.send(200, {"approved": len(names)})
+        if len(rest) == 3 and rest[0] == "users":
+            target = accounts.get(safe(rest[1]))
+            action = rest[2]
+            if not can_manage(user, target):
+                return self.send(403, {"error": "You can't change this account"})
+            name = target.get("name")
+            if action == "approve":
+                ok = accounts.approve(target["id"])
+                if ok:
+                    accounts.log("user.approve", f"approved {name}", actor=me, target=target["id"])
+                return self.send(200, {"ok": ok})
+            if action == "password":
+                err = accounts.set_login(target["id"], password=str(data.get("password") or ""))
+                if not err:
+                    accounts.log("user.password", f"set a new password for {name}", actor=me, target=target["id"])
+                return self.send(400, {"error": err}) if err else self.send(200, {"ok": True})
+            if action == "email":
+                err = accounts.set_login(target["id"], email=str(data.get("email") or ""))
+                if not err:
+                    accounts.log("user.email", f"changed the email of {name}", actor=me, target=target["id"])
+                return self.send(400, {"error": err}) if err else self.send(200, {"ok": True})
+            if action == "speech":
+                accounts.set_speech(target["id"], bool(data.get("allowed")))
+                if data.get("allowed"):
+                    threading.Thread(target=transcriber.backfill, args=(target["id"],), daemon=True).start()
+                accounts.log("user.speech", f"{'allowed' if data.get('allowed') else 'blocked'} speech to text for {name}", actor=me, target=target["id"])
+                return self.send(200, {"ok": True})
+            if action == "status":
+                status = "suspended" if data.get("suspended") else "active"
+                if not accounts.set_status(target["id"], status):
+                    return self.send(400, {"error": "no such user"})
+                accounts.log("user.status", f"{'suspended' if status == 'suspended' else 'restored'} {name}", actor=me, target=target["id"])
+                return self.send(200, {"ok": True})
+            if action == "role":
+                if user.get("role") != "owner":
+                    return self.send(403, {"error": "Only the owner can make admins"})
+                role = "admin" if data.get("admin") else "user"
+                accounts.set_role(target["id"], role)
+                accounts.log("user.role", f"{'made ' + name + ' an admin' if role == 'admin' else 'removed admin from ' + name}", actor=me, target=target["id"])
+                return self.send(200, {"ok": True})
+            if action == "name":
+                if not accounts.rename(target["id"], str(data.get("name") or "")):
+                    return self.send(400, {"error": "Enter a name"})
+                accounts.log("user.rename", f"renamed {name} to {accounts.get(target['id'])['name']}", actor=me, target=target["id"])
+                return self.send(200, {"ok": True})
+            if action == "signout":
+                accounts.sign_out_everywhere(target["id"])
+                accounts.log("user.signout", f"signed {name} out everywhere and unlinked their devices", actor=me, target=target["id"])
+                return self.send(200, {"ok": True})
         return self.send(404, {"error": "not found"})
 
     def transcribe(self, user: dict, store: Store, rest: list):
@@ -1009,6 +1228,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, self.sync_game(store, safe(p[2])))
             if len(p) == 4 and p[:2] == ["api", "media"]:
                 d = store.media_path(safe(p[2]))
+                if over_quota(user, int(self.headers.get("Content-Length", 0))):
+                    return self.send(413, {"error": f"You've used your {accounts.setting('quotaMb')} MB of space on this server."})
                 os.makedirs(d, exist_ok=True)
                 data = self.body()
                 with open(os.path.join(d, safe(p[3])), "wb") as f:
@@ -1041,16 +1262,36 @@ class Handler(BaseHTTPRequestHandler):
                 store = Store(user["id"])
                 main = store.canon(safe(p[2]))
                 return self.send(200, {"ok": store.remove_alias(main, safe(p[4])), "aliases": store.aliases_of(main)})
-            if len(p) >= 4 and p[:2] == ["api", "admin"] and user["role"] == "owner":
+            if len(p) >= 4 and p[:2] == ["api", "admin"] and accounts.is_admin(user):
                 if p[2] == "invites":
                     accounts.db["invites"] = [i for i in accounts.db.get("invites", []) if i != p[3]]
                     accounts.save()
+                    accounts.log("invite.remove", f"cancelled the invite for Steam {p[3]}", actor=user["id"])
                     return self.send(200, {"invites": accounts.db["invites"]})
+                if p[2] == "shares":
+                    with shares_lock:
+                        shares = load_shares()
+                        keep = [s for s in shares if s["id"] != p[3]]
+                        save_shares(keep)
+                    accounts.log("share.remove", "removed a shared note", actor=user["id"])
+                    return self.send(200, {"ok": len(keep) < len(shares)})
+                if p[2] == "users" and len(p) == 6 and p[4] == "devices":
+                    target = accounts.get(safe(p[3]))
+                    if not can_manage(user, target):
+                        return self.send(403, {"error": "You can't change this account"})
+                    ok = accounts.revoke_token(target["id"], p[5])
+                    accounts.log("user.device", f"unlinked a device of {target.get('name')}", actor=user["id"], target=target["id"])
+                    return self.send(200, {"ok": ok})
                 if p[2] == "users":
-                    ok = accounts.remove_user(safe(p[3]))
+                    target = accounts.get(safe(p[3]))
+                    if not can_manage(user, target):
+                        return self.send(403, {"error": "You can't change this account"})
+                    pending = target.get("status") == "pending"
+                    ok = accounts.remove_user(target["id"])
                     if ok:
                         with shares_lock:
                             save_shares([s for s in load_shares() if p[3] not in (s["from"], s["to"])])
+                        accounts.log("user.remove", f"{'rejected' if pending else 'removed'} {target.get('name')}", actor=user["id"], target=target["id"])
                     return self.send(200, {"ok": ok})
         except ValueError:
             return self.send(400, {"error": "bad request"})
