@@ -72,6 +72,33 @@ export const primaryButton: CSSProperties = {
   fontWeight: "bold",
 };
 
+// Square icon buttons for toolbars; same height in the Quick Access menu and on the full-screen page.
+export const iconButton: CSSProperties = {
+  ...smallButton,
+  justifyContent: "center",
+  width: "44px",
+  height: "40px",
+  minWidth: "44px",
+  padding: 0,
+  fontSize: "18px",
+};
+
+export const primaryIconButton: CSSProperties = {
+  ...iconButton,
+  background: "#1a9fff",
+  color: "white",
+};
+
+export const iconHint: CSSProperties = {
+  flex: "1 1 auto",
+  minWidth: 0,
+  fontSize: "13px",
+  opacity: 0.75,
+  whiteSpace: "nowrap",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
+
 export const sectionLabel: CSSProperties = {
   fontSize: "12px",
   fontWeight: "bold",

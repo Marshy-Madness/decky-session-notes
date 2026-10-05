@@ -38,6 +38,13 @@ import * as s from "./styles";
 const GUIDES = "__guides";
 const SHARED = "__shared";
 
+// Icon-only so the row fits the narrow Quick Access menu; the label shows beside them when one is focused.
+const ADD_ACTIONS = [
+  { id: "note", label: "New note", icon: <FaPlus /> },
+  { id: "folder", label: "New folder", icon: <FaFolderPlus /> },
+  { id: "counter", label: "Add counter", icon: <FaSkull /> },
+] as const;
+
 const SORT_OPTIONS = (Object.keys(SORT_LABELS) as SortMode[]).map((k) => ({ label: SORT_LABELS[k], data: k }));
 
 /** All folders and notes for one game (the game comes from NotesProvider). */
@@ -51,6 +58,7 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
     setFolderState(id);
   };
   const [search, setSearch] = useState("");
+  const [addHint, setAddHint] = useState("");
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [activeKinds, setActiveKinds] = useState<string[]>([]);
   const pending = usePendingScreenshots();
@@ -264,16 +272,20 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
         </Focusable>
       )}
 
-      <Focusable flow-children="row" style={{ ...s.toolbar, marginTop: "4px" }}>
-        <DialogButton style={s.primaryButton} onClick={() => openEditor(null)}>
-          <FaPlus /> New note
-        </DialogButton>
-        <DialogButton style={s.smallButton} onClick={newFolder}>
-          <FaFolderPlus /> New folder
-        </DialogButton>
-        <DialogButton style={s.smallButton} onClick={() => addCounter(appId)}>
-          <FaSkull /> Add counter
-        </DialogButton>
+      <Focusable flow-children="row" style={{ ...s.toolbar, flexWrap: "nowrap", marginTop: "4px" }}>
+        {ADD_ACTIONS.map((a) => (
+          <DialogButton
+            key={a.label}
+            style={a.id === "note" ? s.primaryIconButton : s.iconButton}
+            onClick={a.id === "note" ? () => openEditor(null) : a.id === "folder" ? newFolder : () => addCounter(appId)}
+            onGamepadFocus={() => setAddHint(a.label)}
+            onMouseEnter={() => setAddHint(a.label)}
+            {...({ title: a.label, "aria-label": a.label } as any)}
+          >
+            {a.icon}
+          </DialogButton>
+        ))}
+        <div style={s.iconHint}>{addHint}</div>
       </Focusable>
 
       <Focusable flow-children="row" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
@@ -400,7 +412,7 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
 
       {subFolders.length === 0 && notes.length === 0 && !(inShared && shared.length) && (
         <div style={{ opacity: 0.7, padding: "12px 0" }}>
-          {searching ? "No notes match." : currentFolder ? "This folder is empty." : "No notes yet. Press New note to write your first one."}
+          {searching ? "No notes match." : currentFolder ? "This folder is empty." : "No notes yet. Press the blue + button to write your first one."}
         </div>
       )}
 
