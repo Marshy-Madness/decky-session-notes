@@ -2,6 +2,11 @@
 
 Anyone can browse. Signing in with Steam lets you post, edit (if allowed), comment and like.
 The Deck plugin links to an account with a device code that you approve on the website.
+
+Admins (ADMIN_STEAM_IDS, plus anyone they make an admin on the website) get 🛡 Admin on the website:
+an approval queue, reports, posts (publish/hide/pin/lock/delete, in bulk), comments, games (rename, move to
+another app ID), users (ban, sign out, delete their posts or comments), site settings (announcement, read-only,
+comments on/off, check new posts first, posts per day, account age, blocked words) and a mod log.
 """
 import hashlib
 import json
@@ -33,6 +38,10 @@ MEDIA_EXT = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "web
 SAFE_FILE = re.compile(r"^[a-f0-9-]{36}(\.thumb)?\.[a-z0-9]{2,4}$")
 write_times: dict = {}
 lock = threading.Lock()
+STARTED = time.time()
+# Site settings admins can change on the website (key: (type, default)).
+SETTINGS = {"announcement": (str, ""), "readOnly": (bool, False), "approvePosts": (bool, False), "commentsEnabled": (bool, True),
+            "blockedWords": (str, ""), "maxPostsPerDay": (int, 0), "minAccountDays": (int, 0)}
 
 
 def now_ms() -> int:
@@ -51,6 +60,43 @@ def first_line(body: str) -> str:
     return ""
 
 
+def setting(key: str):
+    kind, default = SETTINGS[key]
+    row = db.conn().execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return json.loads(row["value"]) if row else default
+
+
+def all_settings() -> dict:
+    return {k: setting(k) for k in SETTINGS}
+
+
+def is_admin(sid) -> bool:
+    """ADMIN_STEAM_IDS are always admins; they can make other people admins (moderators) on the website."""
+    if not sid:
+        return False
+    if sid in ADMINS:
+        return True
+    row = db.conn().execute("SELECT role FROM users WHERE steam_id=?", (sid,)).fetchone()
+    return bool(row and row["role"] == "admin")
+
+
+def modlog(actor: str, action: str, target: str = "", detail: str = ""):
+    db.conn().execute("INSERT INTO modlog VALUES (?,?,?,?,?)", (now_ms(), actor, action, target, detail[:300]))
+    db.conn().execute("DELETE FROM modlog WHERE at < ?", (now_ms() - 365 * 86400_000,))
+
+
+def blocked_word(*texts) -> str:
+    words = [w.strip().lower() for w in re.split(r"[,\n]", setting("blockedWords") or "") if w.strip()]
+    blob = " ".join(t or "" for t in texts).lower()
+    return next((w for w in words if re.search(r"(?<!\w)" + re.escape(w) + r"(?!\w)", blob)), "")
+
+
+def delete_entry(entry_id: str):
+    c = db.conn()
+    for t in ("entries WHERE id", "comments WHERE entry_id", "likes WHERE entry_id", "entry_versions WHERE entry_id", "reports WHERE entry_id"):
+        c.execute(f"DELETE FROM {t}=?", (entry_id,))
+
+
 def public_user(steam_id: str) -> dict:
     row = db.conn().execute("SELECT steam_id, name, avatar FROM users WHERE steam_id=?", (steam_id,)).fetchone()
     return {"steamId": steam_id, "name": row["name"] if row else steam_id, "avatar": row["avatar"] if row else ""}
@@ -62,7 +108,8 @@ def summary(e: dict) -> dict:
             "kind": e["kind"], "tags": e["tags"], "spoiler": e["spoiler"], "spoilerLabel": e["spoiler_label"] or "",
             "author": public_user(e["author"]), "likes": e["likes"], "comments": e["comments"], "allowCopy": e["allow_copy"],
             "hasScreenshots": bool(e["screenshots"]), "hasVoice": bool(e["recordings"]), "hasChecklist": bool(e["checklist"]),
-            "thumb": thumb, "createdAt": e["created_at"], "updatedAt": e["updated_at"]}
+            "thumb": thumb, "createdAt": e["created_at"], "updatedAt": e["updated_at"],
+            "pinned": e["pinned"], "locked": e["locked"], "status": e["status"]}
 
 
 def full(e: dict, viewer) -> dict:
@@ -72,27 +119,36 @@ def full(e: dict, viewer) -> dict:
                 "updatedBy": public_user(e["updated_by"]) if e["updated_by"] else None})
     out["canEdit"] = can_edit(e, viewer)
     out["isAuthor"] = bool(viewer and viewer == e["author"])
-    out["canDelete"] = bool(viewer and (viewer == e["author"] or viewer in ADMINS))
+    admin = is_admin(viewer)
+    out["canDelete"] = bool(viewer and (viewer == e["author"] or admin))
+    out["canModerate"] = admin
+    out["canComment"] = bool(viewer) and (admin or (not e["locked"] and setting("commentsEnabled") and not setting("readOnly")))
     out["liked"] = bool(viewer and db.conn().execute("SELECT 1 FROM likes WHERE entry_id=? AND steam_id=?", (e["id"], viewer)).fetchone())
     rows = db.conn().execute("SELECT * FROM comments WHERE entry_id=? ORDER BY created_at", (e["id"],)).fetchall()
     out["commentList"] = [{"id": r["id"], "text": r["text"], "createdAt": r["created_at"], "author": public_user(r["author"]),
-                           "canDelete": bool(viewer and viewer in (r["author"], e["author"]) or viewer in ADMINS)} for r in rows]
+                           "canDelete": bool(viewer and viewer in (r["author"], e["author"]) or admin)} for r in rows]
     return out
 
 
 def can_edit(e: dict, viewer) -> bool:
     if not viewer:
         return False
-    if viewer == e["author"] or viewer in ADMINS:
+    if viewer == e["author"] or is_admin(viewer):
         return True
+    if e["locked"] or setting("readOnly"):
+        return False
     if e["edit_policy"] == "anyone":
         return True
     return e["edit_policy"] == "select" and viewer in e["editors"]
 
 
-def get_entry(entry_id: str):
+def get_entry(entry_id: str, viewer=False):
+    """The entry, or None. Pass the viewer to hide posts that aren't published unless they're theirs (or they're an admin)."""
     row = db.conn().execute("SELECT * FROM entries WHERE id=?", (entry_id,)).fetchone()
-    return db.row_to_entry(row) if row else None
+    e = db.row_to_entry(row) if row else None
+    if e and viewer is not False and e["status"] != "published" and viewer != e["author"] and not is_admin(viewer):
+        return None
+    return e
 
 
 def clean_media(items, kind: str) -> list:
@@ -224,16 +280,23 @@ class Handler(BaseHTTPRequestHandler):
         c = db.conn()
 
         if p[1:] == ["me"]:
-            return self.send(200, {"user": public_user(viewer) if viewer else None, "admin": viewer in ADMINS})
+            site = {k: setting(k) for k in ("announcement", "readOnly", "approvePosts", "commentsEnabled")}
+            out = {"user": public_user(viewer) if viewer else None, "admin": is_admin(viewer), "ownerAdmin": viewer in ADMINS, "site": site}
+            if out["admin"]:
+                out["openReports"] = c.execute("SELECT COUNT(*) FROM reports WHERE status='open'").fetchone()[0]
+                out["pendingPosts"] = c.execute("SELECT COUNT(*) FROM entries WHERE status='pending'").fetchone()[0]
+            return self.send(200, out)
+        if len(p) >= 3 and p[1] == "admin":
+            return self.admin_get(viewer, p[2:]) if is_admin(viewer) else self.err(403, "Admins only")
         if p[1:] == ["games"]:
             q = self.query().get("q", "").strip().lower()
             rows = c.execute("SELECT app_id, MAX(game_name) AS name, COUNT(*) AS n, MAX(updated_at) AS u FROM entries "
-                             "GROUP BY app_id ORDER BY n DESC, u DESC LIMIT 200").fetchall()
+                             "WHERE status='published' GROUP BY app_id ORDER BY n DESC, u DESC LIMIT 200").fetchall()
             games = [{"appId": r["app_id"], "gameName": r["name"], "count": r["n"], "updatedAt": r["u"]} for r in rows]
             return self.send(200, [g for g in games if not q or q in (g["gameName"] or "").lower() or q == g["appId"]])
         if p[1:] == ["entries"]:
             q = self.query()
-            where, args = [], []
+            where, args = ["(status='published' OR author=?)"], [viewer or ""]
             if q.get("appId"):
                 where.append("app_id=?"); args.append(q["appId"])
             if q.get("kind"):
@@ -252,13 +315,17 @@ class Handler(BaseHTTPRequestHandler):
             if q.get("q"):
                 where.append("(title LIKE ? OR body LIKE ? OR tags LIKE ? OR game_name LIKE ?)"); args += [f"%{q['q']}%"] * 4
             order = {"top": "likes DESC, updated_at DESC", "updated": "updated_at DESC"}.get(q.get("sort"), "created_at DESC")
+            if q.get("appId"):
+                order = "pinned DESC, " + order
             sql = "SELECT * FROM entries" + (" WHERE " + " AND ".join(where) if where else "") + f" ORDER BY {order} LIMIT 50 OFFSET ?"
             rows = c.execute(sql, args + [max(0, int(q.get("offset", 0) or 0))]).fetchall()
             return self.send(200, [summary(db.row_to_entry(r)) for r in rows])
         if len(p) == 3 and p[1] == "entries":
-            e = get_entry(p[2])
+            e = get_entry(p[2], viewer)
             return self.send(200, full(e, viewer)) if e else self.err(404, "No such entry")
         if len(p) == 4 and p[1] == "entries" and p[3] == "history":
+            if not get_entry(p[2], viewer):
+                return self.err(404, "No such entry")
             rows = c.execute("SELECT saved_at, saved_by, data FROM entry_versions WHERE entry_id=? ORDER BY saved_at DESC LIMIT 50",
                              (p[2],)).fetchall()
             return self.send(200, [{"savedAt": r["saved_at"], "savedBy": public_user(r["saved_by"]), "entry": json.loads(r["data"])} for r in rows])
@@ -292,6 +359,7 @@ class Handler(BaseHTTPRequestHandler):
         c = db.conn()
         c.execute("INSERT INTO users (steam_id, name, avatar, created_at) VALUES (?,?,?,?) "
                   "ON CONFLICT(steam_id) DO UPDATE SET name=excluded.name, avatar=excluded.avatar", (sid, prof["name"], prof["avatar"], now_ms()))
+        c.execute("UPDATE users SET last_login=? WHERE steam_id=?", (now_ms(), sid))
         token = secrets.token_urlsafe(32)
         c.execute("INSERT INTO sessions VALUES (?,?,?)", (h(token), sid, int(time.time()) + SESSION_DAYS * 86400))
         c.commit()
@@ -341,7 +409,7 @@ class Handler(BaseHTTPRequestHandler):
         viewer = self.viewer(mutating=True)
         if not viewer:
             return self.err(401, "Sign in with Steam first")
-        if self.rate_limited(viewer):
+        if not is_admin(viewer) and self.rate_limited(viewer):
             return self.err(429, "Slow down a little")
 
         if p == ["api", "device", "approve"]:
@@ -362,36 +430,81 @@ class Handler(BaseHTTPRequestHandler):
             with open(os.path.join(MEDIA, name), "wb") as f:
                 f.write(data)
             return self.send(200, {"file": name})
+        admin = is_admin(viewer)
+        if p == ["api", "report"]:
+            data = self.json_body()
+            kind, target = data.get("kind"), str(data.get("id", ""))
+            reason = str(data.get("reason", "")).strip()[:500]
+            if kind == "entry":
+                e = get_entry(target, viewer)
+                entry_id = e["id"] if e else None
+            elif kind == "comment":
+                row = c.execute("SELECT entry_id FROM comments WHERE id=?", (target,)).fetchone()
+                entry_id = row["entry_id"] if row else None
+            else:
+                entry_id = None
+            if not entry_id:
+                return self.err(404, "Nothing to report")
+            if not c.execute("SELECT 1 FROM reports WHERE target_id=? AND reporter=? AND status='open'", (target, viewer)).fetchone():
+                c.execute("INSERT INTO reports (id, kind, target_id, entry_id, reporter, reason, created_at) VALUES (?,?,?,?,?,?,?)",
+                          (uuid.uuid4().hex[:12], kind, target, entry_id, viewer, reason, now_ms()))
+                c.commit()
+            return self.send(200, {"ok": True})
+        if len(p) >= 3 and p[:2] == ["api", "admin"]:
+            if not admin:
+                return self.err(403, "Admins only")
+            return self.admin_post(viewer, p[2:], self.json_body())
+        writing = p == ["api", "entries"] or (len(p) == 4 and p[:2] == ["api", "entries"] and p[3] == "comments")
+        if writing and not admin:
+            if setting("readOnly"):
+                return self.err(403, "The Bookstore is read-only for now. Try again later.")
+            days = setting("minAccountDays")
+            joined = c.execute("SELECT created_at FROM users WHERE steam_id=?", (viewer,)).fetchone()
+            if days and joined and joined["created_at"] and now_ms() - joined["created_at"] < days * 86400_000:
+                return self.err(403, f"New accounts can post and comment after {days} days.")
         if p == ["api", "entries"]:
             data = self.json_body()
             app_id = re.sub(r"\D", "", str(data.get("appId", "")))[:20]
             if not app_id:
                 return self.err(400, "A Steam app ID is required")
             fields = clean_fields(data)
+            if not admin:
+                bad = blocked_word(fields["title"], fields["body"], " ".join(fields["tags"]))
+                if bad:
+                    return self.err(400, f"Your post has a blocked word in it (“{bad}”).")
+                limit = setting("maxPostsPerDay")
+                if limit and c.execute("SELECT COUNT(*) FROM entries WHERE author=? AND created_at>?",
+                                       (viewer, now_ms() - 86400_000)).fetchone()[0] >= limit:
+                    return self.err(429, f"You can post {limit} times a day. Try again tomorrow.")
+            status = "pending" if setting("approvePosts") and not admin else "published"
             policy = data.get("editPolicy") if data.get("editPolicy") in POLICIES else "owner"
             editors = [s for s in (data.get("editors") or []) if re.fullmatch(r"\d{17}", str(s))][:50]
             eid = uuid.uuid4().hex[:12]
             now = now_ms()
             c.execute("INSERT INTO entries (id, app_id, game_name, title, body, kind, tags, checklist, screenshots, recordings, spoiler, "
-                      "spoiler_label, author, edit_policy, editors, allow_copy, created_at, updated_at, updated_by) "
-                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                      "spoiler_label, author, edit_policy, editors, allow_copy, created_at, updated_at, updated_by, status) "
+                      "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                       (eid, app_id, str(data.get("gameName") or app_id)[:120], fields["title"], fields["body"], fields["kind"],
                        json.dumps(fields["tags"]), json.dumps(fields["checklist"]), json.dumps(fields["screenshots"]),
                        json.dumps(fields["recordings"]), fields["spoiler"], fields["spoiler_label"], viewer, policy,
-                       json.dumps(editors), 1 if data.get("allowCopy", True) else 0, now, now, viewer))
+                       json.dumps(editors), 1 if data.get("allowCopy", True) else 0, now, now, viewer, status))
             c.commit()
             return self.send(200, full(get_entry(eid), viewer))
         if len(p) == 4 and p[:2] == ["api", "entries"] and p[3] == "comments":
-            e = get_entry(p[2])
+            e = get_entry(p[2], viewer)
             text = str(self.json_body().get("text", "")).strip()[:2000]
             if not e or not text:
                 return self.err(400, "Write something first")
+            if not admin and (e["locked"] or not setting("commentsEnabled")):
+                return self.err(403, "Comments are closed on this post")
+            if not admin and blocked_word(text):
+                return self.err(400, f"Your comment has a blocked word in it (“{blocked_word(text)}”).")
             c.execute("INSERT INTO comments VALUES (?,?,?,?,?)", (uuid.uuid4().hex[:12], e["id"], viewer, text, now_ms()))
             c.execute("UPDATE entries SET comments=comments+1 WHERE id=?", (e["id"],))
             c.commit()
             return self.send(200, full(get_entry(e["id"]), viewer))
         if len(p) == 4 and p[:2] == ["api", "entries"] and p[3] == "like":
-            e = get_entry(p[2])
+            e = get_entry(p[2], viewer)
             if not e:
                 return self.err(404, "No such entry")
             if c.execute("SELECT 1 FROM likes WHERE entry_id=? AND steam_id=?", (e["id"], viewer)).fetchone():
@@ -401,9 +514,259 @@ class Handler(BaseHTTPRequestHandler):
             c.execute("UPDATE entries SET likes=(SELECT COUNT(*) FROM likes WHERE entry_id=?) WHERE id=?", (e["id"], e["id"]))
             c.commit()
             return self.send(200, full(get_entry(e["id"]), viewer))
-        if len(p) == 4 and p[:2] == ["api", "admin"] and p[2] == "ban" and viewer in ADMINS:
-            c.execute("UPDATE users SET banned=1 WHERE steam_id=?", (p[3],)); c.commit()
+        return self.err(404, "not found")
+
+    # ---------- admin ----------
+    def admin_get(self, viewer: str, rest: list):
+        c, q = db.conn(), self.query()
+        count = lambda sql, *a: c.execute(sql, a).fetchone()[0]
+        week = now_ms() - 7 * 86400_000
+        if rest == ["overview"]:
+            media = sum(os.path.getsize(os.path.join(MEDIA, f)) for f in os.listdir(MEDIA)) if os.path.isdir(MEDIA) else 0
+            top_games = c.execute("SELECT app_id, MAX(game_name) AS name, COUNT(*) AS n FROM entries GROUP BY app_id ORDER BY n DESC LIMIT 5").fetchall()
+            top_authors = c.execute("SELECT author, COUNT(*) AS n, SUM(likes) AS l FROM entries GROUP BY author ORDER BY n DESC LIMIT 5").fetchall()
+            return self.send(200, {
+                "posts": count("SELECT COUNT(*) FROM entries"), "published": count("SELECT COUNT(*) FROM entries WHERE status='published'"),
+                "pending": count("SELECT COUNT(*) FROM entries WHERE status='pending'"), "hidden": count("SELECT COUNT(*) FROM entries WHERE status='hidden'"),
+                "pinned": count("SELECT COUNT(*) FROM entries WHERE pinned=1"), "locked": count("SELECT COUNT(*) FROM entries WHERE locked=1"),
+                "games": count("SELECT COUNT(DISTINCT app_id) FROM entries"), "comments": count("SELECT COUNT(*) FROM comments"),
+                "likes": count("SELECT COUNT(*) FROM likes"), "users": count("SELECT COUNT(*) FROM users"),
+                "banned": count("SELECT COUNT(*) FROM users WHERE banned=1"),
+                "admins": len(ADMINS | {r["steam_id"] for r in c.execute("SELECT steam_id FROM users WHERE role='admin'")}),
+                "devices": count("SELECT COUNT(*) FROM tokens"), "openReports": count("SELECT COUNT(*) FROM reports WHERE status='open'"),
+                "postsWeek": count("SELECT COUNT(*) FROM entries WHERE created_at>?", week),
+                "commentsWeek": count("SELECT COUNT(*) FROM comments WHERE created_at>?", week),
+                "usersWeek": count("SELECT COUNT(*) FROM users WHERE created_at>?", week),
+                "mediaBytes": media, "dbBytes": os.path.getsize(db.DB_PATH) if os.path.exists(db.DB_PATH) else 0,
+                "uptime": int(time.time() - STARTED), "readOnly": setting("readOnly"), "approvePosts": setting("approvePosts"),
+                "envAdmins": len(ADMINS),
+                "topGames": [{"appId": r["app_id"], "name": r["name"], "count": r["n"]} for r in top_games],
+                "topAuthors": [{**public_user(r["author"]), "count": r["n"], "likes": r["l"] or 0} for r in top_authors]})
+        if rest == ["entries"]:
+            where, args = [], []
+            if q.get("status") in ("published", "pending", "hidden"):
+                where.append("status=?"); args.append(q["status"])
+            if q.get("flag") == "pinned":
+                where.append("pinned=1")
+            if q.get("flag") == "locked":
+                where.append("locked=1")
+            if q.get("flag") == "reported":
+                where.append("id IN (SELECT entry_id FROM reports WHERE status='open' AND kind='entry')")
+            if q.get("appId"):
+                where.append("app_id=?"); args.append(q["appId"])
+            if q.get("author"):
+                where.append("author=?"); args.append(q["author"])
+            if q.get("q"):
+                where.append("(title LIKE ? OR body LIKE ? OR game_name LIKE ? OR id=?)"); args += [f"%{q['q']}%"] * 3 + [q["q"]]
+            order = {"top": "likes DESC", "comments": "comments DESC", "updated": "updated_at DESC", "old": "created_at ASC"}.get(q.get("sort"), "created_at DESC")
+            rows = c.execute("SELECT * FROM entries" + (" WHERE " + " AND ".join(where) if where else "") + f" ORDER BY {order} LIMIT 100 OFFSET ?",
+                             args + [max(0, int(q.get("offset", 0) or 0))]).fetchall()
+            out = []
+            for r in rows:
+                e = summary(db.row_to_entry(r))
+                e["reports"] = count("SELECT COUNT(*) FROM reports WHERE entry_id=? AND kind='entry' AND status='open'", r["id"])
+                out.append(e)
+            return self.send(200, out)
+        if rest == ["comments"]:
+            where, args = [], []
+            if q.get("q"):
+                where.append("c.text LIKE ?"); args.append(f"%{q['q']}%")
+            if q.get("author"):
+                where.append("c.author=?"); args.append(q["author"])
+            rows = c.execute("SELECT c.*, e.title AS entry_title, e.game_name FROM comments c LEFT JOIN entries e ON e.id=c.entry_id"
+                             + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY c.created_at DESC LIMIT 100 OFFSET ?",
+                             args + [max(0, int(q.get("offset", 0) or 0))]).fetchall()
+            return self.send(200, [{"id": r["id"], "entryId": r["entry_id"], "entryTitle": r["entry_title"], "gameName": r["game_name"],
+                                    "text": r["text"], "createdAt": r["created_at"], "author": public_user(r["author"]),
+                                    "reports": count("SELECT COUNT(*) FROM reports WHERE target_id=? AND status='open'", r["id"])} for r in rows])
+        if rest == ["reports"]:
+            status = q.get("status", "open")
+            rows = c.execute("SELECT * FROM reports" + ("" if status == "all" else " WHERE status=?") + " ORDER BY created_at DESC LIMIT 200",
+                             () if status == "all" else (status,)).fetchall()
+            out = []
+            for r in rows:
+                e = get_entry(r["entry_id"])
+                item = {"id": r["id"], "kind": r["kind"], "targetId": r["target_id"], "entryId": r["entry_id"], "reason": r["reason"],
+                        "createdAt": r["created_at"], "status": r["status"], "reporter": public_user(r["reporter"]),
+                        "resolvedBy": public_user(r["resolved_by"]) if r["resolved_by"] else None, "resolvedAt": r["resolved_at"],
+                        "entryTitle": e["title"] if e else None, "gameName": e["game_name"] if e else None, "exists": bool(e)}
+                if r["kind"] == "comment":
+                    cm = c.execute("SELECT * FROM comments WHERE id=?", (r["target_id"],)).fetchone()
+                    item.update({"exists": bool(cm), "text": cm["text"] if cm else None, "author": public_user(cm["author"]) if cm else None})
+                elif e:
+                    item.update({"text": first_line(e["body"]), "author": public_user(e["author"])})
+                out.append(item)
+            return self.send(200, out)
+        if rest == ["users"]:
+            where, args = [], []
+            if q.get("q"):
+                where.append("(name LIKE ? OR steam_id LIKE ?)"); args += [f"%{q['q']}%"] * 2
+            if q.get("filter") == "banned":
+                where.append("banned=1")
+            if q.get("filter") == "admins":
+                where.append(f"(role='admin' OR steam_id IN ({','.join('?' * len(ADMINS)) or 'NULL'}))"); args += list(ADMINS)
+            order = {"posts": "posts DESC", "name": "name COLLATE NOCASE", "login": "last_login DESC"}.get(q.get("sort"), "created_at DESC")
+            rows = c.execute("SELECT u.*, (SELECT COUNT(*) FROM entries WHERE author=u.steam_id) AS posts, "
+                             "(SELECT COUNT(*) FROM comments WHERE author=u.steam_id) AS ncomments, "
+                             "(SELECT COUNT(*) FROM tokens WHERE steam_id=u.steam_id) AS devices FROM users u"
+                             + (" WHERE " + " AND ".join(where) if where else "") + f" ORDER BY {order} LIMIT 200", args).fetchall()
+            return self.send(200, [{"steamId": r["steam_id"], "name": r["name"], "avatar": r["avatar"], "createdAt": r["created_at"],
+                                    "lastLogin": r["last_login"], "banned": bool(r["banned"]), "banReason": r["ban_reason"] or "",
+                                    "role": "admin" if r["steam_id"] in ADMINS or r["role"] == "admin" else "", "envAdmin": r["steam_id"] in ADMINS,
+                                    "posts": r["posts"], "comments": r["ncomments"], "devices": r["devices"]} for r in rows])
+        if rest == ["games"]:
+            rows = c.execute("SELECT app_id, GROUP_CONCAT(DISTINCT game_name) AS names, COUNT(*) AS n, SUM(likes) AS l, MAX(updated_at) AS u "
+                             "FROM entries GROUP BY app_id ORDER BY n DESC").fetchall()
+            return self.send(200, [{"appId": r["app_id"], "names": (r["names"] or "").split(","), "count": r["n"], "likes": r["l"] or 0,
+                                    "updatedAt": r["u"]} for r in rows])
+        if rest == ["settings"]:
+            return self.send(200, all_settings())
+        if rest == ["log"]:
+            rows = c.execute("SELECT * FROM modlog ORDER BY at DESC LIMIT 300").fetchall()
+            return self.send(200, [{"at": r["at"], "actor": public_user(r["actor"]), "action": r["action"], "target": r["target"],
+                                    "detail": r["detail"]} for r in rows])
+        return self.err(404, "not found")
+
+    def admin_post(self, viewer: str, rest: list, data: dict):
+        c = db.conn()
+        if len(rest) == 2 and rest[0] == "entries" and rest[1] != "bulk":
+            rest, data = ["entries", "bulk"], {**data, "ids": [rest[1]]}
+        if rest == ["entries", "bulk"]:
+            ids = [str(i) for i in (data.get("ids") or [])][:200]
+            actions = {"publish": "status='published'", "hide": "status='hidden'", "pending": "status='pending'", "pin": "pinned=1",
+                       "unpin": "pinned=0", "lock": "locked=1", "unlock": "locked=0"}
+            # single-entry form: {pinned, locked, status}
+            todo = [data["action"]] if data.get("action") else []
+            if "pinned" in data:
+                todo.append("pin" if data["pinned"] else "unpin")
+            if "locked" in data:
+                todo.append("lock" if data["locked"] else "unlock")
+            if data.get("status") in ("published", "hidden", "pending"):
+                todo.append({"published": "publish", "hidden": "hide", "pending": "pending"}[data["status"]])
+            for eid in ids:
+                e = get_entry(eid)
+                if not e:
+                    continue
+                for action in todo:
+                    if action == "delete":
+                        delete_entry(eid)
+                    elif action in actions:
+                        c.execute(f"UPDATE entries SET {actions[action]} WHERE id=?", (eid,))
+                    else:
+                        continue
+                    modlog(viewer, f"entry.{action}", eid, e["title"])
+            c.commit()
             return self.send(200, {"ok": True})
+        if len(rest) >= 2 and rest[0] == "users":
+            sid = rest[1]
+            target = c.execute("SELECT * FROM users WHERE steam_id=?", (sid,)).fetchone()
+            if not target:
+                return self.err(404, "No such user")
+            target_admin = is_admin(sid)
+            if sid == viewer:
+                return self.err(400, "You can't change your own account here")
+            if target_admin and viewer not in ADMINS:
+                return self.err(403, "Only the site owners (ADMIN_STEAM_IDS) can change another admin")
+            if len(rest) == 2:
+                if "role" in data:
+                    if viewer not in ADMINS:
+                        return self.err(403, "Only the site owners (ADMIN_STEAM_IDS) can make admins")
+                    if sid in ADMINS:
+                        return self.err(400, "This person is an admin through ADMIN_STEAM_IDS")
+                    role = "admin" if data["role"] == "admin" else ""
+                    c.execute("UPDATE users SET role=? WHERE steam_id=?", (role, sid))
+                    modlog(viewer, "user.admin" if role else "user.unadmin", sid, target["name"])
+                if "banned" in data:
+                    if sid in ADMINS:
+                        return self.err(400, "Site owners can't be banned")
+                    reason = str(data.get("reason") or "")[:200]
+                    c.execute("UPDATE users SET banned=?, ban_reason=? WHERE steam_id=?", (1 if data["banned"] else 0, reason if data["banned"] else None, sid))
+                    if data["banned"]:
+                        c.execute("DELETE FROM sessions WHERE steam_id=?", (sid,))
+                        c.execute("DELETE FROM tokens WHERE steam_id=?", (sid,))
+                    modlog(viewer, "user.ban" if data["banned"] else "user.unban", sid, f"{target['name']}{': ' + reason if reason and data['banned'] else ''}")
+                c.commit()
+                return self.send(200, {"ok": True})
+            if rest[2] == "purge":
+                what = data.get("what", "all")
+                n_posts = n_comments = 0
+                if what in ("all", "posts"):
+                    ids = [r["id"] for r in c.execute("SELECT id FROM entries WHERE author=?", (sid,))]
+                    for eid in ids:
+                        delete_entry(eid)
+                    n_posts = len(ids)
+                if what in ("all", "comments"):
+                    for r in c.execute("SELECT entry_id FROM comments WHERE author=?", (sid,)).fetchall():
+                        c.execute("UPDATE entries SET comments=MAX(0, comments-1) WHERE id=?", (r["entry_id"],))
+                    n_comments = c.execute("DELETE FROM comments WHERE author=?", (sid,)).rowcount
+                modlog(viewer, "user.purge", sid, f"{target['name']}: {n_posts} posts, {n_comments} comments")
+                c.commit()
+                return self.send(200, {"posts": n_posts, "comments": n_comments})
+            if rest[2] == "signout":
+                c.execute("DELETE FROM sessions WHERE steam_id=?", (sid,))
+                n = c.execute("DELETE FROM tokens WHERE steam_id=?", (sid,)).rowcount
+                modlog(viewer, "user.signout", sid, f"{target['name']} ({n} devices)")
+                c.commit()
+                return self.send(200, {"ok": True})
+        if len(rest) >= 2 and rest[0] == "reports":
+            r = c.execute("SELECT * FROM reports WHERE id=?", (rest[1],)).fetchone()
+            if not r:
+                return self.err(404, "No such report")
+            if len(rest) == 3 and rest[2] == "remove":  # take the reported thing down
+                if r["kind"] == "entry":
+                    e = get_entry(r["target_id"])
+                    if e:
+                        modlog(viewer, "entry.delete", e["id"], f"{e['title']} (reported)")
+                    delete_entry(r["target_id"])
+                else:
+                    cm = c.execute("SELECT * FROM comments WHERE id=?", (r["target_id"],)).fetchone()
+                    if cm:
+                        c.execute("DELETE FROM comments WHERE id=?", (cm["id"],))
+                        c.execute("UPDATE entries SET comments=MAX(0, comments-1) WHERE id=?", (cm["entry_id"],))
+                        modlog(viewer, "comment.delete", cm["entry_id"], f"{cm['text'][:120]} (reported)")
+                c.execute("UPDATE reports SET status='resolved', resolved_by=?, resolved_at=? WHERE target_id=? AND status='open'",
+                          (viewer, now_ms(), r["target_id"]))
+            else:
+                status = "dismissed" if data.get("status") == "dismissed" else "resolved"
+                c.execute("UPDATE reports SET status=?, resolved_by=?, resolved_at=? WHERE target_id=? AND status='open'",
+                          (status, viewer, now_ms(), r["target_id"]))
+                modlog(viewer, f"report.{status}", r["target_id"], r["reason"] or "")
+            c.commit()
+            return self.send(200, {"ok": True})
+        if len(rest) >= 2 and rest[0] == "games":
+            app_id = rest[1]
+            if len(rest) == 2:
+                name = str(data.get("name", "")).strip()[:120]
+                if not name:
+                    return self.err(400, "Enter a name")
+                c.execute("UPDATE entries SET game_name=? WHERE app_id=?", (name, app_id))
+                modlog(viewer, "game.rename", app_id, name)
+            elif rest[2] == "move":
+                to = re.sub(r"\D", "", str(data.get("to", "")))[:20]
+                if not to:
+                    return self.err(400, "Enter the right Steam app ID")
+                name = c.execute("SELECT MAX(game_name) FROM entries WHERE app_id=?", (to,)).fetchone()[0]
+                c.execute("UPDATE entries SET app_id=?" + (", game_name=?" if name else "") + " WHERE app_id=?",
+                          (to, name, app_id) if name else (to, app_id))
+                modlog(viewer, "game.move", app_id, f"posts moved to {to}")
+            c.commit()
+            return self.send(200, {"ok": True})
+        if rest == ["settings"]:
+            changed = []
+            for key, (kind, default) in SETTINGS.items():
+                if key not in data:
+                    continue
+                value = data[key]
+                value = (str(value or "").strip()[:2000] if kind is str else bool(value) if kind is bool else max(0, min(int(value or 0), 100000)))
+                if value != setting(key):
+                    c.execute("INSERT INTO settings VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (key, json.dumps(value)))
+                    changed.append(f"{key} {'set' if value else 'cleared'}" if kind is str else f"{key}={value}")
+            if changed:
+                modlog(viewer, "settings", "", ", ".join(changed))
+            c.commit()
+            return self.send(200, all_settings())
+        if len(rest) == 2 and rest[0] == "ban":  # older builds
+            return self.admin_post(viewer, ["users", rest[1]], {"banned": True})
         return self.err(404, "not found")
 
     # ---------- PUT / DELETE ----------
@@ -424,12 +787,14 @@ class Handler(BaseHTTPRequestHandler):
                            "screenshots": e["screenshots"], "recordings": e["recordings"], "spoiler": e["spoiler"],
                            "spoilerLabel": e["spoiler_label"]}
                 fields = clean_fields({**current, **data})  # partial updates keep everything else
+                if not is_admin(viewer) and blocked_word(fields["title"], fields["body"]):
+                    return self.err(400, f"Your post has a blocked word in it (“{blocked_word(fields['title'], fields['body'])}”).")
                 c = db.conn()
                 c.execute("INSERT INTO entry_versions VALUES (?,?,?,?)", (e["id"], now_ms(), e["updated_by"] or e["author"],
                           json.dumps({k: e[k] for k in ("title", "body", "kind", "tags", "checklist", "screenshots", "recordings",
                                                          "spoiler", "spoiler_label", "updated_at")})))
                 sets = dict(fields)
-                if viewer == e["author"] or viewer in ADMINS:  # only the poster changes who can edit/copy
+                if viewer == e["author"] or is_admin(viewer):  # only the poster changes who can edit/copy
                     if data.get("editPolicy") in POLICIES:
                         sets["edit_policy"] = data["editPolicy"]
                     if "editors" in data:
@@ -454,18 +819,23 @@ class Handler(BaseHTTPRequestHandler):
         c = db.conn()
         if len(p) == 3 and p[:2] == ["api", "entries"]:
             e = get_entry(p[2])
-            if not e or not (viewer == e["author"] or viewer in ADMINS):
+            if not e or not (viewer == e["author"] or is_admin(viewer)):
                 return self.err(403, "Only the poster can delete this")
-            for t in ("entries WHERE id", "comments WHERE entry_id", "likes WHERE entry_id", "entry_versions WHERE entry_id"):
-                c.execute(f"DELETE FROM {t}=?", (e["id"],))
+            delete_entry(e["id"])
+            if viewer != e["author"]:
+                modlog(viewer, "entry.delete", e["id"], e["title"])
             c.commit()
             return self.send(200, {"ok": True})
         if len(p) == 3 and p[:2] == ["api", "comments"]:
             row = c.execute("SELECT * FROM comments WHERE id=?", (p[2],)).fetchone()
             e = get_entry(row["entry_id"]) if row else None
-            if not row or not (viewer in (row["author"], e["author"]) or viewer in ADMINS):
+            if not row or not (viewer in (row["author"], e["author"]) or is_admin(viewer)):
                 return self.err(403, "Not yours to delete")
             c.execute("DELETE FROM comments WHERE id=?", (p[2],))
+            c.execute("UPDATE reports SET status='resolved', resolved_by=?, resolved_at=? WHERE target_id=? AND status='open'",
+                      (viewer, now_ms(), p[2]))
+            if viewer not in (row["author"], e["author"]):
+                modlog(viewer, "comment.delete", row["entry_id"], row["text"][:120])
             c.execute("UPDATE entries SET comments=MAX(0, comments-1) WHERE id=?", (row["entry_id"],))
             c.commit()
             return self.send(200, {"ok": True})

@@ -26,7 +26,22 @@ CREATE TABLE IF NOT EXISTS likes (entry_id TEXT, steam_id TEXT, PRIMARY KEY (ent
 CREATE TABLE IF NOT EXISTS sessions (hash TEXT PRIMARY KEY, steam_id TEXT, exp INTEGER);
 CREATE TABLE IF NOT EXISTS tokens (hash TEXT PRIMARY KEY, steam_id TEXT, label TEXT, created_at INTEGER);
 CREATE TABLE IF NOT EXISTS device_codes (device_code TEXT PRIMARY KEY, user_code TEXT UNIQUE, steam_id TEXT, label TEXT, exp INTEGER);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS modlog (at INTEGER, actor TEXT, action TEXT, target TEXT, detail TEXT);
+CREATE TABLE IF NOT EXISTS reports (id TEXT PRIMARY KEY, kind TEXT, target_id TEXT, entry_id TEXT, reporter TEXT, reason TEXT,
+  created_at INTEGER, status TEXT DEFAULT 'open', resolved_by TEXT, resolved_at INTEGER);
+CREATE INDEX IF NOT EXISTS reports_status ON reports(status);
 """
+
+# Columns added after the first release: (table, column, definition)
+MIGRATIONS = [
+    ("entries", "pinned", "INTEGER DEFAULT 0"),      # shown first on the game's page
+    ("entries", "locked", "INTEGER DEFAULT 0"),      # only admins can edit or comment
+    ("entries", "status", "TEXT DEFAULT 'published'"),  # published | pending (waiting for an admin) | hidden
+    ("users", "role", "TEXT DEFAULT ''"),            # 'admin' = moderator (ADMIN_STEAM_IDS are always admins)
+    ("users", "ban_reason", "TEXT"),
+    ("users", "last_login", "INTEGER"),
+]
 
 JSON_COLS = ("tags", "checklist", "screenshots", "recordings", "editors")
 
@@ -44,8 +59,13 @@ def conn() -> sqlite3.Connection:
 
 
 def init():
-    conn().executescript(SCHEMA)
-    conn().commit()
+    c = conn()
+    c.executescript(SCHEMA)
+    for table, col, definition in MIGRATIONS:
+        if col not in {r["name"] for r in c.execute(f"PRAGMA table_info({table})")}:
+            c.execute(f"ALTER TABLE {table} ADD COLUMN {col} {definition}")
+    c.execute("CREATE INDEX IF NOT EXISTS entries_status ON entries(status)")
+    c.commit()
 
 
 def row_to_entry(row) -> dict:
@@ -54,4 +74,7 @@ def row_to_entry(row) -> dict:
         e[k] = json.loads(e.get(k) or "[]")
     e["spoiler"] = bool(e["spoiler"])
     e["allow_copy"] = bool(e["allow_copy"])
+    e["pinned"] = bool(e.get("pinned"))
+    e["locked"] = bool(e.get("locked"))
+    e["status"] = e.get("status") or "published"
     return e

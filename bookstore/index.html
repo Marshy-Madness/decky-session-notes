@@ -44,7 +44,44 @@
   .code-input { font-size: 28px; letter-spacing: 4px; text-align: center; text-transform: uppercase; width: 100%; padding: 12px; }
   .hidden { display: none !important; }
   .steam-btn { background: #171a21; border: 1px solid #66c0f4; color: #66c0f4; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-weight: 600; }
+  .badge { background: var(--danger); color: #fff; border-radius: 9px; font-size: 11px; padding: 0 6px; margin-left: 4px; }
+  .redchip { background: #5a1f24; }
+  #announce { background: #3b2a5c; padding: 10px 20px; display: flex; gap: 12px; align-items: center; }
+  #announce span { flex: 1; white-space: pre-wrap; }
+  .box { background: var(--panel); border-radius: 8px; padding: 10px 14px; margin: 8px 0; } .warnbox { background: #3a2c12; } .warnbox a { color: #f5c46b; }
+  .adminbar { background: #2a2140; border-radius: 8px; padding: 6px 10px; }
+  /* admin */
+  main:has(.admin) { max-width: 1300px; }
+  .admin { display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start; }
+  .aside { position: sticky; top: 76px; background: var(--panel); border-radius: 10px; padding: 10px; }
+  .aside .ahead { font-weight: 700; font-size: 16px; padding: 4px 8px 6px; }
+  .aside .agroup { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; opacity: .55; margin: 12px 8px 4px; }
+  .aside button { display: flex; align-items: center; gap: 6px; width: 100%; text-align: left; background: none; border: 0; padding: 8px 10px; }
+  .aside button:hover { background: #2c2738; } .aside button.active { background: #463a63; color: #fff; } .aside .badge { margin-left: auto; }
+  .apage { min-width: 0; } .apage h2 { margin-top: 0; } .apage h4 { margin: 18px 0 6px; font-size: 14px; opacity: .85; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+  .stat { background: var(--panel); border-radius: 8px; padding: 10px 12px; } .stat b { display: block; font-size: 22px; } .stat span { font-size: 12px; opacity: .65; }
+  .stat.warn b { color: #f5a524; }
+  .mini { display: flex; gap: 8px; align-items: center; padding: 4px 0; } .mini img { width: 64px; height: 30px; object-fit: cover; border-radius: 3px; }
+  .logrow { display: grid; grid-template-columns: 170px 1fr; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .arow { background: var(--panel); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px; display: flex; gap: 12px; align-items: center; }
+  .arow .text { flex: 1; min-width: 0; } .arow [data-open] { cursor: pointer; } .arow .first { opacity: .7; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .arow .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; } .arow .gart { width: 92px; height: 43px; object-fit: cover; border-radius: 4px; }
+  .quote { background: #1a1622; border-radius: 6px; padding: 6px 10px; margin: 6px 0; white-space: pre-wrap; font-size: 14px; max-height: 120px; overflow: auto; }
+  .bulk { background: var(--panel); border-radius: 8px; padding: 6px 10px; position: sticky; top: 64px; z-index: 1; }
+  .ucard { background: var(--panel); border-radius: 8px; margin-bottom: 8px; }
+  .ucard summary { display: flex; gap: 10px; align-items: center; padding: 10px 12px; cursor: pointer; list-style: none; } .ucard summary::-webkit-details-marker { display: none; }
+  .ucard summary img, .ucard summary .ph { width: 36px; height: 36px; border-radius: 4px; background: #2a2536; flex: none; } .ucard summary .text { flex: 1; min-width: 0; }
+  .ucard[open] summary { border-bottom: 1px solid var(--line); } .uactions { padding: 4px 12px 10px; } .uactions .toolbar > .meta:first-child { width: 70px; }
+  label.inline, label.radio { display: flex; gap: 8px; align-items: center; opacity: 1; margin: 0; font-size: 14px; }
+  label.radio { align-items: flex-start; background: var(--panel); border-radius: 8px; padding: 10px 12px; margin: 8px 0; cursor: pointer; } label.radio input { margin-top: 3px; }
+  .apage label:not(.inline):not(.radio) { display: block; font-size: 12px; opacity: .75; margin: 12px 0 4px; }
   @media (max-width: 760px) {
+    .admin { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+    .aside { position: static; display: flex; overflow-x: auto; gap: 4px; padding: 6px; }
+    .aside .agroup, .aside .ahead { display: none; } .aside button { width: auto; flex: none; white-space: nowrap; border-radius: 18px; background: #2c2738; }
+    .logrow { grid-template-columns: minmax(0, 1fr); gap: 2px; } .arow { flex-wrap: wrap; } .arow .acts { width: 100%; justify-content: flex-start; }
+    .bulk { top: 0; position: static; } .uactions .toolbar > .meta:first-child { width: 100%; }
     main { padding: 12px; } header { padding: 10px 12px; } .card img.thumb { width: 90px; height: 51px; }
     dialog { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; border: 0; }
     .row { flex-direction: column; gap: 0; } button, select, input:not([type=checkbox]):not([type=radio]) { min-height: 42px; }
@@ -56,8 +93,10 @@
 <header>
   <h1 id="home">📚 Bookstore</h1>
   <input id="gameSearch" class="grow" placeholder="Search games…">
+  <button id="adminBtn" class="hidden">🛡 Admin</button>
   <span id="userBox"></span>
 </header>
+<div id="announce" class="hidden"><span>📣 <span id="announceText"></span></span><button id="announceClose" aria-label="Hide">✕</button></div>
 <main id="main"></main>
 <dialog id="dlg"></dialog>
 <dialog id="dlg2"></dialog>
@@ -67,13 +106,14 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const date = (ms) => (ms ? new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" }) : "—");
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => { const r = (Math.random() * 16) | 0; return (c === "x" ? r : (r & 3) | 8).toString(16); }));
+const day = (ms) => (ms ? new Date(ms).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—");
 const media = (f) => `/api/media/${encodeURIComponent(f)}`;
 const art = (appId) => `https://cdn.cloudflare.steamstatic.com/steam/apps/${encodeURIComponent(appId)}/capsule_184x69.jpg`;
 const KINDS = [["note", "📝", "Note"], ["guide", "📘", "Guide"], ["tip", "💡", "Tip"], ["walkthrough", "🧭", "Walkthrough"],
   ["boss", "⚔️", "Boss strategy"], ["build", "🛡️", "Build / loadout"], ["collectibles", "🗺️", "Collectibles / map"],
   ["secret", "🔮", "Secret / easter egg"], ["settings", "⚙️", "Deck settings"], ["achievement", "🏆", "Achievement guide"]];
 const kindOf = (k) => KINDS.find((x) => x[0] === k) || KINDS[0];
-let me = null, admin = false, view = { appId: null, gameName: "", kinds: [], has: [], sort: "top", q: "" };
+let me = null, admin = false, ownerAdmin = false, badges = {}, siteInfo = {}, view = { appId: null, gameName: "", kinds: [], has: [], sort: "top", q: "" };
 
 async function api(path, opts = {}) {
   const r = await fetch(path, { ...opts, headers: { "X-Requested-With": "bookstore", ...(opts.json ? { "Content-Type": "application/json" } : {}), ...(opts.headers || {}) },
@@ -85,15 +125,37 @@ async function api(path, opts = {}) {
 const who = (u) => `<span class="who">${u.avatar ? `<img src="${esc(u.avatar)}">` : ""}${esc(u.name)}</span>`;
 const signIn = (next = location.pathname + location.search) => `/auth/steam?next=${encodeURIComponent(next)}`;
 
-async function start() {
+async function loadMe() {
   const r = await api("/api/me");
-  me = r.user; admin = r.admin;
+  me = r.user; admin = r.admin; ownerAdmin = r.ownerAdmin; siteInfo = r.site || {};
+  badges = { openReports: r.openReports || 0, pendingPosts: r.pendingPosts || 0 };
+  paintHeader();
+}
+
+function paintHeader() {
   $("#userBox").innerHTML = me ? `${who(me)} <button id="logout">Log out</button>` : `<a class="steam-btn" href="${signIn()}">Sign in with Steam</a>`;
   if (me) $("#logout").onclick = async () => { await api("/api/logout", { method: "POST" }); location.reload(); };
+  const n = (badges.openReports || 0) + (badges.pendingPosts || 0);
+  $("#adminBtn").classList.toggle("hidden", !admin);
+  $("#adminBtn").innerHTML = `🛡 Admin${n ? `<span class="badge">${n}</span>` : ""}`;
+  $("#adminBtn").onclick = () => adminPage();
+  const text = [siteInfo.announcement, siteInfo.readOnly ? "🔒 The Bookstore is read-only for now: you can browse and save posts, but not post or comment." : ""].filter(Boolean).join("\n");
+  const hidden = localStorage.getItem("bs-announce-hidden") === text;
+  $("#announce").classList.toggle("hidden", !text || hidden);
+  $("#announceText").textContent = text;
+  $("#announceClose").onclick = () => { localStorage.setItem("bs-announce-hidden", text); $("#announce").classList.add("hidden"); };
+}
+const canPost = () => me && (admin || !siteInfo.readOnly);
+/** Redraw whatever page is showing (after a change in a dialog). */
+const refreshView = () => (new URLSearchParams(location.search).get("admin") ? adminPage() : view.appId ? renderGame() : home());
+
+async function start() {
+  await loadMe();
   const err = new URLSearchParams(location.search).get("error");
   if (err) alert(err);
   if (location.pathname === "/link") return linkPage();
   const params = new URLSearchParams(location.search);
+  if (params.get("admin") && admin) return adminPage(params.get("admin"));
   if (params.get("game")) return openGame(params.get("game"), params.get("name") || "");
   home();
 }
@@ -107,7 +169,7 @@ async function home(q = "") {
     <p>Notes, guides and tips for your games, shared by players. Open one on your Deck from the <b>Bookstore</b> tab in Session Notes.</p>
     <h2>${q ? "Games matching “" + esc(q) + "”" : "Games"}</h2>
     <div class="grid">${games.map((g) => `<div class="game" data-app="${esc(g.appId)}" data-name="${esc(g.gameName)}"><img src="${art(g.appId)}" onerror="this.style.visibility='hidden'"><div><b>${esc(g.gameName)}</b><br><small>${g.count} posts</small></div></div>`).join("") || '<p class="meta">Nothing yet. Be the first to post!</p>'}</div>
-    ${me ? '<div class="toolbar"><button class="primary" id="newAny">+ Post something</button></div>' : ""}
+    ${canPost() ? '<div class="toolbar"><button class="primary" id="newAny">+ Post something</button></div>' : ""}
     ${recent.length ? `<h2>Latest</h2>${recent.slice(0, 15).map(card).join("")}` : ""}`;
   $("#main").querySelectorAll(".game").forEach((el) => (el.onclick = () => openGame(el.dataset.app, el.dataset.name)));
   wireCards();
@@ -128,7 +190,7 @@ async function renderGame() {
   if (!view.gameName && entries[0]) view.gameName = entries[0].gameName;
   $("#main").innerHTML = `
     <div class="toolbar"><button id="back">← All games</button><img src="${art(view.appId)}" style="height:34px;border-radius:4px" onerror="this.remove()"><h2 style="margin:0">${esc(view.gameName || view.appId)}</h2>
-      <span style="flex:1"></span>${me ? '<button class="primary" id="newEntry">+ Post for this game</button>' : `<a class="steam-btn" href="${signIn()}">Sign in to post</a>`}</div>
+      <span style="flex:1"></span>${canPost() ? '<button class="primary" id="newEntry">+ Post for this game</button>' : me ? "" : `<a class="steam-btn" href="${signIn()}">Sign in to post</a>`}</div>
     <div class="toolbar">${KINDS.map((k) => `<button data-kind="${k[0]}" class="${view.kinds.includes(k[0]) ? "on" : ""}">${k[1]} ${k[2]}</button>`).join("")}</div>
     <div class="toolbar"><span class="meta">Contains:</span>
       ${[["screenshots", "📷 Screenshots"], ["voice", "🎙 Voice recording"], ["checklist", "☑ Checklist"]].map(([h, l]) => `<button data-has="${h}" class="${view.has.includes(h) ? "on" : ""}">${l}</button>`).join("")}
@@ -148,7 +210,7 @@ async function renderGame() {
 function card(e) {
   const k = kindOf(e.kind);
   return `<div class="card" data-id="${esc(e.id)}"><div class="text">
-    <h3>${k[1]} ${esc(e.title)}</h3>
+    <h3>${e.pinned ? "📌 " : ""}${k[1]} ${esc(e.title)}${e.status === "pending" ? ' <span class="chip">⏳ Waiting for approval</span>' : e.status === "hidden" ? ' <span class="chip">🙈 Hidden</span>' : ""}</h3>
     <div class="first ${e.spoiler ? "blur" : ""}">${e.spoiler ? "Spoiler" + (e.spoilerLabel ? ": " + esc(e.spoilerLabel) : "") : esc(e.firstLine) || "&nbsp;"}</div>
     <span class="chip">${k[2]}</span>${view.appId ? "" : `<span class="chip">🎮 ${esc(e.gameName)}</span>`}<span class="chip">${who(e.author)}</span>
     <span class="chip">♥ ${e.likes}</span><span class="chip">💬 ${e.comments}</span>
@@ -173,6 +235,11 @@ async function openEntry(id, revealed = false, prefetched = null) {
     ${e.tags.map((t) => `<span class="chip">#${esc(t)}</span>`).join("")}
     <span class="chip">${{ owner: "🔒 Only the poster edits", select: "👥 Selected people edit", anyone: "✏️ Anyone signed in can edit" }[e.editPolicy]}</span>
     <span class="chip">${e.allowCopy ? "📋 Copying allowed" : "🚫 No copies"}</span>
+    ${e.pinned ? '<span class="chip">📌 Pinned</span>' : ""}${e.locked ? '<span class="chip">🔒 Locked</span>' : ""}
+    ${e.status === "pending" ? '<div class="box warnbox">⏳ Waiting for an admin to check it. Only you and the admins can see it for now.</div>' : e.status === "hidden" ? '<div class="box warnbox">🙈 Hidden by an admin. Only the poster and admins can see it.</div>' : ""}
+    ${e.canModerate ? `<div class="toolbar adminbar"><span class="meta">🛡 Admin</span>
+      ${e.status !== "published" ? '<button class="primary" data-mod="publish">✅ Publish</button>' : '<button data-mod="hide">🙈 Hide</button>'}
+      <button data-mod="${e.pinned ? "unpin" : "pin"}">${e.pinned ? "Unpin" : "📌 Pin"}</button><button data-mod="${e.locked ? "unlock" : "lock"}">${e.locked ? "🔓 Unlock" : "🔒 Lock"}</button></div>` : ""}
     ${hidden ? `<div class="spoiler-gate"><p>🙈 Spoiler${e.spoilerLabel ? `: <b>${esc(e.spoilerLabel)}</b>` : ""}</p><button class="primary" id="reveal">Reveal</button></div>` : `
       <div class="body">${body || '<span class="meta">(no text)</span>'}</div>
       ${e.checklist.length ? `<div>${e.checklist.map((c) => `<div>☐ ${esc(c.text)}</div>`).join("")}</div>` : ""}
@@ -181,13 +248,13 @@ async function openEntry(id, revealed = false, prefetched = null) {
     <div class="toolbar">
       <button id="like" class="${e.liked ? "on" : ""}">♥ ${e.likes}</button>
       ${e.canEdit ? '<button id="edit">✏️ Edit</button>' : ""}<button id="history">🕘 History</button>
-      ${e.canDelete ? '<button id="del" class="danger">Delete</button>' : ""}
+      ${e.canDelete ? '<button id="del" class="danger">Delete</button>' : ""}${me && !e.isAuthor ? '<button id="report" title="Report to the admins">🚩 Report</button>' : ""}
       <span style="flex:1"></span>${e.allowCopy ? `<button class="primary" id="save">📥 Save to my notes</button>${window.SessionNotesApp ? "" : '<button id="saveWhere" title="Change your Session Notes address">⚙️</button>'}` : ""}
     </div>
     <h3>Comments (${e.commentList.length})</h3>
-    ${e.commentList.map((c) => `<div class="comment">${who(c.author)} <small>${date(c.createdAt)}</small> ${c.canDelete ? `<button class="danger" data-delc="${esc(c.id)}" style="float:right">✕</button>` : ""}<p>${esc(c.text)}</p></div>`).join("") || '<p class="meta">No comments yet.</p>'}
-    ${me ? '<textarea id="comment" rows="2" placeholder="Add a comment…"></textarea><div class="toolbar"><button class="primary" id="postComment">Comment</button></div>'
-      : `<p><a href="${signIn()}">Sign in with Steam</a> to like and comment.</p>`}`;
+    ${e.commentList.map((c) => `<div class="comment">${who(c.author)} <small>${date(c.createdAt)}</small> ${c.canDelete ? `<button class="danger" data-delc="${esc(c.id)}" style="float:right">✕</button>` : ""}${me && c.author.steamId !== me.steamId ? `<button data-repc="${esc(c.id)}" style="float:right;margin-right:6px" title="Report">🚩</button>` : ""}<p>${esc(c.text)}</p></div>`).join("") || '<p class="meta">No comments yet.</p>'}
+    ${me && e.canComment ? '<textarea id="comment" rows="2" placeholder="Add a comment…"></textarea><div class="toolbar"><button class="primary" id="postComment">Comment</button></div>'
+      : me ? '<p class="meta">💬 Comments are closed here.</p>' : `<p><a href="${signIn()}">Sign in with Steam</a> to like and comment.</p>`}`;
   $("#close", dlg).onclick = () => dlg.close();
   if ($("#reveal", dlg)) $("#reveal", dlg).onclick = () => {
     const draft = $("#comment", dlg)?.value || "";
@@ -199,7 +266,13 @@ async function openEntry(id, revealed = false, prefetched = null) {
   $("#history", dlg).onclick = () => showHistory(e);
   if ($("#save", dlg)) $("#save", dlg).onclick = () => saveToNotes(e.id);
   if ($("#saveWhere", dlg)) $("#saveWhere", dlg).onclick = () => notesUrl(true);
-  if ($("#del", dlg)) $("#del", dlg).onclick = async () => { if (!confirm("Delete this post for everyone?")) return; await api(`/api/entries/${id}`, { method: "DELETE" }); dlg.close(); view.appId ? renderGame() : home(); };
+  if ($("#del", dlg)) $("#del", dlg).onclick = async () => { if (!confirm("Delete this post for everyone?")) return; await api(`/api/entries/${id}`, { method: "DELETE" }); dlg.close(); refreshView(); };
+  if ($("#report", dlg)) $("#report", dlg).onclick = () => report("entry", id);
+  dlg.querySelectorAll("[data-repc]").forEach((b) => (b.onclick = () => report("comment", b.dataset.repc)));
+  dlg.querySelectorAll("[data-mod]").forEach((b) => (b.onclick = async () => {
+    try { await api("/api/admin/entries/bulk", { method: "POST", json: { ids: [id], action: b.dataset.mod } }); await refreshBadge(); openEntry(id, revealed); refreshView(); }
+    catch (err) { alert(err.message); }
+  }));
   if ($("#postComment", dlg)) $("#postComment", dlg).onclick = async () => {
     const text = $("#comment", dlg).value.trim(); if (!text) return;
     await api(`/api/entries/${id}/comments`, { method: "POST", json: { text } }); openEntry(id, revealed);
@@ -322,8 +395,9 @@ function editEntry(orig, defaults) {
         const saved = isNew ? await api("/api/entries", { method: "POST", json: { ...payload, appId: e.appId, gameName: e.gameName } })
           : await api(`/api/entries/${orig.id}`, { method: "PUT", json: payload });
         d.close();
-        if (isNew) await openGame(saved.appId, saved.gameName); else if (view.appId) renderGame(); else home();
+        if (isNew) await openGame(saved.appId, saved.gameName); else refreshView();
         openEntry(saved.id);
+        if (isNew && saved.status === "pending") alert("Thanks! An admin will check your post before everyone can see it.");
       } catch (err) { alert(err.message); }
     };
   };
@@ -344,6 +418,174 @@ function linkPage() {
       $("#msg").textContent = "✅ Linked! Your Deck will finish connecting in a few seconds."; }
     catch (err) { $("#msg").textContent = "⚠️ " + err.message; }
   };
+}
+
+// ---------- admin ----------
+const ADMIN_PAGES = [
+  ["Dashboard", [["overview", "📊", "Overview"], ["log", "🕘", "Mod log"]]],
+  ["Moderation", [["queue", "⏳", "Approval queue"], ["reports", "🚩", "Reports"]]],
+  ["Content", [["posts", "📚", "Posts"], ["comments", "💬", "Comments"], ["games", "🎮", "Games"]]],
+  ["People", [["users", "👥", "Users"]]],
+  ["Site", [["general", "📣", "Announcement & mode"], ["rules", "📏", "Posting rules"]]],
+];
+const bytes = (n) => { if (!n) return "0 B"; const u = ["B", "KB", "MB", "GB", "TB"]; const i = Math.min(4, Math.floor(Math.log(n) / Math.log(1024))); return `${(n / 1024 ** i).toFixed(i ? 1 : 0)} ${u[i]}`; };
+const ago = (ms) => { if (!ms) return "never"; const s = (Date.now() - ms) / 1000; if (s < 90) return "just now"; if (s < 5400) return `${Math.round(s / 60)} min ago`; if (s < 129600) return `${Math.round(s / 3600)} h ago`; return `${Math.round(s / 86400)} days ago`; };
+const stat = (n, label, warn) => `<div class="stat${warn ? " warn" : ""}"><b>${n}</b><span>${label}</span></div>`;
+const STATUS = { published: "✅ Published", pending: "⏳ Waiting", hidden: "🙈 Hidden" };
+const ACTIONS = { "entry.delete": "deleted post", "entry.hide": "hid post", "entry.publish": "published post", "entry.pending": "sent back to the queue",
+  "entry.pin": "pinned", "entry.unpin": "unpinned", "entry.lock": "locked", "entry.unlock": "unlocked", "comment.delete": "deleted a comment on",
+  "user.ban": "banned", "user.unban": "unbanned", "user.admin": "made admin:", "user.unadmin": "removed admin from", "user.purge": "cleared out",
+  "user.signout": "signed out", "report.resolved": "resolved a report on", "report.dismissed": "dismissed a report on", "game.rename": "renamed game",
+  "game.move": "moved posts of game", settings: "changed settings:" };
+let adm = { page: "overview", q: "", status: "", flag: "", sort: "", filter: "", reportStatus: "open", selected: new Set() };
+
+async function adminPage(page) {
+  if (!admin) return home();
+  if (page) adm.page = page;
+  view.appId = null;
+  history.replaceState(null, "", `/?admin=${adm.page}`);
+  const aPost = (path, json = {}) => api(`/api/admin/${path}`, { method: "POST", json });
+  const act = async (fn) => { try { await fn(); await refreshBadge(); await adminPage(); } catch (err) { alert(err.message); } };
+  let html = "";
+  const p = adm.page;
+  if (p === "overview") {
+    const o = await api("/api/admin/overview");
+    html = `<h2>Overview</h2>
+      ${o.readOnly ? '<div class="box warnbox">🔒 The Bookstore is read-only: only admins can post or comment. <a href="#" data-go="general">Change</a></div>' : ""}
+      ${o.pending ? `<div class="box warnbox">⏳ ${o.pending} posts are waiting for approval. <a href="#" data-go="queue">Review</a></div>` : ""}
+      ${o.openReports ? `<div class="box warnbox">🚩 ${o.openReports} open reports. <a href="#" data-go="reports">Review</a></div>` : ""}
+      <h4>Content</h4><div class="stats">${stat(o.published, "published posts")}${stat(o.pending, "waiting", o.pending)}${stat(o.hidden, "hidden")}${stat(o.games, "games")}${stat(o.comments, "comments")}${stat(o.likes, "likes")}</div>
+      <h4>This week</h4><div class="stats">${stat(o.postsWeek, "new posts")}${stat(o.commentsWeek, "new comments")}${stat(o.usersWeek, "new people")}</div>
+      <h4>People</h4><div class="stats">${stat(o.users, "people signed in once")}${stat(o.admins, "admins")}${stat(o.banned, "banned")}${stat(o.devices, "linked Decks")}${stat(o.openReports, "open reports", o.openReports)}</div>
+      <h4>Storage</h4><div class="stats">${stat(bytes(o.mediaBytes), "screenshots & audio")}${stat(bytes(o.dbBytes), "database")}${stat(Math.floor(o.uptime / 3600) + " h", "uptime")}</div>
+      <div class="row" style="margin-top:14px"><div><h4>Top games</h4>${o.topGames.map((g) => `<div class="mini"><img src="${art(g.appId)}" onerror="this.style.visibility='hidden'"> ${esc(g.name)} <small>${g.count}</small></div>`).join("") || '<p class="meta">None yet.</p>'}</div>
+        <div><h4>Top posters</h4>${o.topAuthors.map((u) => `<div class="mini">${who(u)} <small>${u.count} posts · ♥ ${u.likes}</small></div>`).join("") || '<p class="meta">None yet.</p>'}</div></div>`;
+  } else if (p === "log") {
+    const log = await api("/api/admin/log");
+    html = `<h2>Mod log</h2><p class="meta">Everything admins did, newest first.</p>
+      ${log.map((l) => `<div class="logrow"><span class="meta">${date(l.at)}</span><span>${who(l.actor)} ${esc(ACTIONS[l.action] || l.action)} <b>${esc(l.detail)}</b></span></div>`).join("") || '<p class="meta">Nothing yet.</p>'}`;
+  } else if (p === "queue" || p === "posts") {
+    const params = new URLSearchParams(p === "queue" ? { status: "pending", sort: "old" } : { q: adm.q, status: adm.status, flag: adm.flag, sort: adm.sort, author: adm.author || "" });
+    const list = await api(`/api/admin/entries?${params}`);
+    adm.selected = new Set([...adm.selected].filter((id) => list.some((e) => e.id === id)));
+    html = `<h2>${p === "queue" ? "Approval queue" : "Posts"}</h2>
+      ${p === "queue" ? `<p class="meta">${siteInfo.approvePosts ? "New posts from people who aren't admins wait here until you publish them." : 'Posts only wait here when "Check new posts first" is on under <a href="#" data-go="rules">Posting rules</a>.'}</p>`
+        : `<div class="toolbar"><input id="admQ" placeholder="Search title, text, game or ID…" style="flex:1" value="${esc(adm.q)}">
+          <select id="admStatus"><option value="">Any status</option><option value="published">Published</option><option value="pending">Waiting</option><option value="hidden">Hidden</option></select>
+          <select id="admFlag"><option value="">Everything</option><option value="pinned">📌 Pinned</option><option value="locked">🔒 Locked</option><option value="reported">🚩 Reported</option></select>
+          <select id="admSort"><option value="">Newest</option><option value="old">Oldest</option><option value="updated">Recently updated</option><option value="top">Most liked</option><option value="comments">Most comments</option></select></div>
+          ${adm.author ? `<div class="toolbar"><span class="chip">👤 Posts by ${esc(adm.authorName || adm.author)} <a href="#" id="clearAuthor">✕</a></span></div>` : ""}`}
+      <div class="toolbar bulk"><label class="inline"><input type="checkbox" id="selAll"> Select all</label><span class="meta">${adm.selected.size} selected</span>
+        <span style="flex:1"></span>${[["publish", "✅ Publish"], ["hide", "🙈 Hide"], ["pin", "📌 Pin"], ["unpin", "Unpin"], ["lock", "🔒 Lock"], ["unlock", "Unlock"]].map(([a, l]) => `<button data-bulk="${a}">${l}</button>`).join("")}<button class="danger" data-bulk="delete">🗑 Delete</button></div>
+      ${list.map((e) => `<div class="arow"><input type="checkbox" data-sel="${esc(e.id)}" ${adm.selected.has(e.id) ? "checked" : ""}>
+        <div class="text" data-open="${esc(e.id)}"><b>${kindOf(e.kind)[1]} ${esc(e.title)}</b> ${e.pinned ? '<span class="chip">📌</span>' : ""}${e.locked ? '<span class="chip">🔒</span>' : ""}${e.reports ? `<span class="chip redchip">🚩 ${e.reports}</span>` : ""}<span class="chip">${STATUS[e.status]}</span>
+          <div class="meta">🎮 ${esc(e.gameName)} · ${who(e.author)} · ${date(e.createdAt)} · ♥ ${e.likes} · 💬 ${e.comments}</div><div class="first">${esc(e.firstLine)}</div></div>
+        <div class="acts">${e.status !== "published" ? `<button class="primary" data-one="publish" data-id="${esc(e.id)}">Publish</button>` : `<button data-one="hide" data-id="${esc(e.id)}">Hide</button>`}<button class="danger" data-one="delete" data-id="${esc(e.id)}">Delete</button></div></div>`).join("")
+        || `<p class="meta">${p === "queue" ? "Nothing is waiting. 🎉" : "No posts match."}</p>`}`;
+  } else if (p === "reports") {
+    const list = await api(`/api/admin/reports?status=${adm.reportStatus}`);
+    html = `<h2>Reports</h2><div class="toolbar"><select id="admRStatus"><option value="open">Open</option><option value="resolved">Resolved</option><option value="dismissed">Dismissed</option><option value="all">All</option></select></div>
+      ${list.map((r) => `<div class="arow"><div class="text"><b>🚩 ${r.kind === "entry" ? "Post" : "Comment"}${r.entryTitle ? ` on <a href="#" data-open="${esc(r.entryId)}">${esc(r.entryTitle)}</a>` : ""}</b> <span class="chip">${esc(r.status)}</span>
+          <div class="quote">${r.exists ? esc(r.text || "") : '<i class="meta">already removed</i>'}</div>
+          <div class="meta">${r.author ? "by " + who(r.author) + " · " : ""}reported by ${who(r.reporter)} ${ago(r.createdAt)}${r.reason ? ` · “${esc(r.reason)}”` : ""}${r.resolvedBy ? ` · ${esc(r.status)} by ${esc(r.resolvedBy.name)}` : ""}</div></div>
+        ${r.status === "open" ? `<div class="acts"><button class="danger" data-rremove="${esc(r.id)}">Remove ${r.kind === "entry" ? "post" : "comment"}</button><button data-rdismiss="${esc(r.id)}">Dismiss</button>${r.author ? `<button data-ruser="${esc(r.author.steamId)}">👤 User</button>` : ""}</div>` : ""}</div>`).join("") || '<p class="meta">No reports here.</p>'}`;
+  } else if (p === "comments") {
+    const list = await api(`/api/admin/comments?q=${encodeURIComponent(adm.q)}`);
+    html = `<h2>Comments</h2><div class="toolbar"><input id="admQ" placeholder="Search comments…" style="flex:1" value="${esc(adm.q)}"></div>
+      ${list.map((cm) => `<div class="arow"><div class="text"><div class="meta">${who(cm.author)} on <a href="#" data-open="${esc(cm.entryId)}">${esc(cm.entryTitle || "(deleted post)")}</a> · ${esc(cm.gameName || "")} · ${date(cm.createdAt)} ${cm.reports ? `<span class="chip redchip">🚩 ${cm.reports}</span>` : ""}</div><div class="quote">${esc(cm.text)}</div></div>
+        <div class="acts"><button class="danger" data-cdel="${esc(cm.id)}">Delete</button></div></div>`).join("") || '<p class="meta">No comments.</p>'}`;
+  } else if (p === "games") {
+    const list = await api("/api/admin/games");
+    html = `<h2>Games</h2><p class="meta">Fix a game's name, or move its posts to the right Steam app ID if someone typed the wrong one.</p>
+      ${list.map((g) => `<div class="arow"><img class="gart" src="${art(g.appId)}" onerror="this.style.visibility='hidden'"><div class="text"><b>${esc(g.names[0] || g.appId)}</b>${g.names.length > 1 ? ` <span class="chip">also: ${esc(g.names.slice(1).join(", "))}</span>` : ""}
+          <div class="meta">App ${esc(g.appId)} · ${g.count} posts · ♥ ${g.likes} · updated ${ago(g.updatedAt)}</div></div>
+        <div class="acts"><button data-grename="${esc(g.appId)}" data-name="${esc(g.names[0] || "")}">✏️ Rename</button><button data-gmove="${esc(g.appId)}">↪ Move posts</button><button data-gview="${esc(g.appId)}" data-name="${esc(g.names[0] || "")}">Open</button></div></div>`).join("") || '<p class="meta">No games yet.</p>'}`;
+  } else if (p === "users") {
+    const list = await api(`/api/admin/users?${new URLSearchParams({ q: adm.q, filter: adm.filter, sort: adm.sort })}`);
+    html = `<h2>Users</h2><p class="meta">Everyone who has signed in with Steam at least once.</p>
+      <div class="toolbar"><input id="admQ" placeholder="Search name or Steam ID…" style="flex:1" value="${esc(adm.q)}">
+        <select id="admFilter"><option value="">Everyone</option><option value="banned">Banned</option><option value="admins">Admins</option></select>
+        <select id="admSort"><option value="">Newest</option><option value="login">Last sign-in</option><option value="posts">Most posts</option><option value="name">Name</option></select></div>
+      ${list.map((u) => `<details class="ucard" ${adm.openUser === u.steamId ? "open" : ""} data-user="${esc(u.steamId)}"><summary>${u.avatar ? `<img src="${esc(u.avatar)}">` : '<div class="ph"></div>'}
+          <div class="text"><b>${esc(u.name)}</b> ${u.role ? `<span class="chip">🛡 admin${u.envAdmin ? " (owner)" : ""}</span>` : ""}${u.banned ? '<span class="chip redchip">⛔ banned</span>' : ""}
+          <div class="meta">${u.posts} posts · ${u.comments} comments · ${u.devices} Decks · joined ${day(u.createdAt)} · last sign-in ${ago(u.lastLogin)}</div>${u.banReason ? `<div class="meta">Ban reason: ${esc(u.banReason)}</div>` : ""}</div></summary>
+        <div class="uactions">${u.steamId === me.steamId ? '<p class="meta">This is you.</p>' : `
+          <div class="toolbar"><span class="meta">See</span><button data-uposts="${esc(u.steamId)}" data-name="${esc(u.name)}">📚 Their posts</button><a href="https://steamcommunity.com/profiles/${esc(u.steamId)}" target="_blank" rel="noopener"><button>Steam profile</button></a></div>
+          ${ownerAdmin && !u.envAdmin ? `<div class="toolbar"><span class="meta">Role</span><label class="inline"><input type="checkbox" data-uadmin="${esc(u.steamId)}" ${u.role ? "checked" : ""}> 🛡 Admin (can moderate everything)</label></div>` : ""}
+          ${u.envAdmin || (u.role && !ownerAdmin) ? '<p class="meta">Only site owners can change another admin.</p>' : `
+          <div class="toolbar"><span class="meta">Account</span>${u.banned ? `<button class="primary" data-uunban="${esc(u.steamId)}">Unban</button>` : `<button class="danger" data-uban="${esc(u.steamId)}">⛔ Ban</button>`}<button data-usignout="${esc(u.steamId)}">🚪 Sign out & unlink Decks</button></div>
+          <div class="toolbar"><span class="meta">Clean up</span><button class="danger" data-upurge="posts" data-id="${esc(u.steamId)}">Delete all posts</button><button class="danger" data-upurge="comments" data-id="${esc(u.steamId)}">Delete all comments</button></div>`}`}</div></details>`).join("") || '<p class="meta">No one matches.</p>'}`;
+  } else if (p === "general" || p === "rules") {
+    const st = await api("/api/admin/settings");
+    html = p === "general" ? `<h2>Announcement & mode</h2>
+      <label>Announcement <span class="meta">— shown at the top of every page. Leave empty to hide it.</span></label><textarea id="sAnn" rows="3" maxlength="2000">${esc(st.announcement)}</textarea>
+      <div class="toolbar"><button class="primary" id="sSaveAnn">Save announcement</button></div>
+      <h4>Mode</h4>
+      <label class="radio"><input type="checkbox" data-set="readOnly" ${st.readOnly ? "checked" : ""}><span><b>🔒 Read-only</b><br><span class="meta">Everyone can still browse and save posts, but only admins can post, edit or comment. Handy during a cleanup.</span></span></label>
+      <label class="radio"><input type="checkbox" data-set="commentsEnabled" ${st.commentsEnabled ? "checked" : ""}><span><b>💬 Comments</b><br><span class="meta">Turn off to close comments everywhere (existing ones stay visible).</span></span></label>`
+    : `<h2>Posting rules</h2><p class="meta">Admins skip all of these.</p>
+      <label class="radio"><input type="checkbox" data-set="approvePosts" ${st.approvePosts ? "checked" : ""}><span><b>⏳ Check new posts first</b><br><span class="meta">New posts wait in the Approval queue until an admin publishes them. The poster can still see theirs.</span></span></label>
+      <div class="row"><div><label>Posts per person per day (0 = no limit)</label><input id="sMax" type="number" min="0" value="${st.maxPostsPerDay}" style="width:100%"></div>
+        <div><label>Days before new accounts can post or comment</label><input id="sDays" type="number" min="0" value="${st.minAccountDays}" style="width:100%"></div></div>
+      <label>Blocked words <span class="meta">— comma or line separated; posts and comments containing one are refused</span></label><textarea id="sWords" rows="4">${esc(st.blockedWords)}</textarea>
+      <div class="toolbar"><button class="primary" id="sSaveRules">Save rules</button></div>`;
+  }
+  const nav = ADMIN_PAGES.map(([g, pages]) => `<div class="agroup">${g}</div>` + pages.map(([id, icon, label]) => {
+    const n = id === "queue" ? badges.pendingPosts : id === "reports" ? badges.openReports : 0;
+    return `<button data-go="${id}" class="${id === p ? "active" : ""}">${icon} ${label}${n ? `<span class="badge">${n}</span>` : ""}</button>`;
+  }).join("")).join("");
+  $("#main").innerHTML = `<div class="admin"><div class="aside"><div class="ahead">🛡 Admin</div>${nav}</div><div class="apage">${html}</div></div>`;
+  const m = $("#main"), on = (sel, fn) => m.querySelectorAll(sel).forEach(fn), enc = encodeURIComponent;
+  on("[data-go]", (b) => (b.onclick = (e) => { e.preventDefault(); adm.q = adm.status = adm.flag = adm.sort = adm.filter = adm.author = ""; adm.selected.clear(); adminPage(b.dataset.go); }));
+  on("[data-open]", (el) => (el.onclick = (e) => { e.preventDefault(); openEntry(el.dataset.open).catch((err) => alert(err.message)); }));
+  const bindSel = (id, key) => { const el = $(id, m); if (el) { el.value = adm[key]; el.onchange = () => { adm[key] = el.value; adminPage(); }; } };
+  bindSel("#admStatus", "status"); bindSel("#admFlag", "flag"); bindSel("#admSort", "sort"); bindSel("#admFilter", "filter"); bindSel("#admRStatus", "reportStatus");
+  if ($("#clearAuthor", m)) $("#clearAuthor", m).onclick = (e) => { e.preventDefault(); adm.author = ""; adminPage(); };
+  if ($("#admQ", m)) $("#admQ", m).onchange = (e) => { adm.q = e.target.value; adminPage(); };
+  // posts
+  on("[data-sel]", (c) => (c.onchange = () => { c.checked ? adm.selected.add(c.dataset.sel) : adm.selected.delete(c.dataset.sel); $(".bulk .meta", m).textContent = `${adm.selected.size} selected`; }));
+  if ($("#selAll", m)) $("#selAll", m).onchange = (e) => on("[data-sel]", (c) => { c.checked = e.target.checked; c.onchange(); });
+  on("[data-bulk]", (b) => (b.onclick = () => {
+    if (!adm.selected.size) return alert("Tick some posts first.");
+    if (b.dataset.bulk === "delete" && !confirm(`Delete ${adm.selected.size} posts for everyone?`)) return;
+    act(() => aPost("entries/bulk", { ids: [...adm.selected], action: b.dataset.bulk }).then(() => adm.selected.clear()));
+  }));
+  on("[data-one]", (b) => (b.onclick = () => { if (b.dataset.one === "delete" && !confirm("Delete this post for everyone?")) return; act(() => aPost("entries/bulk", { ids: [b.dataset.id], action: b.dataset.one })); }));
+  // reports & comments
+  on("[data-rremove]", (b) => (b.onclick = () => confirm("Remove it for everyone?") && act(() => aPost(`reports/${enc(b.dataset.rremove)}/remove`))));
+  on("[data-rdismiss]", (b) => (b.onclick = () => act(() => aPost(`reports/${enc(b.dataset.rdismiss)}`, { status: "dismissed" }))));
+  on("[data-ruser]", (b) => (b.onclick = () => { adm.q = b.dataset.ruser; adm.openUser = b.dataset.ruser; adminPage("users"); }));
+  on("[data-cdel]", (b) => (b.onclick = () => confirm("Delete this comment?") && act(() => api(`/api/comments/${enc(b.dataset.cdel)}`, { method: "DELETE" }))));
+  // games
+  on("[data-grename]", (b) => (b.onclick = () => { const n = prompt("Game name:", b.dataset.name); if (n) act(() => aPost(`games/${enc(b.dataset.grename)}`, { name: n })); }));
+  on("[data-gmove]", (b) => (b.onclick = () => { const to = prompt(`Move every post of app ${b.dataset.gmove} to which Steam app ID?`); if (to) act(() => aPost(`games/${enc(b.dataset.gmove)}/move`, { to })); }));
+  on("[data-gview]", (b) => (b.onclick = () => openGame(b.dataset.gview, b.dataset.name)));
+  // users
+  on("details.ucard", (d) => (d.ontoggle = () => { if (d.open) adm.openUser = d.dataset.user; }));
+  on("[data-uposts]", (b) => (b.onclick = () => { adm.q = adm.status = adm.flag = adm.sort = ""; adm.author = b.dataset.uposts; adm.authorName = b.dataset.name; adminPage("posts"); }));
+  on("[data-uadmin]", (c) => (c.onchange = () => { if (!confirm(c.checked ? "Make this person an admin? They can hide, delete and ban." : "Remove their admin rights?")) { c.checked = !c.checked; return; } act(() => aPost(`users/${enc(c.dataset.uadmin)}`, { role: c.checked ? "admin" : "" })); }));
+  on("[data-uban]", (b) => (b.onclick = () => { const reason = prompt("Ban this person? They're signed out and can't post, comment or like. Reason (optional, only admins see it):"); if (reason !== null) act(() => aPost(`users/${enc(b.dataset.uban)}`, { banned: true, reason })); }));
+  on("[data-uunban]", (b) => (b.onclick = () => act(() => aPost(`users/${enc(b.dataset.uunban)}`, { banned: false }))));
+  on("[data-usignout]", (b) => (b.onclick = () => confirm("Sign them out and unlink their Decks?") && act(() => aPost(`users/${enc(b.dataset.usignout)}/signout`))));
+  on("[data-upurge]", (b) => (b.onclick = () => confirm(`Delete ALL ${b.dataset.upurge} by this person? This can't be undone.`) && act(async () => { const r = await aPost(`users/${enc(b.dataset.id)}/purge`, { what: b.dataset.upurge }); alert(`Deleted ${r.posts} posts and ${r.comments} comments.`); })));
+  // settings
+  on("[data-set]", (c) => (c.onchange = () => act(async () => { await aPost("settings", { [c.dataset.set]: c.checked }); await loadMe(); })));
+  if ($("#sSaveAnn", m)) $("#sSaveAnn", m).onclick = () => act(async () => { await aPost("settings", { announcement: $("#sAnn", m).value }); await loadMe(); });
+  if ($("#sSaveRules", m)) $("#sSaveRules", m).onclick = () => act(() => aPost("settings", { maxPostsPerDay: +$("#sMax", m).value || 0, minAccountDays: +$("#sDays", m).value || 0, blockedWords: $("#sWords", m).value }));
+}
+
+async function refreshBadge() {
+  const r = await api("/api/me");
+  badges = { openReports: r.openReports || 0, pendingPosts: r.pendingPosts || 0 };
+  siteInfo = r.site || {};
+  paintHeader();
+}
+
+function report(kind, id) {
+  if (!me) return (location.href = signIn());
+  const reason = prompt(`Report this ${kind === "entry" ? "post" : "comment"} to the admins. What's wrong with it?`);
+  if (reason === null) return;
+  api("/api/report", { method: "POST", json: { kind, id, reason } }).then(() => alert("Thanks, the admins will take a look.")).catch((err) => alert(err.message));
 }
 
 $("#home").onclick = () => home();
