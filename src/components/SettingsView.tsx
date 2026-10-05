@@ -1,12 +1,12 @@
 import { FC, useEffect, useState } from "react";
-import { ButtonItem, DropdownItem, PanelSectionRow, showModal, TextField, ToggleField } from "@decky/ui";
+import { ButtonItem, DropdownItem, PanelSectionRow, TextField, ToggleField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { emitDataChanged, loadSettings, updateSettings, useSettings } from "../state/notesStore";
 import { BackupStatus, DictateTarget, VoiceFallback } from "../types";
 import { ComboRow, VoiceCommandList } from "./ComboSettings";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Bookstore";
-import { OverlayModal } from "./OverlayModal";
+import { openOverlayModal } from "./OverlayModal";
 import { useSeenButtons } from "../opening";
 import { formatDateTime } from "../utils/format";
 import { errText } from "../utils/errors";
@@ -234,7 +234,7 @@ export const SettingsView: FC = () => {
           description={`${settings.overlayX != null ? `${settings.overlayX}, ${settings.overlayY} px` : "Top left"} · text ${
             settings.overlayTextSize ?? 13
           }px · ${settings.overlayHideStats ? "Steam's stats hidden" : "with Steam's stats"}`}
-          onClick={() => showModal(<OverlayModal settings={settings} />)}
+          onClick={openOverlayModal}
         >
           Position and look…
         </ButtonItem>

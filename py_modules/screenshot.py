@@ -98,6 +98,14 @@ async def capture(dest: str):
     raise RuntimeError("gamescope didn't take a screenshot (only works in Game Mode)")
 
 
+def forget_gamescope_shot():
+    """Deletes gamescope's own copy, for screenshots that shouldn't be kept anywhere."""
+    try:
+        os.remove(GAMESCOPE_SHOT)
+    except OSError:
+        pass
+
+
 def attach(appid: str, path: str) -> dict:
     """Moves a captured screenshot into the game's media. Returns the Screenshot item for a note."""
     shot_id = str(uuid.uuid4())

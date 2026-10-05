@@ -1,9 +1,10 @@
 import { CSSProperties, FC, PointerEvent as ReactPointerEvent, ReactNode, useEffect, useRef, useState } from "react";
-import { DialogButton, Focusable, GamepadEvent, ModalRoot, ToggleField } from "@decky/ui";
+import { DialogButton, Focusable, GamepadEvent, ModalRoot, Navigation, QuickAccessTab, showModal, ToggleField } from "@decky/ui";
 import { FaArrowUp, FaDotCircle, FaThumbtack } from "react-icons/fa";
 import { backend } from "../api/backend";
-import { useRunningGame } from "../hooks/useAppLifetime";
-import { updateSettings } from "../state/notesStore";
+import { getRunningGame, useRunningGame } from "../hooks/useAppLifetime";
+import { closeNotesPage, isNotesPageShowing, openNotesPage } from "../opening";
+import { getSettings, updateSettings } from "../state/notesStore";
 import { OverlayPosition, Settings } from "../types";
 import { gameArt } from "./Library";
 import * as s from "./styles";
@@ -90,14 +91,47 @@ const Caption: FC<{ children: ReactNode }> = ({ children }) => (
   <div style={{ fontSize: "12px", opacity: 0.65, textTransform: "uppercase", marginTop: "4px" }}>{children}</div>
 );
 
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Opens the modal over a fresh picture of the game: in a game, Steam's menu is put away so the game is on
+ * screen, gamescope takes a screenshot, and then the menu (the notes page or the side panel, whichever you
+ * were in) comes back with the modal on top. The screenshot is deleted when the modal closes.
+ */
+export async function openOverlayModal() {
+  let backdrop: string | null = null;
+  if (getRunningGame()) {
+    const onPage = isNotesPageShowing();
+    if (onPage) closeNotesPage(); // keeps the open note, which comes back with the page
+    else Navigation.CloseSideMenus();
+    await wait(700); // Steam's menu fades out
+    backdrop = await backend.captureBackdrop().catch(() => null);
+    if (onPage) openNotesPage();
+    else Navigation.OpenQuickAccessMenu(QuickAccessTab.Decky);
+    await wait(400); // let the page (and its note window) open first, so the modal ends up on top
+  }
+  showModal(<OverlayModal settings={getSettings()} backdrop={backdrop ?? undefined} />);
+}
+
 /**
  * Where the pinned list sits on screen, and how it looks. Shows the real list (the pinned note, else this
  * game's latest checklist) at its real size over a picture of the game. Gamepad: snap it to a spot, or select
  * the picture, press A and move it with the D-pad. Touch: drag it. Nothing changes until you press Save.
  */
-export const OverlayModal: FC<{ settings: Settings; closeModal?: () => void }> = ({ settings, closeModal }) => {
+export const OverlayModal: FC<{ settings: Settings; backdrop?: string; closeModal?: () => void }> = ({
+  settings,
+  backdrop,
+  closeModal,
+}) => {
   const game = useRunningGame();
-  const picture = useGamePicture(game?.appId);
+  const fallback = useGamePicture(backdrop ? undefined : game?.appId);
+  const picture = backdrop ?? fallback;
+  useEffect(
+    () => () => {
+      if (backdrop) backend.discardBackdrop().catch(() => {});
+    },
+    []
+  );
   const [lines, setLines] = useState<string[] | null>(null);
   const [source, setSource] = useState<"pinned" | "note" | "sample">("sample");
   const [text, setText] = useState(settings.overlayTextSize ?? DEFAULT_TEXT);

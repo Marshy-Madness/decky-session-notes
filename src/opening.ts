@@ -35,6 +35,8 @@ const APP_RUNNING_ROUTE = "/apprunning";
 // means it's on screen.
 let pageMounted = false;
 
+export const isNotesPageShowing = () => pageMounted;
+
 /** Called by the full-screen page as it mounts and unmounts. */
 export function setNotesPageMounted(mounted: boolean) {
   pageMounted = mounted;

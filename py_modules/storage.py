@@ -431,6 +431,10 @@ def save_media_data(appid: str, b64: str, ext: str) -> str:
     return name
 
 
+def data_url(path: str) -> str:
+    return _data_url(path)
+
+
 def get_media(appid: str, filename: str):
     path = os.path.join(media_dir(appid), os.path.basename(filename))
     return _data_url(path) if os.path.exists(path) else None

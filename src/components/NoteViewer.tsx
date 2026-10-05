@@ -10,8 +10,7 @@ import { kindInfo } from "../utils/kinds";
 import { AudioButton } from "./AudioButton";
 import { Transcripts } from "./Transcripts";
 import * as s from "./styles";
-import { OverlayModal } from "./OverlayModal";
-import { getSettings } from "../state/notesStore";
+import { openOverlayModal } from "./OverlayModal";
 
 const ImageModal: FC<{ appId: string; file: string; closeModal?: () => void }> = ({ appId, file, closeModal }) => (
   <ModalRoot onCancel={closeModal} bAllowFullSize>
@@ -147,7 +146,7 @@ export const NoteViewer: FC<{
             {onScreen && (
               <DialogButton
                 style={{ ...s.smallButton, padding: "2px 10px", fontSize: "12px" }}
-                onClick={() => showModal(<OverlayModal settings={getSettings()} />)}
+                onClick={openOverlayModal}
               >
                 Move…
               </DialogButton>

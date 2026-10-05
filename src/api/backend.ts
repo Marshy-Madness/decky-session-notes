@@ -47,6 +47,8 @@ export const backend = {
   captureScreen: () => call<[], string>("capture_screen"),
   attachCaptured: (appId: string) => call<[string], Screenshot | null>("attach_captured", appId),
   discardCaptured: () => call<[], void>("discard_captured"),
+  captureBackdrop: () => call<[], string | null>("capture_backdrop"),
+  discardBackdrop: () => call<[], void>("discard_backdrop"),
   transcribeRecording: (appId: string, file: string) => call<[string, string], string>("transcribe_recording", appId, file),
 
   syncNow: () => call<[], { pushed: number; pulled: number }>("sync_now"),

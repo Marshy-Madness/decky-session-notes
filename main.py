@@ -13,6 +13,7 @@ import screenshot
 
 DICTATION_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "dictation.wav")
 VOICE_SHOT_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "voice-shot.png")
+BACKDROP_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "overlay-backdrop.png")
 
 
 class Plugin:
@@ -186,6 +187,21 @@ class Plugin:
         if os.path.exists(VOICE_SHOT_PATH):
             os.remove(VOICE_SHOT_PATH)
 
+    # a throwaway screenshot of the game behind the pin-to-screen modal, deleted when the modal closes
+    async def capture_backdrop(self):
+        """Returns the game's screen as a data URL, or None if gamescope didn't take one."""
+        try:
+            await screenshot.capture(BACKDROP_PATH)
+            screenshot.forget_gamescope_shot()
+            return storage.data_url(BACKDROP_PATH)
+        except Exception as e:
+            decky.logger.warning(f"Backdrop screenshot failed: {e}")
+            return None
+
+    async def discard_backdrop(self):
+        if os.path.exists(BACKDROP_PATH):
+            os.remove(BACKDROP_PATH)
+
     async def transcribe_recording(self, appid: str, file: str):
         text = await asyncio.to_thread(self.sync.transcribe_media, appid, file)
         if text:
@@ -297,3 +313,4 @@ class Plugin:
         self.overlay.clear()
         await self.recorder.stop()
         await self.dictation.stop()
+        await self.discard_backdrop()
