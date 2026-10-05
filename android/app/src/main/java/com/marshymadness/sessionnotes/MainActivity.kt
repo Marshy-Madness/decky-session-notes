@@ -6,7 +6,9 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
@@ -104,6 +106,7 @@ class MainActivity : Activity() {
         }
 
         handleShareIntent(intent)
+        askForPermissionsOnce()
         if (savedInstanceState != null) {
             savedInstanceState.getBundle("notes")?.let { webView.restoreState(it) } ?: loadHome()
             savedInstanceState.getBundle("store")?.let { storeView.restoreState(it); storeLoaded = true }
@@ -151,6 +154,30 @@ class MainActivity : Activity() {
             gravity = Gravity.CENTER
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f)
         }, LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(6) })
+    }
+
+    /** The microphone and media permissions the app needs, for this Android version. */
+    private fun neededPermissions(): Array<String> {
+        val media = when {
+            Build.VERSION.SDK_INT >= 34 -> listOf(
+                Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO,
+                Manifest.permission.READ_MEDIA_AUDIO, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED,
+            )
+            Build.VERSION.SDK_INT >= 33 -> listOf(
+                Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VIDEO, Manifest.permission.READ_MEDIA_AUDIO,
+            )
+            else -> listOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+        return (listOf(Manifest.permission.RECORD_AUDIO) + media)
+            .filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }.toTypedArray()
+    }
+
+    /** Ask for the microphone and photos/media on first launch, so voice notes and screenshots just work later. */
+    private fun askForPermissionsOnce() {
+        if (prefs.getBoolean("askedPermissions", false)) return
+        prefs.edit().putBoolean("askedPermissions", true).apply()
+        val missing = neededPermissions()
+        if (missing.isNotEmpty()) requestPermissions(missing, REQ_START)
     }
 
     private fun scrollToTop() = current.evaluateJavascript("window.scrollTo({top: 0, behavior: 'smooth'})", null)
@@ -506,8 +533,16 @@ class MainActivity : Activity() {
         override fun onShowFileChooser(view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams): Boolean {
             fileCallback?.onReceiveValue(null)
             fileCallback = callback
+            val imagesOnly = params.acceptTypes.any { it.isNotBlank() } && params.acceptTypes.all { it.isBlank() || it.startsWith("image/") }
+            val intent = if (imagesOnly && Build.VERSION.SDK_INT >= 33) {
+                // Android's photo picker: recent photos and screenshots up front.
+                Intent(MediaStore.ACTION_PICK_IMAGES).apply {
+                    type = "image/*"
+                    if (params.mode == FileChooserParams.MODE_OPEN_MULTIPLE) putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MediaStore.getPickImagesMaxLimit().coerceAtMost(20))
+                }
+            } else params.createIntent()
             return try {
-                startActivityForResult(params.createIntent(), REQ_FILES)
+                startActivityForResult(intent, REQ_FILES)
                 true
             } catch (e: Exception) {
                 fileCallback = null
@@ -546,6 +581,7 @@ class MainActivity : Activity() {
         private const val REQ_MIC = 1
         private const val REQ_FILES = 2
         private const val REQ_DICTATE = 3
+        private const val REQ_START = 4
         private const val DEFAULT_BOOKSTORE = "https://bookstore.marshymadness.com"
     }
 }
