@@ -241,6 +241,12 @@ class MainActivity : Activity() {
         }
     }
 
+    /** Back in the app: let the site pick up a newer version of itself and the latest notes. */
+    override fun onResume() {
+        super.onResume()
+        webView.evaluateJavascript("window.snResume && window.snResume()", null)
+    }
+
     override fun onDestroy() {
         endDictation()
         super.onDestroy()

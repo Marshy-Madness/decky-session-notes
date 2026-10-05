@@ -1104,6 +1104,26 @@ window.snBack = () => {
   return false;
 };
 
+/** Coming back to the page (the Android app keeps it open for days): pick up a newer website and the latest notes. */
+const PAGE_VERSION = "__PAGE_VERSION__";
+let lastRefresh = Date.now();
+window.snResume = async () => {
+  if (Date.now() - lastRefresh < 15000 || $("#app").classList.contains("hidden")) return;
+  if (dictation || $("#panel").open || $("#editor").open) return; // don't throw away something half-written
+  lastRefresh = Date.now();
+  try {
+    const info = await (await fetch("/api/me")).json();
+    if (info.page && info.page !== PAGE_VERSION) return location.reload();
+    if (!info.loggedIn) return showLogin();
+    await loadGames();
+    if (game && !$("#panel").open && !$("#editor").open) {
+      game = (await api(`/api/games/${encodeURIComponent(game.appId)}`)).game;
+      render();
+    }
+  } catch {}
+};
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") window.snResume(); });
+
 $("#search").oninput = render;
 $("#gamePicker").onchange = (e) => {
   if (e.target.value === "+") { e.target.value = game?.appId || ""; return addGameDialog(); }

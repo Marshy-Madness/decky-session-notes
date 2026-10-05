@@ -501,6 +501,12 @@ def user_is_pending(user: dict):
 
 # ---------- HTTP ----------
 
+
+def page_version() -> str:
+    """Short hash of index.html, so an open page (e.g. the Android app left running) can tell it's out of date."""
+    with open(os.path.join(HERE, "index.html"), "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()[:12]
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "SessionNotes/3"
 
@@ -602,7 +608,7 @@ class Handler(BaseHTTPRequestHandler):
         p = self.parts()
         if not p or p == ["index.html"]:
             with open(os.path.join(HERE, "index.html"), "rb") as f:
-                return self.send(200, f.read(), "text/html; charset=utf-8")
+                return self.send(200, f.read().replace(b"__PAGE_VERSION__", page_version().encode()), "text/html; charset=utf-8")
         if len(p) == 1 and p[0] in STATIC:
             with open(os.path.join(HERE, p[0]), "rb") as f:
                 return self.send(200, f.read(), STATIC[p[0]], {"Cache-Control": "no-cache"})
@@ -626,7 +632,7 @@ class Handler(BaseHTTPRequestHandler):
             u = accounts.session_user(self.session_id())
             return self.send(200, {"loggedIn": bool(u), "user": {**accounts.public(u), "email": u.get("email"),
                                                                   "hasPassword": bool(u.get("password"))} if u else None,
-                                   "androidApp": os.path.exists(APK_PATH), "bookstoreUrl": BOOKSTORE_URL,
+                                   "page": page_version(), "androidApp": os.path.exists(APK_PATH), "bookstoreUrl": BOOKSTORE_URL,
                                    "speech": speech_on(u), "signups": "open" if accounts.db.get("allowSignups") else "approval",
                                    "pendingUsers": len(accounts.pending()) if u and u.get("role") == "owner" else 0})
 
