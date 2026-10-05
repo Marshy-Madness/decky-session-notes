@@ -162,8 +162,8 @@ export interface SteamScreenshot {
 export type SortMode = "alpha" | "created" | "edited" | "recent";
 /** @deprecated the old fixed choices for the open combo; see Settings.combos */
 export type OpenChord = "l4r4" | "l5r5" | "l3r3" | "off";
-/** What a button combo does: open the notes page, speech to text, or a voice command. */
-export type ComboAction = "open" | "dictate" | "voice";
+/** What a button combo does: open the notes page, speech to text, a voice command, or the Tome wheel. */
+export type ComboAction = "open" | "dictate" | "voice" | "tomes";
 /** What a voice command does with words that don't start with a command. */
 export type VoiceFallback = "note" | "append" | "nothing";
 /** Where STEAM + L5 + R5 dictation goes: typed into whatever is focused, or saved as a note. */
@@ -220,6 +220,34 @@ export interface Settings {
   browserMode?: BrowserMode;
   /** Reader view text size in pixels; unset = 17. */
   readerTextSize?: number;
+  /** The Desk: which Tomes show, in what order, and Tome options. */
+  desk?: DeskSettings;
+}
+
+/** One arrangement of the Desk's Tomes. Tomes not in `order` (new ones) go at the end. */
+export interface DeskLayout {
+  order: string[];
+  /** Tomes taken off the Desk. */
+  hidden: string[];
+  /** Tomes folded down to their title bar. */
+  collapsed: string[];
+}
+
+export interface DeskSettings {
+  /** The layout for games without their own, and when no game is picked. */
+  layout?: DeskLayout;
+  /** Each game's own layout (per-game layouts). */
+  games?: Record<string, DeskLayout>;
+  /** Changes made while a game is showing apply to that game only. On unless turned off. */
+  perGame?: boolean;
+  /** How much Y adds on a counter; unset = 3. */
+  counterStep?: number;
+  /** Notes opened lately, newest first, per game (for Game Brain and Guides). */
+  recent?: Record<string, string[]>;
+  /** When the Workshop Tome was last looked at, per game, for its "new" badge. */
+  workshopSeen?: Record<string, number>;
+  /** The Tome wheel's button combo. On unless turned off. */
+  radial?: boolean;
 }
 
 export type BrowserMode = "reader" | "full";

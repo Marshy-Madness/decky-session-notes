@@ -15,6 +15,7 @@ from overlay import Overlay
 from buttons import Buttons
 import reader
 import screenshot
+import system
 
 
 DICTATION_PATH = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "dictation.wav")
@@ -325,6 +326,19 @@ class Plugin:
 
     async def bs_copy(self, entry_id: str, appid: str):
         return await asyncio.to_thread(self.workshop.copy, entry_id, appid)
+
+    # the Desk's Deck Tomes and the Tome wheel
+    async def stick_feed(self, on: bool):
+        self.buttons.set_stick_feed(on)
+
+    async def system_stats(self):
+        return await asyncio.to_thread(system.stats)
+
+    async def storage_stats(self):
+        return await asyncio.to_thread(system.storage)
+
+    async def network_stats(self):
+        return await asyncio.to_thread(system.network)
 
     async def import_notice(self):
         return migrate.take_notice()

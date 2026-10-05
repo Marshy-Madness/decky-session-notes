@@ -1,14 +1,16 @@
 import { FC, useEffect, useState } from "react";
 import { DialogButton, Focusable } from "@decky/ui";
-import { FaCog, FaExpand, FaGamepad, FaStore, FaThList } from "react-icons/fa";
+import { FaBookOpen, FaCog, FaExpand, FaStore, FaThList } from "react-icons/fa";
 import { openNotesPage } from "../opening";
 import { useRunningGame } from "../hooks/useAppLifetime";
 import { NotesProvider } from "../state/NotesProvider";
-import { NoteList } from "./NoteList";
 import { Library } from "./Library";
+import { NoteList } from "./NoteList";
 import { SettingsView } from "./SettingsView";
 import { WorkshopView } from "./Workshop";
 import { getPlace, setPlace, Tab } from "../state/place";
+import { Desk } from "../tomes/Desk";
+import { useWheelRequest } from "../tomes/wheel";
 
 const TabButton: FC<{ active: boolean; onClick: () => void; children: React.ReactNode; grow?: boolean; label?: string }> = ({
   active,
@@ -59,9 +61,15 @@ export const QuickAccessPanel: FC = () => {
 export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false }) => {
   const running = useRunningGame();
   // Where you were is remembered between Quick Access opens, and on the full-screen page it's in the address.
-  const [tab, setTabState] = useState<Tab>(() => getPlace().tab ?? (running ? "current" : "all"));
+  const [tab, setTabState] = useState<Tab>(() => getPlace().tab ?? "desk");
   const [openGame, setOpenGameState] = useState<string | null>(() => getPlace().openGame);
   useEffect(() => setPlace({ tab }), []);
+
+  // The Tome wheel's combo shows the Desk (it opens the wheel once it's showing).
+  const wheel = useWheelRequest();
+  useEffect(() => {
+    if (wheel && fullScreen && tab !== "desk") setTab("desk");
+  }, [wheel]);
 
   const setTab = (t: Tab) => {
     setPlace({ tab: t, note: null });
@@ -78,8 +86,8 @@ export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false 
         flow-children="row"
         style={{ display: "flex", flexWrap: "nowrap", alignItems: "stretch", gap: "6px", marginBottom: "14px", width: "100%" }}
       >
-        <TabButton active={tab === "current"} onClick={() => setTab("current")}>
-          {fullScreen ? <><FaGamepad /> This game</> : "Current"}
+        <TabButton active={tab === "desk"} onClick={() => setTab("desk")}>
+          {fullScreen ? <><FaBookOpen /> Desk</> : "Desk"}
         </TabButton>
         <TabButton active={tab === "all"} onClick={() => setTab("all")}>
           {fullScreen ? <><FaThList /> All games</> : "All"}
@@ -97,16 +105,7 @@ export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false 
         )}
       </Focusable>
 
-      {tab === "current" &&
-        (running ? (
-          <NotesProvider key={running.appId} appId={running.appId}>
-            <NoteList live />
-          </NotesProvider>
-        ) : (
-          <div style={{ opacity: 0.8, padding: "8px 0" }}>
-            No game is running. Launch one to take notes for it, or check <b>{fullScreen ? "All games" : "All"}</b>.
-          </div>
-        ))}
+      {tab === "desk" && <Desk fullScreen={fullScreen} goTab={setTab} />}
 
       {tab === "all" &&
         (openGame ? (

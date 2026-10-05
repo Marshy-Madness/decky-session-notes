@@ -1,4 +1,5 @@
 import { cloneElement, isValidElement, ReactElement } from "react";
+import { openTomeWheel } from "./tomes/wheel";
 import { addEventListener, removeEventListener, routerHook } from "@decky/api";
 import { afterPatch, ErrorBoundary, findModuleExport, Focusable, Patch } from "@decky/ui";
 import { FaRegStickyNote } from "react-icons/fa";
@@ -93,7 +94,7 @@ function findInputService(): InputService | null {
   }
 }
 
-const ACTIONS: ComboAction[] = ["open", "dictate", "voice"];
+const ACTIONS: ComboAction[] = ["open", "dictate", "voice", "tomes"];
 
 function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
   const s = getSettings();
@@ -101,6 +102,7 @@ function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
     open: true,
     dictate: dictationChordEnabled(),
     voice: !!s.voiceCommands && speechAllowed(),
+    tomes: s.desk?.radial !== false,
   };
   return ACTIONS.flatMap((action) => {
     const buttons = on[action] ? getCombo(action) : null;
@@ -110,6 +112,7 @@ function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
 
 function runCombo(action: ComboAction) {
   if (action === "open") toggleNotesPage();
+  else if (action === "tomes") openTomeWheel(getCombo("tomes") ?? []);
   else if (action === "dictate") {
     if (voiceBusy()) return;
     toggleAnywhereDictation();

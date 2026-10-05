@@ -93,6 +93,12 @@ export const backend = {
   overlayPreview: (appId: string) =>
     call<[string], { lines: string[]; source: "pinned" | "note" | "sample" }>("overlay_preview", appId),
 
+  stickFeed: (on: boolean) => call<[boolean], void>("stick_feed", on),
+  systemStats: () =>
+    call<[], { temps: { cpu?: number; gpu?: number }; memory: { total?: number; used?: number }; battery: { percent: number; status: string } | null; load: number | null }>("system_stats"),
+  storageStats: () => call<[], { label: string; path: string; total: number; free: number }[]>("storage_stats"),
+  networkStats: () => call<[], { ssid: string | null; signal: number | null; connected: boolean }>("network_stats"),
+
   getSettings: () => call<[], Settings>("get_settings"),
   saveSettings: (settings: Settings) => call<[Settings], void>("save_settings", settings),
 };

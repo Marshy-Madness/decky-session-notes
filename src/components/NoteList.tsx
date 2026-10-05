@@ -22,8 +22,8 @@ import { SharedNoteViewer } from "./SharedNotes";
 import { ShareModal } from "./ShareModal";
 import { PublishModal } from "./Workshop";
 import { NoteItem } from "./NoteItem";
-import { NoteEditor, folderPath } from "./NoteEditor";
-import { NoteViewer } from "./NoteViewer";
+import { folderPath } from "./NoteEditor";
+import { confirmDelete, openEditor as openEditorFor, openNote as openNoteFor, saveNote as saveNoteFor } from "../noteActions";
 import { StatsView } from "./StatsView";
 import { TagFilterBar } from "./TagFilterBar";
 import { NameModal } from "./NameModal";
@@ -32,7 +32,7 @@ import { Counters, addCounter } from "./Counters";
 import { AttachScreenshotsModal } from "./AttachScreenshotsModal";
 import { DeletedNotesModal, VersionHistoryModal } from "./VersionHistory";
 import { usePendingScreenshots } from "../state/pendingScreenshots";
-import { lastFolder, noteToReopen, rememberFolder, showNoteModal, EditorDraft } from "../state/resume";
+import { lastFolder, noteToReopen, rememberFolder, EditorDraft } from "../state/resume";
 import { setPlace } from "../state/place";
 import * as s from "./styles";
 
@@ -49,7 +49,7 @@ const ADD_ACTIONS = [
 const SORT_OPTIONS = (Object.keys(SORT_LABELS) as SortMode[]).map((k) => ({ label: SORT_LABELS[k], data: k }));
 
 /** All folders and notes for one game (the game comes from NotesProvider). */
-export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, onBack }) => {
+export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: string }> = ({ live, onBack, backLabel = "All games" }) => {
   const { appId, game } = useGame();
   const settings = useSettings();
   const sort = settings.sort ?? "edited";
@@ -120,53 +120,15 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
   // ---- actions ----
 
   const openEditor = (note: Note | null, draft?: EditorDraft) =>
-    showNoteModal(
-      { type: "edit", appId, noteId: note?.id ?? null, draft },
-      <NoteEditor
-        draft={draft}
-        appId={appId}
-        note={note}
-        folderId={inGuides || inShared ? null : folderId}
-        defaultKind={inGuides ? "guide" : undefined}
-        folders={folders}
-        gameName={game.name}
-        onSaved={emitDataChanged}
-      />
-    );
+    openEditorFor(game, note, {
+      draft,
+      folderId: inGuides || inShared ? null : folderId,
+      defaultKind: inGuides ? "guide" : undefined,
+    });
 
-  const saveNote = async (note: Note) => {
-    await backend.saveNote(appId, note);
-    emitDataChanged();
-  };
-
-  const deleteNote = (note: Note) =>
-    showModal(
-      <ConfirmModal
-        strTitle={`Delete "${note.title}"?`}
-        strDescription="The note, its voice recordings and attached screenshots will be removed."
-        strOKButtonText="Delete"
-        bDestructiveWarning
-        onOK={async () => {
-          await backend.deleteNote(appId, note.id);
-          emitDataChanged();
-        }}
-      />
-    );
-
-  const openNote = (note: Note) =>
-    showNoteModal(
-      { type: "view", appId, noteId: note.id },
-      <NoteViewer
-        appId={appId}
-        note={note}
-        folderLabel={note.folderId ? folderPath(folders, note.folderId) : undefined}
-        onEdit={() => openEditor(note)}
-        onTogglePin={() => saveNote({ ...note, pinned: !note.pinned })}
-        onDelete={() => deleteNote(note)}
-        onHistory={() => showModal(<VersionHistoryModal appId={appId} note={note} />)}
-        onUpdate={saveNote}
-      />
-    );
+  const saveNote = (note: Note) => saveNoteFor(appId, note);
+  const deleteNote = (note: Note) => confirmDelete(appId, note);
+  const openNote = (note: Note) => openNoteFor(game, note);
 
   const moveNote = (note: Note) =>
     showContextMenu(
@@ -255,7 +217,7 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void }> = ({ live, on
       {onBack && (
         <Focusable style={s.toolbar}>
           <DialogButton style={s.smallButton} onClick={onBack}>
-            <FaArrowLeft /> All games
+            <FaArrowLeft /> {backLabel}
           </DialogButton>
         </Focusable>
       )}

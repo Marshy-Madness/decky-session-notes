@@ -139,6 +139,52 @@ export const SettingsView: FC = () => {
         <ButtonsSeen />
       </PanelSectionRow>
 
+      <Heading>Desk</Heading>
+      <PanelSectionRow>
+        <ToggleField
+          label="A layout for each game"
+          description="Changing the Desk while a game shows makes a layout just for that game. Off: every game shares one layout."
+          checked={settings.desk?.perGame !== false}
+          onChange={(v) => updateSettings({ desk: { ...settings.desk, perGame: v } })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <DropdownItem
+          label="Counters: X adds"
+          description="On the Counters Tome, A adds 1 and X adds this many."
+          rgOptions={[2, 3, 5, 10].map((n) => ({ label: `+${n}`, data: n }))}
+          selectedOption={settings.desk?.counterStep ?? 3}
+          onChange={(o) => updateSettings({ desk: { ...settings.desk, counterStep: o.data } })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ToggleField
+          label="Tome wheel combo"
+          description="Hold the combo, aim with the right stick, let go to jump to a Tome (or add it). L1/R1 change the ring."
+          checked={settings.desk?.radial !== false}
+          onChange={(v) => updateSettings({ desk: { ...settings.desk, radial: v } })}
+        />
+      </PanelSectionRow>
+      <PanelSectionRow>
+        <ComboRow
+          action="tomes"
+          label="Tome wheel buttons"
+          description="Opens the full-screen Desk with the wheel up, even in a game."
+          disabled={settings.desk?.radial === false}
+        />
+      </PanelSectionRow>
+      {settings.desk?.games && Object.keys(settings.desk.games).length > 0 && (
+        <PanelSectionRow>
+          <ButtonItem
+            layout="below"
+            description={`${Object.keys(settings.desk.games).length} game(s) have their own layout.`}
+            onClick={() => updateSettings({ desk: { ...settings.desk, games: {} } })}
+          >
+            Reset every game to the shared layout
+          </ButtonItem>
+        </PanelSectionRow>
+      )}
+
       <Heading>While playing</Heading>
       <PanelSectionRow>
         <ToggleField

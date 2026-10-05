@@ -93,7 +93,7 @@ const requireLink = (linked: boolean, then: () => void) => (linked ? then() : sh
 
 // ---------- reading a post ----------
 
-const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void }> = ({ id, appId, closeModal }) => {
+export const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void }> = ({ id, appId, closeModal }) => {
   const settings = useSettings();
   const linked = !!settings.bookstoreUser;
   const [entry, setEntry] = useState<WorkshopEntry | null>(null);
@@ -357,6 +357,9 @@ const CONTAINS = [
 ];
 
 let lastGame: { appId: string; name: string } | null = null;
+
+/** Opens the Workshop tab on this game next time it shows (the Desk's Workshop Tome). */
+export const showWorkshopFor = (game: { appId: string; name: string }) => (lastGame = game);
 
 export const WorkshopView: FC = () => {
   const running = useRunningGame();

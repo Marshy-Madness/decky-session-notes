@@ -44,51 +44,54 @@ export function addCounter(appId: string) {
   );
 }
 
+/** The counter's options menu: defeated, rename, reset, delete. */
+export function counterMenu(appId: string, counter: Counter) {
+  const save = async (patch: Partial<Counter>) => {
+    await backend.saveCounter(appId, { ...counter, ...patch });
+    emitDataChanged();
+  };
+  showContextMenu(
+    <Menu label={counter.name}>
+      {counter.kind === "boss" && (
+        <MenuItem onSelected={() => save({ defeated: !counter.defeated })}>
+          {counter.defeated ? "Mark not defeated" : "Mark defeated 🎉"}
+        </MenuItem>
+      )}
+      <MenuItem
+        onSelected={() =>
+          showModal(<NameModal heading="Rename counter" initial={counter.name} onSubmit={(name) => save({ name })} />)
+        }
+      >
+        Rename
+      </MenuItem>
+      <MenuItem onSelected={() => save({ count: 0, sessionCount: 0 })}>Reset to 0</MenuItem>
+      <MenuItem
+        tone="destructive"
+        onSelected={() =>
+          showModal(
+            <ConfirmModal
+              strTitle={`Delete "${counter.name}"?`}
+              strOKButtonText="Delete"
+              onOK={async () => {
+                await backend.deleteCounter(appId, counter.id);
+                emitDataChanged();
+              }}
+            />
+          )
+        }
+      >
+        Delete
+      </MenuItem>
+    </Menu>
+  );
+}
+
 const CounterRow: FC<{ appId: string; counter: Counter }> = ({ appId, counter }) => {
   const bump = async (delta: number) => {
     await backend.bumpCounter(appId, counter.id, delta);
     emitDataChanged();
   };
-  const save = async (patch: Partial<Counter>) => {
-    await backend.saveCounter(appId, { ...counter, ...patch });
-    emitDataChanged();
-  };
-
-  const options = () =>
-    showContextMenu(
-      <Menu label={counter.name}>
-        {counter.kind === "boss" && (
-          <MenuItem onSelected={() => save({ defeated: !counter.defeated })}>
-            {counter.defeated ? "Mark not defeated" : "Mark defeated 🎉"}
-          </MenuItem>
-        )}
-        <MenuItem
-          onSelected={() =>
-            showModal(<NameModal heading="Rename counter" initial={counter.name} onSubmit={(name) => save({ name })} />)
-          }
-        >
-          Rename
-        </MenuItem>
-        <MenuItem onSelected={() => save({ count: 0, sessionCount: 0 })}>Reset to 0</MenuItem>
-        <MenuItem
-          tone="destructive"
-          onSelected={() =>
-            showModal(
-              <ConfirmModal
-                strTitle={`Delete "${counter.name}"?`}
-                strOKButtonText="Delete"
-                onOK={async () => {
-                  await backend.deleteCounter(appId, counter.id);
-                  emitDataChanged();
-                }}
-              />
-            )
-          }
-        >
-          Delete
-        </MenuItem>
-      </Menu>
-    );
+  const options = () => counterMenu(appId, counter);
 
   return (
     <Focusable

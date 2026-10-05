@@ -49,6 +49,7 @@ export const DEFAULT_COMBOS: Record<ComboAction, Button[]> = {
   open: ["L4", "R4"],
   dictate: ["STEAM", "L5", "R5"],
   voice: ["STEAM", "L4", "R4"],
+  tomes: ["R4", "R5"],
 };
 
 /** The combo for an action, or null if it's off. Settings from before custom combos still count. */

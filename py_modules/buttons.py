@@ -15,6 +15,9 @@ DECK_HID_ID = "000028DE:00001205"  # Valve, Steam Deck controller
 REPORT_SIZE = 64
 REPORT_STATE = 0x09
 RESCAN_SECONDS = 5
+STICK_OFFSET = 52  # right stick X, Y (int16; Y positive = up) in a state report
+STICK_INTERVAL = 0.033  # at most ~30 updates a second to the frontend
+STICK_MOVE = 1500  # ignore smaller changes than this
 
 # Bits of the two button words in a state report (the same layout Steam and SDL use). Touch-only bits
 # (trackpads, sticks) are left out: they'd be "held" whenever a thumb rests there.
@@ -50,6 +53,10 @@ class Buttons:
         self.fds = {}
         self.state = None  # (lo, hi) of the buttons we care about
         self.error = None
+        # The right stick is only sent while the Tome wheel is open (it changes constantly).
+        self.stick_on = False
+        self.stick = (0, 0)
+        self.stick_sent = 0.0
 
     def status(self) -> dict:
         return {"devices": len(self.fds), "error": self.error}
@@ -105,9 +112,24 @@ class Buttons:
         if len(data) < 16 or data[2] != REPORT_STATE:
             return
         lo, hi = struct.unpack_from("<II", data, 8)
+        if self.stick_on and len(data) >= STICK_OFFSET + 4:
+            self._send_stick(loop, struct.unpack_from("<hh", data, STICK_OFFSET))
         state = (lo & LO_MASK, hi & HI_MASK)
         if state == self.state:
             return
         self.state = state
         names = [n for b, n in LO_BITS if state[0] & b] + [n for b, n in HI_BITS if state[1] & b]
         loop.create_task(decky.emit("buttons", names))
+
+    def set_stick_feed(self, on: bool):
+        self.stick_on = bool(on)
+        self.stick = (0, 0)
+
+    def _send_stick(self, loop, stick):
+        now = loop.time()
+        moved = abs(stick[0] - self.stick[0]) + abs(stick[1] - self.stick[1])
+        if moved < STICK_MOVE or now - self.stick_sent < STICK_INTERVAL:
+            return
+        self.stick = stick
+        self.stick_sent = now
+        loop.create_task(decky.emit("stick", stick[0], stick[1]))

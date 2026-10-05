@@ -20,6 +20,7 @@ const ACTION_NAMES: Record<ComboAction, string> = {
   open: "Open notes",
   dictate: "Speech to text",
   voice: "Voice command",
+  tomes: "Tome wheel",
 };
 
 const IDLE_CANCEL_MS = 10_000;
