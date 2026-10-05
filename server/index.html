@@ -35,6 +35,14 @@
   .chip { display: inline-block; font-size: 12px; background: var(--chip); border-radius: 8px; padding: 1px 7px; margin: 4px 4px 0 0; }
   .box { background: #1e2a38; border-radius: 8px; padding: 12px 14px; margin-bottom: 12px; }
   .counter { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .viewswitch { margin: 10px 0 12px; } .viewswitch button { flex: 1 1 0; max-width: 180px; }
+  .desk { columns: 2 340px; column-gap: 12px; } .tome { break-inside: avoid; padding: 8px 12px; }
+  .thead { display: flex; align-items: center; gap: 6px; } .tfold { flex: 1; text-align: left; background: none; border: 0; padding: 4px 0; font-weight: bold; text-transform: uppercase; letter-spacing: .05em; font-size: 13px; color: inherit; }
+  .tbody { margin-top: 4px; } .tline { display: flex; gap: 10px; padding: 7px 8px; border-radius: 6px; background: rgba(255,255,255,.04); margin-bottom: 4px; cursor: pointer; }
+  .tline .ti { width: 20px; text-align: center; flex: 0 0 auto; } .tl { font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: .06em; opacity: .6; }
+  .tbody .kv { display: grid; grid-template-columns: auto 1fr; gap: 3px 14px; } button.small { padding: 3px 10px; font-size: 12px; }
+  .tome .counter { flex-wrap: nowrap; } .tome .counter .name { flex: 1 1 auto; min-width: 0; }
+  @media (max-width: 700px) { .deskbtn span { display: none; } .deskbtn { padding: 6px 10px; } .gamehead h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } }
   .counter .n { min-width: 40px; text-align: center; font-size: 18px; font-weight: bold; }
   .counter .name { flex: 1; } .defeated { opacity: .6; }
   .spoiler { filter: blur(5px); }
@@ -283,6 +291,7 @@ async function start() {
   paintAccount();
   $("#account").onclick = accountDialog;
   if (info.androidApp && !window.DeskApp && /Android/i.test(navigator.userAgent)) $("#getApp").classList.remove("hidden");
+  workshopUrl = info.bookstoreUrl || "";
   if (info.bookstoreUrl && !window.DeskApp?.openBookstore) { $("#bookstoreLink").href = info.bookstoreUrl; $("#bookstoreLink").classList.remove("hidden"); }
   $("#login").classList.add("hidden");
   $("#app").classList.remove("hidden");
@@ -352,8 +361,16 @@ const transcriptsOf = (n) => (n.recordings || []).map((r) => r.transcript).filte
 const firstLine = (body) => (body || "").split("\n").map((l) => l.replace(/\[img:\d+\]/g, "").trim()).find(Boolean) || "";
 
 // ---------- game view ----------
+let workshopUrl = "";
+let gameView = localStorage.getItem("dom-view") || "desk";
+const viewSwitch = () => `<div class="toolbar viewswitch"><button data-view="desk" class="${gameView === "desk" ? "primary" : ""}">🗂 Desk</button><button data-view="notes" class="${gameView === "notes" ? "primary" : ""}">📝 Notes</button></div>`;
+function wireViewSwitch() {
+  $("#content").querySelectorAll("[data-view]").forEach((b) => (b.onclick = () => { gameView = b.dataset.view; localStorage.setItem("dom-view", gameView); render(); }));
+}
+
 function render() {
   if (!game) return;
+  if (gameView === "desk") return renderDesk();
   const q = $("#search").value.toLowerCase();
   game.notes ??= []; game.folders ??= []; game.counters ??= [];
   const sorters = { alpha: (a, b) => a.title.localeCompare(b.title), created: (a, b) => b.createdAt - a.createdAt, edited: (a, b) => b.updatedAt - a.updatedAt };
@@ -371,6 +388,7 @@ function render() {
     <div class="gamehead"><button class="mobile-only" id="backToGames" aria-label="All games">‹ Games</button>${gameIcon(games.find((g) => g.appId === game.appId) || game)}<h2 style="margin:0;flex:1">${esc(game.name)}</h2>
       <button id="gameSettings" title="Rename, or link more app IDs to this game">⚙ Game</button></div>
     <div class="meta">Launched ${game.launchCount ?? 0}× · ${Math.round((game.playtimeSeconds ?? 0) / 60)} min played · last played ${date(game.lastLaunched)}</div>
+    ${viewSwitch()}
 
     <div class="box" style="margin-top:14px">
       <b>📍 Where I left off</b> ${lo ? `<span class="meta">· ${date(lo.updatedAt)}</span>` : ""}
@@ -423,6 +441,7 @@ function render() {
         ${s.note.screenshots?.[0] ? `<img loading="lazy" src="/api/shared/media/${esc(s.shareId)}/${encodeURIComponent(s.note.screenshots[0].thumb || s.note.screenshots[0].file)}">` : ""}</div>`).join("") : ""}
     ${!notes.length && !(folderFilter === "shared" && sharedHere.length) ? '<p class="meta">No notes here.</p>' : ""}`;
 
+  wireViewSwitch();
   $("#folderFilter").value = folderFilter;
   $("#kindFilter").value = kindFilter;
   $("#kindFilter").onchange = (e) => { kindFilter = e.target.value; render(); };
@@ -473,6 +492,153 @@ function render() {
   };
   $("#content").querySelectorAll(".card:not(.shared)").forEach((c) => (c.onclick = () => editNote(game.notes.find((n) => n.id === c.dataset.id))));
   $("#content").querySelectorAll(".card.shared").forEach((c) => (c.onclick = () => viewShared(sharedHere.find((s) => s.shareId === c.dataset.share))));
+}
+
+// ---------- the Desk (the web side of the Deck's Tomes; layout kept per browser) ----------
+const WEB_TOMES = [
+  ["game-brain", "🧠", "Game Brain"], ["left-off", "📍", "Where I Left Off"], ["checklist", "☑️", "Active Checklist"],
+  ["counters", "⚔️", "Counters"], ["recent-notes", "📝", "Recent Notes"], ["guides", "📚", "Guides"],
+  ["voice-notes", "🎙️", "Voice Notes"], ["game-stats", "📊", "Game Stats"], ["pinned-notes", "📌", "Pinned Notes"], ["workshop", "🏭", "Madness Workshop"],
+];
+const WEB_TOMES_OFF = ["left-off"];
+let deskEditing = false, recentFilter = "all";
+function deskLayout() {
+  try { const l = JSON.parse(localStorage.getItem("dom-desk") || "null"); if (l?.order) return l; } catch {}
+  return { order: WEB_TOMES.map((t) => t[0]), hidden: [...WEB_TOMES_OFF], collapsed: [] };
+}
+const saveDeskLayout = (l) => localStorage.setItem("dom-desk", JSON.stringify(l));
+const byUpdated = (a, b) => b.updatedAt - a.updatedAt;
+const openItems = () => [...game.notes].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || byUpdated(a, b))
+  .flatMap((note) => (note.checklist || []).filter((i) => !i.done).map((item) => ({ note, item })));
+const isGuideish = (n) => GUIDE_KINDS.includes(n.kind) || n.kind === "boss";
+const counterIcon = { death: "💀", boss: "⚔️", custom: "#" };
+const line = (icon, label, body, attrs = "") => `<div class="tline" ${attrs}><span class="ti">${icon}</span><div>${label ? `<div class="tl">${label}</div>` : ""}${body}</div></div>`;
+const noteLine = (n) => line(n.pinned ? "📌" : kindOf(n.kind)[1], "", `${esc(n.title)}<div class="meta">${esc(day(n.updatedAt))}${firstLine(n.body) ? " · " + esc(firstLine(n.body)) : ""}</div>`, `data-note="${esc(n.id)}"`);
+const RECENT_FILTERS = [["all", "All", () => true], ["note", "Notes", (n) => (n.kind || "note") === "note"], ["guides", "Guides", (n) => GUIDE_KINDS.includes(n.kind)],
+  ["tip", "Tips", (n) => n.kind === "tip"], ["boss", "Boss", (n) => n.kind === "boss"], ["build", "Builds", (n) => n.kind === "build"]];
+
+function tomeBody(id) {
+  const lo = game.leftOff?.text;
+  const counters = [...game.counters].sort((a, b) => (a.defeated ? 1 : 0) - (b.defeated ? 1 : 0) || a.createdAt - b.createdAt);
+  const counterRow = (c) => `<div class="counter ${c.defeated ? "defeated" : ""}" data-counter="${esc(c.id)}"><span>${counterIcon[c.kind] || "#"}</span>
+    <span class="name">${esc(c.name)} ${c.sessionCount ? `<small>+${c.sessionCount} this session</small>` : ""}</span>
+    <button class="icon" data-cact="dec">−</button><span class="n">${c.count}</span><button class="icon" data-cact="inc">+</button></div>`;
+  if (id === "game-brain") {
+    const next = openItems()[0];
+    const guides = game.notes.filter(isGuideish).sort(byUpdated);
+    const counter = counters.filter((c) => !c.defeated).sort((a, b) => (b.updatedAt || b.createdAt) - (a.updatedAt || a.createdAt))[0];
+    const last = [...game.notes].sort(byUpdated)[0];
+    return [
+      line("📍", "Left off", lo ? esc(lo) : '<span class="meta">Not set yet.</span>', 'data-leftoff="1"'),
+      next ? line("☑️", "Next", `${esc(next.item.text)}<div class="meta">from ${esc(next.note.title)} · tap to tick off</div>`, `data-tick="${esc(next.note.id)}|${esc(next.item.id)}"`) : "",
+      guides[0] ? line(kindOf(guides[0].kind)[1], "Guide", esc(guides[0].title), `data-note="${esc(guides[0].id)}"`) : "",
+      counter ? line(counterIcon[counter.kind] || "#", "Counter", `${esc(counter.name)}: <b>${counter.count}</b>${counter.sessionCount ? ` <span class="meta">(+${counter.sessionCount} this session)</span>` : ""}`) : "",
+      last ? line(kindOf(last.kind)[1], "Last note", esc(last.title), `data-note="${esc(last.id)}"`) : "",
+    ].join("") + '<div class="toolbar"><button class="primary" data-view="notes">📝 All notes</button><button data-new="1">+ New note</button></div>';
+  }
+  if (id === "left-off") return `<textarea id="leftOff" rows="2" placeholder="Shown on the Deck every time you launch this game">${esc(lo ?? "")}</textarea>
+      <div class="toolbar" style="margin:6px 0 0"><button id="saveLeftOff" class="primary">Save</button>${lo ? '<button id="clearLeftOff">Clear</button>' : ""}${micButton("leftOff")}</div>`;
+  if (id === "checklist") {
+    const items = openItems();
+    const total = game.notes.reduce((n, x) => n + (x.checklist || []).length, 0);
+    if (!total) return '<div class="meta">No checklists yet. Add one to a note and its open items show here.</div>';
+    return `<div class="meta">${items.length} of ${total} still to do</div>` +
+      items.map(({ note, item }) => line("☐", "", `${esc(item.text)}<div class="meta">${esc(note.title)}</div>`, `data-tick="${esc(note.id)}|${esc(item.id)}"`)).join("") +
+      (items.length ? "" : '<div class="meta">All done! 🎉</div>');
+  }
+  if (id === "counters") return (counters.map(counterRow).join("") || '<div class="meta">No counters yet. Add one from 📝 Notes.</div>');
+  if (id === "recent-notes") {
+    const f = RECENT_FILTERS.find((x) => x[0] === recentFilter) || RECENT_FILTERS[0];
+    const list = game.notes.filter(f[2]).sort(byUpdated).slice(0, 6);
+    return `<div class="toolbar">${RECENT_FILTERS.map(([k, label]) => `<button class="small ${k === recentFilter ? "primary" : ""}" data-rf="${k}">${label}</button>`).join("")}</div>` +
+      (list.map(noteLine).join("") || '<div class="meta">Nothing here yet.</div>') + '<div class="toolbar"><button class="primary" data-new="1">+ New note</button></div>';
+  }
+  if (id === "guides") {
+    const guides = game.notes.filter(isGuideish);
+    if (!guides.length) return '<div class="meta">No guides yet.</div>';
+    const counts = ["boss", "walkthrough", "achievement", "guide"].map((k) => [k, guides.filter((g) => g.kind === k).length]).filter((x) => x[1]);
+    return `<div>${counts.map(([k, n]) => `<span class="chip">${kindOf(k)[1]} ${kindOf(k)[2]} <b>${n}</b></span>`).join("")}</div>` +
+      [...guides].sort(byUpdated).slice(0, 3).map(noteLine).join("") + '<div class="toolbar"><button data-guides="1">Browse guides</button></div>';
+  }
+  if (id === "voice-notes") {
+    const recs = game.notes.flatMap((note) => (note.recordings || []).map((rec) => ({ note, rec }))).sort((a, b) => b.rec.createdAt - a.rec.createdAt).slice(0, 4);
+    return recs.map(({ note, rec }) => line("▶", "", `${rec.transcript ? "“" + esc(rec.transcript) + "”" : esc(note.title)}<div class="meta">${esc(day(rec.createdAt))}</div>`, `data-note="${esc(note.id)}"`)).join("")
+      || '<div class="meta">No voice notes yet. Record one on the Deck or in a note here.</div>';
+  }
+  if (id === "game-stats") {
+    const h = Math.floor((game.playtimeSeconds ?? 0) / 3600), m = Math.floor(((game.playtimeSeconds ?? 0) % 3600) / 60);
+    return `<div class="kv"><span>Playtime</span><b>${h ? h + "h " : ""}${m}m</b><span>Launches</span><b>${game.launchCount ?? 0}</b><span>Last played</span><b>${esc(day(game.lastLaunched))}</b><span>Notes</span><b>${game.notes.length}</b></div>`;
+  }
+  if (id === "pinned-notes") return game.notes.filter((n) => n.pinned).sort(byUpdated).map(noteLine).join("") || '<div class="meta">No pinned notes.</div>';
+  if (id === "workshop") return workshopUrl ? `<div class="meta">Community books for ${esc(game.name)}.</div><div class="toolbar"><a href="${esc(workshopUrl)}/?game=${encodeURIComponent(game.appId)}&name=${encodeURIComponent(game.name)}" target="_blank" rel="noopener"><button class="primary">🏭 Open in the Madness Workshop</button></a></div>` : '<div class="meta">No Workshop set up on this server.</div>';
+  return "";
+}
+
+function renderDesk() {
+  game.notes ??= []; game.folders ??= []; game.counters ??= [];
+  const l = deskLayout();
+  const ids = [...l.order.filter((id) => WEB_TOMES.some((t) => t[0] === id)), ...WEB_TOMES.map((t) => t[0]).filter((id) => !l.order.includes(id))];
+  const on = ids.filter((id) => !l.hidden.includes(id));
+  $("#content").innerHTML = `
+    <div class="gamehead"><button class="mobile-only" id="backToGames" aria-label="All games">‹ Games</button>${gameIcon(games.find((g) => g.appId === game.appId) || game)}<h2 style="margin:0;flex:1">${esc(game.name)}</h2>
+      <button id="deskAdd" class="deskbtn" title="Add or remove Tomes">＋<span> Tomes</span></button><button id="deskEdit" class="deskbtn ${deskEditing ? "primary" : ""}" title="${deskEditing ? "Done" : "Edit the Desk"}">${deskEditing ? "✓<span> Done</span>" : "✏️<span> Edit</span>"}</button></div>
+    ${viewSwitch()}
+    <div class="desk">${on.map((id, i) => {
+      const [, icon, name] = WEB_TOMES.find((t) => t[0] === id);
+      const folded = l.collapsed.includes(id);
+      return `<div class="box tome" data-tome="${id}"><div class="thead"><button class="tfold" data-fold="${id}">${icon} ${esc(name)} <span class="meta">${folded ? "▸" : "▾"}</span></button>
+        ${deskEditing ? `<button class="icon" data-move="${id}|-1" ${i === 0 ? "disabled" : ""}>↑</button><button class="icon" data-move="${id}|1" ${i === on.length - 1 ? "disabled" : ""}>↓</button><button class="icon" data-hide="${id}">✕</button>` : ""}</div>
+        ${folded ? "" : `<div class="tbody">${tomeBody(id)}</div>`}</div>`;
+    }).join("") || '<p class="meta">Your Desk is empty. Use ＋ Tomes to add some.</p>'}</div>`;
+
+  const c = $("#content");
+  const change = (fn) => { const next = deskLayout(); next.order = ids; fn(next); saveDeskLayout(next); renderDesk(); };
+  wireViewSwitch();
+  wireDictation(c);
+  $("#backToGames").onclick = closeGame;
+  $("#fabNote").onclick = () => editNote(null);
+  $("#deskEdit").onclick = () => { deskEditing = !deskEditing; renderDesk(); };
+  $("#deskAdd").onclick = () => {
+    const dlg = document.createElement("dialog");
+    const cur = deskLayout();
+    dlg.innerHTML = `<h3 style="margin-top:0">Tomes</h3><p class="meta">Saved in this browser.</p>${WEB_TOMES.map(([id, icon, name]) =>
+      `<label class="radio"><input type="checkbox" data-t="${id}" ${!cur.hidden.includes(id) && (cur.order.includes(id) || !WEB_TOMES_OFF.includes(id)) ? "checked" : ""}><span>${icon} ${esc(name)}</span></label>`).join("")}
+      <div class="actions toolbar"><button class="primary" id="tDone">Done</button></div>`;
+    document.body.appendChild(dlg); dlg.showModal();
+    dlg.querySelector("#tDone").onclick = () => {
+      change((next) => { next.hidden = [...dlg.querySelectorAll("[data-t]")].filter((x) => !x.checked).map((x) => x.dataset.t); });
+      dlg.close(); dlg.remove();
+    };
+  };
+  c.querySelectorAll("[data-fold]").forEach((b) => (b.onclick = () => change((n) => {
+    const id = b.dataset.fold; n.collapsed = n.collapsed.includes(id) ? n.collapsed.filter((x) => x !== id) : [...n.collapsed, id];
+  })));
+  c.querySelectorAll("[data-hide]").forEach((b) => (b.onclick = () => change((n) => { n.hidden = [...n.hidden.filter((x) => x !== b.dataset.hide), b.dataset.hide]; })));
+  c.querySelectorAll("[data-move]").forEach((b) => (b.onclick = () => change((n) => {
+    const [id, by] = b.dataset.move.split("|"); const vis = n.order.filter((x) => !n.hidden.includes(x));
+    const target = vis[vis.indexOf(id) + Number(by)]; if (!target) return;
+    const a = n.order.indexOf(id), t = n.order.indexOf(target); [n.order[a], n.order[t]] = [n.order[t], n.order[a]];
+  })));
+  c.querySelectorAll("[data-note]").forEach((el) => (el.onclick = () => editNote(game.notes.find((n) => n.id === el.dataset.note))));
+  c.querySelectorAll("[data-new]").forEach((el) => (el.onclick = () => editNote(null)));
+  c.querySelectorAll("[data-leftoff]").forEach((el) => (el.onclick = () => {
+    const text = prompt("Where did you leave off?", game.leftOff?.text ?? ""); if (text === null) return;
+    game.leftOff = { text: text.trim(), updatedAt: Date.now(), launchNumber: null }; save();
+  }));
+  c.querySelectorAll("[data-tick]").forEach((el) => (el.onclick = () => {
+    const [noteId, itemId] = el.dataset.tick.split("|");
+    const note = game.notes.find((n) => n.id === noteId); const item = note?.checklist?.find((i) => i.id === itemId); if (!item) return;
+    item.done = true; note.updatedAt = Date.now(); save(); toast(`☑ ${item.text}`);
+  }));
+  c.querySelectorAll("[data-counter] button").forEach((b) => (b.onclick = () => {
+    const cnt = game.counters.find((x) => x.id === b.closest("[data-counter]").dataset.counter);
+    const by = b.dataset.cact === "inc" ? 1 : -1; if (cnt.count + by < 0) return;
+    cnt.count += by; cnt.sessionCount = Math.max(0, (cnt.sessionCount || 0) + by); cnt.updatedAt = Date.now(); save();
+  }));
+  c.querySelectorAll("[data-rf]").forEach((b) => (b.onclick = () => { recentFilter = b.dataset.rf; renderDesk(); }));
+  c.querySelectorAll("[data-guides]").forEach((b) => (b.onclick = () => { folderFilter = "guides"; gameView = "notes"; localStorage.setItem("dom-view", "notes"); render(); }));
+  if ($("#saveLeftOff")) $("#saveLeftOff").onclick = () => { game.leftOff = { text: $("#leftOff").value.trim(), updatedAt: Date.now(), launchNumber: null }; save(); };
+  if ($("#clearLeftOff")) $("#clearLeftOff").onclick = () => { game.leftOff = { text: "", updatedAt: Date.now(), launchNumber: null }; save(); };
 }
 
 // ---------- version history / recently deleted ----------

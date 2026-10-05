@@ -1,6 +1,6 @@
 # Desk of Madness: plan
 
-Status: **approved** (2026-10-04). Phase 1 shipped 2026-10-05 as 0.3.0-beta.1 (overlay bug deferred). Next: Phase 2.
+Status: **approved** (2026-10-04). Phase 1 shipped 2026-10-05 as 0.3.0-beta.1 (overlay bug deferred). Phase 2 shipped 2026-10-05 as 0.3.0-beta.2. Next: Phase 3.
 
 ## 1. Names and terms
 

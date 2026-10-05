@@ -19,8 +19,25 @@ Four parts, all in this repo:
 
 ## Deck plugin
 
+### The Desk and Tomes
+The **Desk** tab is a stream of **Tomes** (widgets) for the game you're playing, or the one you played last
+(🔁 switches game). Tomes work on your real notes: ticking a checklist item there ticks it in the note.
+
+- **My Desk:** 🧠 Game Brain (left off, next checklist item, last guide, top counter, last note), ⚡ Quick Actions,
+  📍 Where I Left Off, ☑️ Active Checklist (unfinished items from every note; A ticks off, Options opens the note),
+  ⚔️ Counters (A or ▶ +1, ◀ −1, X +3).
+- **Gaming:** 📝 Recent Notes (All / Notes / Guides / Tips / Boss / Builds), 📚 Guides, 📊 Game Stats,
+  🎙️ Voice Notes (one press records a new note; its words become the title), 📸 Screenshot → Note.
+- **Workshop:** 🏭 Madness Workshop (popular books, a "new" badge), 👥 Shared Notes, 📌 Pinned Notes.
+- **Deck** (off by default): 🌡️ System, 💾 Storage, 🌐 Network.
+
+✏️ Edit Desk moves, folds and hides Tomes; ➕ opens the picker (category tabs and tiles). Changes made while a game
+shows give that game its own layout (Settings → Desk turns that off). The **Tome wheel** (◎, or hold R4 + R5 even in a
+game) is a radial menu: aim with the right stick or D-pad, L1/R1 change the ring, let go or press A to jump to a Tome.
+The website has the Desk too (🗂 Desk / 📝 Notes in a game).
+
 ### Layout
-- **Current** tab: notes for the game you're playing right now.
+- **Desk** tab: the Tomes above. 📝 opens the game's full notes list.
 - **All** tab: every game you've played or written notes for.
 - **Workshop** tab: browse what other players posted for your game (see [Workshop](#madness-workshop)).
 - **Sort** by Alphabetical, Created, Last Edited or Recent Games. Pinned notes stay on top.
@@ -96,7 +113,9 @@ A dependency-free Python container (`server/`) that:
 
 ### Web editor
 Edit notes, information text, tags, folders, checklists, pin and spoiler. Upload screenshots, record or upload voice
-notes, and edit the left-off pin and counters. Version history and Recently deleted are here too.
+notes, and edit the left-off pin and counters. Version history and Recently deleted are here too. Each game opens
+on its **Desk** (Game Brain, checklist, counters, recent notes, guides and more; ＋ Tomes and ✏️ Edit arrange it, saved in
+that browser) with **📝 Notes** for the full list.
 
 Voice recording in the browser needs the site served over **https**.
 
