@@ -9,7 +9,10 @@ so a custom placement is written as top-left plus pixel offsets, with the box wi
 The size maths here is mirrored in src/components/OverlayModal.tsx (boxSize) so its preview matches.
 """
 import asyncio
-import glob
+try:
+    import glob
+except ImportError:  # not in newer Decky Loader builds
+    from compat import glob
 import os
 import re
 

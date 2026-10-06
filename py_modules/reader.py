@@ -12,7 +12,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import zlib
-from html.parser import HTMLParser
+try:
+    from html.parser import HTMLParser
+except ImportError:  # Decky Loader's bundled Python leaves html.parser out
+    from compat.html_parser import HTMLParser
 
 MAX_BYTES = 6 * 1024 * 1024
 MAX_HTML = 1_500_000

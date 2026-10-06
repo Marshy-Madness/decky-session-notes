@@ -8,7 +8,10 @@ these to its screenshot library, so we copy the file into the note's media ourse
 import asyncio
 import ctypes
 import ctypes.util
-import glob
+try:
+    import glob
+except ImportError:  # not in newer Decky Loader builds
+    from compat import glob
 import os
 import shutil
 import time

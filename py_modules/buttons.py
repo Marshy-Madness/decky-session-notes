@@ -5,7 +5,10 @@ copy of each input report, so we can listen alongside Steam without taking anyth
 """
 
 import asyncio
-import glob
+try:
+    import glob
+except ImportError:  # not in newer Decky Loader builds
+    from compat import glob
 import os
 import struct
 

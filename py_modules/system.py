@@ -1,6 +1,9 @@
 """Readings for the Desk's Deck Tomes: temperatures, memory, battery, storage and network."""
 
-import glob
+try:
+    import glob
+except ImportError:  # not in newer Decky Loader builds
+    from compat import glob
 import os
 import shutil
 import subprocess

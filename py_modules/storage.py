@@ -1,5 +1,8 @@
 import base64
-import glob
+try:
+    import glob
+except ImportError:  # not in newer Decky Loader builds
+    from compat import glob
 import json
 import os
 import shutil
