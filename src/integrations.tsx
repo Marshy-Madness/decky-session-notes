@@ -1,7 +1,7 @@
 import { cloneElement, isValidElement } from "react";
 import { openTomeWheel } from "./tomes/wheel";
 import { addEventListener, removeEventListener, routerHook } from "@decky/api";
-import { afterPatch, ErrorBoundary, findModuleExport, Focusable, Patch } from "@decky/ui";
+import { afterPatch, ErrorBoundary, findModuleExport, Patch } from "@decky/ui";
 import { FaRegStickyNote } from "react-icons/fa";
 import { NotesPage } from "./components/NotesPage";
 import { BrowserPage } from "./components/BrowserPage";
@@ -9,6 +9,7 @@ import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { getSettings } from "./state/notesStore";
 import { dictationBusy, dictationChordEnabled, stopAnywhereDictation, toggleAnywhereDictation } from "./dictation";
 import { NOTES_ROUTE, WEB_ROUTE, reportButtons, toggleNotesPage } from "./opening";
+import { lastPlaceAddress } from "./state/place";
 import { releaseTrackpads } from "./trackpads";
 import { Button, feedRecording, getCombo, isRecordingCombo, sortButtons } from "./combos";
 import { speechAllowed } from "./state/speech";
@@ -246,8 +247,9 @@ function withNotesItem(items: unknown): MenuItem[] | null {
     cloneElement(template, { routeState: undefined, active: "if-within-route", ...props } as any) as MenuItem;
   let changed = false;
   if (getSettings().mainMenuEntry && !list.some((e) => e.key === MENU_KEY)) {
-    const item = makeItem({ key: MENU_KEY, route: NOTES_ROUTE, label: "Desk of Madness", icon: <FaRegStickyNote /> });
-    list = [...list.slice(0, after + 1), item, ...list.slice(after + 1)];
+    // At the very top, above the running game, so it's the first thing under the Steam button.
+    const route = lastPlaceAddress() ?? NOTES_ROUTE;
+    list = [makeItem({ key: MENU_KEY, route, label: "Desk of Madness", icon: <FaRegStickyNote /> }), ...list];
     changed = true;
   }
   for (const hook of menuHooks) {
@@ -265,17 +267,18 @@ function withNotesItem(items: unknown): MenuItem[] | null {
 }
 
 /**
- * Steam builds the main menu's items inside its own code, then passes them as children to its shared
- * Focusable. Newer Steam makes Focusable a plain function we can't patch in place, so we watch for it at
+ * Steam builds the main menu's items inside its own code, then passes them as children to a Focusable with
+ * role "menu". Newer Steam makes Focusable a plain function we can't patch in place, so we watch for it at
  * React.createElement instead and add our item there, copied from the Downloads entry so it looks and
- * behaves the same.
+ * behaves the same. We don't compare the type with @decky/ui's Focusable: that lookup can land on a
+ * different copy than the menu uses, which silently hid the entry. withNotesItem checks the items instead.
  */
 function patchMainMenu(): (() => void) | null {
   const react = (window as any).SP_REACT;
-  if (!Focusable || typeof react?.createElement !== "function") return null;
+  if (typeof react?.createElement !== "function") return null;
   const original = react.createElement;
   const patched = function (this: unknown, type: unknown, props: any, ...children: unknown[]) {
-    if (type === Focusable && props?.role === "menu" && (getSettings().mainMenuEntry || menuHooks.size)) {
+    if (props?.role === "menu" && typeof type !== "string" && (getSettings().mainMenuEntry || menuHooks.size)) {
       try {
         // Children come either as extra arguments or in props.children, possibly one array deep.
         if (children.length) {
