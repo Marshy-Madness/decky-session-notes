@@ -54,8 +54,7 @@ const RecentNotes: FC<TomeProps> = ({ game, fullScreen, showNotes }) => {
               padding: "2px 10px",
               fontSize: "12px",
               minHeight: 0,
-              background: i === filter ? "#1a9fff" : undefined,
-              color: i === filter ? "white" : undefined,
+              ...(i === filter ? s.tint("#1a9fff") : {}),
             }}
             onClick={() => setFilter(i)}
           >

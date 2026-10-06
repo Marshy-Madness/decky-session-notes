@@ -1,22 +1,21 @@
-import { FC, ReactNode, useEffect, useState } from "react";
-import { DialogButton, Focusable, Menu, MenuItem, showContextMenu, showModal } from "@decky/ui";
-import { FaBullseye, FaCheck, FaExchangeAlt, FaPen, FaPlus, FaStickyNote } from "react-icons/fa";
+import { CSSProperties, FC, ReactNode, useEffect, useState } from "react";
+import { DialogButton, Focusable, Menu, MenuItem, showContextMenu } from "@decky/ui";
+import { FaCheck, FaExchangeAlt, FaPen, FaPlus, FaStickyNote } from "react-icons/fa";
 import { backend } from "../api/backend";
 import { useRunningGame } from "../hooks/useAppLifetime";
 import { NotesProvider, useGame } from "../state/NotesProvider";
 import { useDataVersion, useSettings } from "../state/notesStore";
 import { getPlace, setPlace } from "../state/place";
 import { rememberFolder } from "../state/resume";
+import { deskGame } from "../state/deskGame";
 import { Game, GameSummary } from "../types";
 import { NoteList } from "../components/NoteList";
 import { gameArt } from "../components/Library";
 import { Loading, errorText } from "../components/Loading";
 import { TomeFrame } from "./TomeFrame";
-import { TomePickerModal } from "./TomePicker";
-import { TomeWheelModal } from "./RadialPicker";
+import { TomeList } from "./TomePicker";
 import { moveTome, resetGameLayout, setCollapsed, setTomeOn, useArrangement, useForAllGames } from "./layout";
 import { TomeProps } from "./registry";
-import { takeWheelRequest, useWheelRequest } from "./wheel";
 import { Hint } from "./bits";
 import "./builtin";
 import * as s from "../components/styles";
@@ -24,9 +23,6 @@ import * as s from "../components/styles";
 // The Desk: the first tab. It follows the game you're playing (or the one you played last) and shows your
 // Tomes for it, one stream you can reorder, fold and add to.
 
-let lastDeskGame: string | null = null;
-/** The running game the Desk last switched to; a game launched after that takes the Desk over. */
-let followed: string | null = null;
 
 type GoTab = TomeProps["goTab"];
 
@@ -37,17 +33,18 @@ export const Desk: FC<{ fullScreen: boolean; goTab: GoTab }> = ({ fullScreen, go
   const [gamesError, setGamesError] = useState<string | null>(null);
   const [appId, setAppIdState] = useState<string | null>(() => {
     const p = getPlace();
-    if (running && running.appId !== followed) {
-      followed = running.appId;
+    if (running && running.appId !== deskGame.followed) {
+      deskGame.followed = running.appId;
       return running.appId;
     }
-    return lastDeskGame ?? (p.tab === "desk" ? p.appId : null) ?? running?.appId ?? null;
+    return deskGame.last ?? (p.tab === "desk" ? p.appId : null) ?? running?.appId ?? null;
   });
   const [view, setViewState] = useState<"desk" | "notes">(() => getPlace().deskView ?? "desk");
   const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   const setAppId = (id: string | null) => {
-    lastDeskGame = id;
+    deskGame.last = id;
     setPlace({ appId: id, folderId: null, note: null, deskView: "desk" });
     setViewState("desk");
     setAppIdState(id);
@@ -69,8 +66,8 @@ export const Desk: FC<{ fullScreen: boolean; goTab: GoTab }> = ({ fullScreen, go
 
   // A game starting takes over the Desk.
   useEffect(() => {
-    if (running && running.appId !== followed) {
-      followed = running.appId;
+    if (running && running.appId !== deskGame.followed) {
+      deskGame.followed = running.appId;
       setAppId(running.appId);
       setView("desk");
     }
@@ -82,16 +79,6 @@ export const Desk: FC<{ fullScreen: boolean; goTab: GoTab }> = ({ fullScreen, go
     const last = [...games].sort((a, b) => (b.lastLaunched ?? 0) - (a.lastLaunched ?? 0))[0];
     if (last) setAppId(last.appId);
   }, [games, appId]);
-
-  // The Tome wheel's combo (full-screen page only; the panel has its own button for it).
-  const wheel = useWheelRequest();
-  useEffect(() => {
-    if (!fullScreen || !wheel) return;
-    const r = takeWheelRequest();
-    if (!r) return;
-    setView("desk");
-    showModal(<TomeWheelModal appId={appId} combo={r.combo} />);
-  }, [wheel, fullScreen]);
 
   const summary = games?.find((g) => g.appId === appId) ?? null;
   const live = !!running && running.appId === appId;
@@ -136,14 +123,20 @@ export const Desk: FC<{ fullScreen: boolean; goTab: GoTab }> = ({ fullScreen, go
       fullScreen={fullScreen}
       editing={editing}
       onPickGame={pickGame}
-      onEdit={() => setEditing((e) => !e)}
-      onAdd={() => showModal(<TomePickerModal appId={appId} gameName={summary?.name} />)}
-      onWheel={() => showModal(<TomeWheelModal appId={appId} />)}
+      onEdit={() => {
+        setAdding(false);
+        setEditing((e) => !e);
+      }}
+      onAdd={() => {
+        setEditing(false);
+        setAdding(true);
+      }}
       onNotes={appId ? () => setView("notes") : undefined}
     />
   );
 
   const props = {
+    onAdd: () => setAdding(true),
     live,
     fullScreen,
     editing,
@@ -156,6 +149,14 @@ export const Desk: FC<{ fullScreen: boolean; goTab: GoTab }> = ({ fullScreen, go
   };
 
   if (!games) return <Loading error={gamesError} onRetry={loadGames} what="your games" />;
+
+  if (adding)
+    return (
+      <div>
+        {header}
+        <TomeList appId={appId} gameName={summary?.name} onDone={() => setAdding(false)} />
+      </div>
+    );
 
   return (
     <div>
@@ -193,10 +194,11 @@ interface StreamProps extends Omit<TomeProps, "game"> {
   appId: string | null;
   game: Game | null;
   editing: boolean;
+  onAdd: () => void;
 }
 
 /** The Tomes that are on, in order; in edit mode with buttons to move and hide them. */
-const DeskStream: FC<StreamProps> = ({ appId, game, editing, ...rest }) => {
+const DeskStream: FC<StreamProps> = ({ appId, game, editing, onAdd, ...rest }) => {
   const { items, own, perGame } = useArrangement(appId);
   const compact = !!useSettings().desk?.compact;
   const on = items.filter((x) => x.on);
@@ -229,9 +231,12 @@ const DeskStream: FC<StreamProps> = ({ appId, game, editing, ...rest }) => {
         })}
       </div>
       {shown.length === 0 && (
-        <Hint>
-          Your Desk is empty. Press <FaPlus size={10} /> to add Tomes.
-        </Hint>
+        <Focusable style={{ ...s.toolbar, marginTop: "4px" }}>
+          <Hint>Your Desk is empty. Tomes are its widgets: notes, checklists, counters, guides and more.</Hint>
+          <DialogButton style={s.primaryButton} onClick={onAdd}>
+            <FaPlus /> Add Tomes
+          </DialogButton>
+        </Focusable>
       )}
       {editing && (
         <Focusable style={{ ...s.toolbar, marginTop: "4px", fontSize: "13px" }}>
@@ -267,17 +272,16 @@ const DeskHeader: FC<{
   onPickGame: () => void;
   onEdit: () => void;
   onAdd: () => void;
-  onWheel: () => void;
   onNotes?: () => void;
-}> = ({ name, appId, live, fullScreen, editing, onPickGame, onEdit, onAdd, onWheel, onNotes }) => {
-  const [hint, setHint] = useState("");
+}> = ({ name, appId, live, fullScreen, editing, onPickGame, onEdit, onAdd, onNotes }) => {
   const art = appId ? gameArt(appId) : undefined;
-  const actions: { label: string; icon: ReactNode; run: () => void; primary?: boolean }[] = [
-    ...(onNotes ? [{ label: "All notes for this game", icon: <FaStickyNote />, run: onNotes, primary: true }] : []),
-    { label: "Switch game", icon: <FaExchangeAlt />, run: onPickGame },
+  const actions: { label: string; icon: ReactNode; run: () => void; style?: CSSProperties }[] = [
+    ...(onNotes ? [{ label: "Notes", icon: <FaStickyNote />, run: onNotes, style: s.tint("#1a9fff") }] : []),
+    { label: "Game", icon: <FaExchangeAlt />, run: onPickGame },
     { label: "Add Tomes", icon: <FaPlus />, run: onAdd },
-    { label: "Tome wheel", icon: <FaBullseye />, run: onWheel },
-    { label: editing ? "Done editing" : "Edit Desk", icon: editing ? <FaCheck /> : <FaPen />, run: onEdit },
+    editing
+      ? { label: "Done", icon: <FaCheck />, run: onEdit, style: s.tint("#2d7d2d") }
+      : { label: "Edit", icon: <FaPen />, run: onEdit },
   ];
   return (
     <div style={{ marginBottom: "10px" }}>
@@ -295,20 +299,24 @@ const DeskHeader: FC<{
         <div style={{ ...s.title, fontSize: fullScreen ? "22px" : "18px", flex: 1 }}>{name}</div>
         {live && <span style={{ ...s.chip, background: "#2d7d2d", opacity: 1 }}>● Playing</span>}
       </div>
-      <Focusable flow-children="row" style={{ ...s.toolbar, flexWrap: "nowrap", marginTop: "8px" }}>
+      {/* Labelled buttons, two to a line in the Quick Access menu. */}
+      <Focusable style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
         {actions.map((a) => (
           <DialogButton
             key={a.label}
-            style={a.primary ? s.primaryIconButton : editing && a.label === "Done editing" ? { ...s.iconButton, background: "#2d7d2d" } : s.iconButton}
+            style={{
+              ...s.smallButton,
+              flex: fullScreen ? "1 1 0" : "1 1 40%",
+              justifyContent: "center",
+              height: "38px",
+              fontSize: "14px",
+              ...a.style,
+            }}
             onClick={a.run}
-            onGamepadFocus={() => setHint(a.label)}
-            onMouseEnter={() => setHint(a.label)}
-            {...({ title: a.label, "aria-label": a.label } as any)}
           >
-            {a.icon}
+            {a.icon} {a.label}
           </DialogButton>
         ))}
-        <div style={s.iconHint}>{hint}</div>
       </Focusable>
     </div>
   );

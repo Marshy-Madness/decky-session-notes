@@ -31,9 +31,14 @@ The **Desk** tab is a stream of **Tomes** (widgets) for the game you're playing,
 - **Workshop:** 🏭 Madness Workshop (popular books, a "new" badge), 👥 Shared Notes, 📌 Pinned Notes.
 - **Deck** (off by default): 🌡️ System, 💾 Storage, 🌐 Network.
 
-✏️ Edit Desk moves, folds and hides Tomes; ➕ opens the picker (category tabs and tiles). Changes made while a game
-shows give that game its own layout (Settings → Desk turns that off). The **Tome wheel** (◎, or hold R4 + R5 even in a
-game) is a radial menu: aim with the right stick or D-pad, L1/R1 change the ring, let go or press A to jump to a Tome.
+✏️ Edit moves, folds and hides Tomes; ➕ Add Tomes lists every Tome with a switch (also under Settings → Desk). Changes
+made while a game shows give that game its own layout (Settings → Desk turns that off).
+
+### Radial menu
+Hold **R4 + R5** (even in a game), aim with the right stick or D-pad, and let go (or press A). The wheel holds
+📝 Notes, 🗂 Desk, 🌐 Web Browser and 🎮 the current game, which opens a second wheel of that game's notes. Pin any note
+to it with **Add to radial** in the note's window (separate from pinning in the notes list). Settings → **Controls**
+reorders and removes slots and sets the buttons for the radial menu, Notes, Desk and Web Browser.
 The website has the Desk too (🗂 Desk / 📝 Notes in a game).
 
 ### Scrolls
@@ -83,9 +88,9 @@ Your Desk server's admin can limit which Scrolls may be installed and how much s
   the note, save it as a new note, text size) · L1 / R1 back / forward · L2 / R2 page up / down. In the reader the
   D-pad scrolls (up/down) and picks links on screen (left/right), and A opens the picked link.
 - **Trackpads** work as on Steam's store pages on the notes page, in notes and in the browser: the left one scrolls,
-  the right one is a mouse and clicking it clicks. Turn it off under Settings → Browser and controls.
+  the right one is a mouse and clicking it clicks. Turn it off under Settings → Controls.
 - Server admins choose how long unread reader pages are kept (30, 60, 90, 180 or 365 days, or never) on the website
-  (Admin → Features & limits, also in the Android app) or on the Deck (Settings → Browser and controls).
+  (Admin → Features & limits, also in the Android app) or on the Deck (Settings → Sync).
 
 ### While playing
 - **Where I left off.** A pinned note per game that pops up every time you launch it.

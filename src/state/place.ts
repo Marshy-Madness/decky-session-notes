@@ -8,6 +8,8 @@ import { replacePath } from "../steamWindow";
 
 export const NOTES_ROUTE = "/desk-of-madness";
 export const WEB_ROUTE = "/desk-of-madness-web";
+/** The radial menu (radial/RadialPage.tsx). */
+export const RADIAL_ROUTE = "/desk-of-madness-radial";
 
 export type Tab = "desk" | "all" | "workshop" | "settings";
 const TABS: Tab[] = ["desk", "all", "workshop", "settings"];

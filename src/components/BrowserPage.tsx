@@ -23,6 +23,7 @@ import { NOTES_ROUTE, placePath, rememberAddress } from "../state/place";
 import { emitDataChanged, updateSettings, useSettings } from "../state/notesStore";
 import { currentPath, mainWindow, replacePath, steamHistory, useChromeHeights } from "../steamWindow";
 import { useTrackpadMouse } from "../trackpads";
+import { rememberWebAddress } from "../radial/go";
 import { BrowserMode, ReaderPage } from "../types";
 import { errText } from "../utils/errors";
 import { newId } from "../utils/format";
@@ -129,6 +130,7 @@ export const BrowserPage: FC = () => {
   useEffect(() => {
     const path = webPath(cur.url, cur.mode);
     rememberAddress(path);
+    rememberWebAddress(path);
     replacePath(path);
   }, [cur.url, cur.mode]);
 
@@ -471,6 +473,7 @@ export const BrowserPage: FC = () => {
 
   return (
     <Focusable
+      className="dom-root"
       style={{ position: "absolute", inset: 0, paddingTop: `${header}px`, paddingBottom: `${footer}px`, display: "flex", flexDirection: "column", boxSizing: "border-box" }}
       onCancelButton={() => goBack()}
       onCancelActionDescription={canBack ? "Back" : "Close"}
@@ -570,7 +573,7 @@ const AddressModal: FC<{ url: string; onGo: (typed: string) => void; closeModal?
     onGo(text);
   };
   return (
-    <ModalRoot onCancel={closeModal} onOK={submit}>
+    <ModalRoot className="dom-modal" onCancel={closeModal} onOK={submit}>
       <Cover />
       <h3 style={{ marginTop: 0 }}>Go to an address or search</h3>
       <TextField value={text} onChange={(e) => setText(e.target.value)} focusOnMount />

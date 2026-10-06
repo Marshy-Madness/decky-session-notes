@@ -34,7 +34,7 @@ export const SessionSummaryModal: FC<{ appId: string; gameName: string; closeMod
   };
 
   return (
-    <ModalRoot onCancel={closeModal}>
+    <ModalRoot className="dom-modal" onCancel={closeModal}>
       <h3 style={{ marginTop: 0 }}>Done with {gameName}?</h3>
       <TextField
         label="Where did you leave off / what's next? (pinned for next time)"

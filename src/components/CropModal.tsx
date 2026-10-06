@@ -5,6 +5,7 @@ import { backend } from "../api/backend";
 import { Screenshot } from "../types";
 import { newId } from "../utils/format";
 import { loadMedia } from "./MediaImage";
+import { tint } from "./styles";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -191,11 +192,11 @@ export const CropModal: FC<{
     <div style={{ position: "absolute", background: "rgba(255,255,255,0.25)", pointerEvents: "none", ...style }} />
   );
   const small: CSSProperties = { minWidth: 0, padding: "6px 8px", fontSize: "12px" };
-  const selected = (on: boolean): CSSProperties => (on ? { background: "#1a9fff", color: "#fff" } : {});
+  const selected = (on: boolean): CSSProperties => (on ? tint("#1a9fff") : {});
   const caption: CSSProperties = { fontSize: "11px", opacity: 0.6, textTransform: "uppercase" };
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <h2 style={{ margin: "0 0 8px" }}>
         <FaCrop size={16} /> Crop screenshot
       </h2>

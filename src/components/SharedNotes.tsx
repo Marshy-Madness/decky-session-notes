@@ -31,7 +31,7 @@ export const SharedNoteViewer: FC<{ appId: string; shared: SharedNote; closeModa
   };
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <ReadOnlyNote
         closeModal={closeModal}
         appId={appId}

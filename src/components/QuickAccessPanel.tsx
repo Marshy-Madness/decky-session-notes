@@ -10,7 +10,8 @@ import { SettingsView } from "./SettingsView";
 import { WorkshopView } from "./Workshop";
 import { getPlace, setPlace, Tab } from "../state/place";
 import { Desk } from "../tomes/Desk";
-import { useWheelRequest } from "../tomes/wheel";
+import { ensureTheme } from "../theme";
+import * as s from "./styles";
 
 const TabButton: FC<{ active: boolean; onClick: () => void; children: React.ReactNode; grow?: boolean; label?: string }> = ({
   active,
@@ -39,9 +40,9 @@ const TabButton: FC<{ active: boolean; onClick: () => void; children: React.Reac
       whiteSpace: "nowrap",
       overflow: "hidden",
       textOverflow: "ellipsis",
+      fontSize: "14px",
       fontWeight: active ? "bold" : undefined,
-      background: active ? "#1a9fff" : undefined,
-      color: active ? "white" : undefined,
+      ...(active ? s.tint("#1a9fff") : {}),
     }}
   >
     {children}
@@ -50,8 +51,9 @@ const TabButton: FC<{ active: boolean; onClick: () => void; children: React.Reac
 
 // Fits Steam's normal Quick Access width; for more room, use the full-screen page.
 export const QuickAccessPanel: FC = () => {
+  useEffect(ensureTheme, []);
   return (
-    <div style={{ padding: "0 12px 16px", maxWidth: "100%", overflowX: "hidden", boxSizing: "border-box" }}>
+    <div className="dom-root" style={{ padding: "0 12px 16px", maxWidth: "100%", overflowX: "hidden", boxSizing: "border-box" }}>
       <NotesBrowser />
     </div>
   );
@@ -64,12 +66,6 @@ export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false 
   const [tab, setTabState] = useState<Tab>(() => getPlace().tab ?? "desk");
   const [openGame, setOpenGameState] = useState<string | null>(() => getPlace().openGame);
   useEffect(() => setPlace({ tab }), []);
-
-  // The Tome wheel's combo shows the Desk (it opens the wheel once it's showing).
-  const wheel = useWheelRequest();
-  useEffect(() => {
-    if (wheel && fullScreen && tab !== "desk") setTab("desk");
-  }, [wheel]);
 
   const setTab = (t: Tab) => {
     setPlace({ tab: t, note: null });
@@ -90,7 +86,7 @@ export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false 
           {fullScreen ? <><FaBookOpen /> Desk</> : "Desk"}
         </TabButton>
         <TabButton active={tab === "all"} onClick={() => setTab("all")}>
-          {fullScreen ? <><FaThList /> All games</> : "All"}
+          {fullScreen ? <><FaThList /> All games</> : "Games"}
         </TabButton>
         <TabButton active={tab === "workshop"} onClick={() => setTab("workshop")} grow={fullScreen} label="Workshop">
           <FaStore /> {fullScreen && "Workshop"}

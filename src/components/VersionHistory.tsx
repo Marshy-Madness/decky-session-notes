@@ -59,7 +59,7 @@ export const VersionHistoryModal: FC<{ appId: string; note: Note; closeModal?: (
   }, [appId, note.id]);
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <h2 style={{ marginTop: 0 }}>
         <FaHistory size={16} /> Version history · {note.title}
       </h2>
@@ -110,7 +110,7 @@ export const DeletedNotesModal: FC<{ appId: string; closeModal?: () => void }> =
   }, [appId]);
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <h2 style={{ marginTop: 0 }}>Recently deleted</h2>
       {selected ? (
         <>

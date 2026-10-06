@@ -41,7 +41,7 @@ export const ShareModal: FC<{ appId: string; note: Note; closeModal?: () => void
   };
 
   return (
-    <ModalRoot onCancel={closeModal}>
+    <ModalRoot className="dom-modal" onCancel={closeModal}>
       <h2 style={{ marginTop: 0 }}>Share "{note.title}"</h2>
       <div style={{ fontSize: "13px", opacity: 0.75, marginBottom: "8px" }}>
         People you share with see this note (read-only) in their <b>Shared Notes</b> folder and can copy it.

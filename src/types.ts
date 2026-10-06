@@ -162,8 +162,26 @@ export interface SteamScreenshot {
 export type SortMode = "alpha" | "created" | "edited" | "recent";
 /** @deprecated the old fixed choices for the open combo; see Settings.combos */
 export type OpenChord = "l4r4" | "l5r5" | "l3r3" | "off";
-/** What a button combo does: open the notes page, speech to text, a voice command, or the Tome wheel. */
-export type ComboAction = "open" | "dictate" | "voice" | "tomes";
+/**
+ * What a button combo does: the radial menu, open the notes page ("open"), the Desk, the web browser, speech
+ * to text or a voice command. "tomes" is the old name of the radial combo, still read as its fallback.
+ */
+export type ComboAction = "radial" | "open" | "desk" | "web" | "dictate" | "voice";
+
+/** One slot on the radial menu. */
+export type RadialItem =
+  /** The game you're playing (or played last): opens a second wheel of its notes. */
+  | { type: "game" }
+  | { type: "notes" }
+  | { type: "desk" }
+  | { type: "web"; url?: string }
+  /** A note pinned to the wheel (separate from pinning in the notes list). */
+  | { type: "note"; appId: string; noteId: string; title: string; gameName?: string };
+
+export interface RadialSettings {
+  /** The wheel's slots, clockwise from the top; unset = the default four. */
+  items?: RadialItem[];
+}
 /** What a voice command does with words that don't start with a command. */
 export type VoiceFallback = "note" | "append" | "nothing";
 /** Where STEAM + L5 + R5 dictation goes: typed into whatever is focused, or saved as a note. */
@@ -199,7 +217,9 @@ export interface Settings {
   /** @deprecated replaced by combos.open */
   openChord?: OpenChord;
   /** Buttons (1 to 4) for each combo; [] = off, unset = the default. */
-  combos?: Partial<Record<ComboAction, string[]>>;
+  combos?: Partial<Record<ComboAction | "tomes", string[]>>;
+  /** The radial menu's slots. */
+  radial?: RadialSettings;
   /** Add "Desk of Madness" to the main Steam-button menu. */
   mainMenuEntry?: boolean;
   /** Give Desk of Madness its own Quick Access tab, next to Decky's. */
@@ -306,7 +326,7 @@ export interface DeskSettings {
   recent?: Record<string, string[]>;
   /** When the Workshop Tome was last looked at, per game, for its "new" badge. */
   workshopSeen?: Record<string, number>;
-  /** The Tome wheel's button combo. On unless turned off. */
+  /** @deprecated the old Tome wheel's on/off; false still turns the radial combo off until one is set. */
   radial?: boolean;
   /** Tighter Tomes, to fit more in the Quick Access menu. */
   compact?: boolean;

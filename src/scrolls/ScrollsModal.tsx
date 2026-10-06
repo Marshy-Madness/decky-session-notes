@@ -56,7 +56,7 @@ const ScrollDetail: FC<{ id: string; onDone: () => void; closeModal?: () => void
     setBusy(false);
   };
   return (
-    <ModalRoot onCancel={closeModal} closeModal={closeModal}>
+    <ModalRoot className="dom-modal" onCancel={closeModal} closeModal={closeModal}>
       {error && <div style={{ color: "#ff6b6b", marginBottom: "8px" }}>⚠️ {error}</div>}
       {!scroll && !error && <Spinner style={{ width: "28px" }} />}
       {scroll && (
@@ -180,7 +180,7 @@ export const ScrollsModal: FC<{ start?: "installed" | "workshop"; closeModal?: (
   const updates = installed.filter((x) => x.version && latest(x.id) && newer(latest(x.id)!.version, x.version)).length;
 
   return (
-    <ModalRoot onCancel={closeModal} closeModal={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} closeModal={closeModal} bAllowFullSize>
       <h2 style={{ margin: "0 0 4px" }}>📜 Scrolls</h2>
       <div style={{ fontSize: "13px", opacity: 0.75, marginBottom: "8px" }}>
         Add-ons for your Desk from the Madness Workshop: new Tomes, Steam tweaks, link lists and more.

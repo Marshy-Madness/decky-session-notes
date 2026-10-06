@@ -2,7 +2,7 @@ import { FC, Fragment, useEffect, useState } from "react";
 import { ModalRoot, DialogButton, Focusable, showModal } from "@decky/ui";
 import { toaster } from "@decky/api";
 import { backend } from "../api/backend";
-import { FaThumbtack as FaPinScreen, FaCheckSquare, FaHistory, FaEdit, FaEye, FaRegSquare, FaThumbtack, FaTrash } from "react-icons/fa";
+import { FaThumbtack as FaPinScreen, FaCheckSquare, FaHistory, FaEdit, FaEye, FaRegDotCircle, FaRegSquare, FaThumbtack, FaTrash } from "react-icons/fa";
 import { Note } from "../types";
 import { formatDateTime } from "../utils/format";
 import { MediaImage } from "./MediaImage";
@@ -12,9 +12,10 @@ import { Transcripts } from "./Transcripts";
 import * as s from "./styles";
 import { openOverlayModal } from "./OverlayModal";
 import { LinkedText } from "./LinkedText";
+import { isNoteOnWheel, toggleNoteOnWheel } from "../radial/items";
 
 const ImageModal: FC<{ appId: string; file: string; closeModal?: () => void }> = ({ appId, file, closeModal }) => (
-  <ModalRoot onCancel={closeModal} bAllowFullSize>
+  <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
     <MediaImage appId={appId} file={file} style={{ width: "100%", maxHeight: "75vh", objectFit: "contain" }} />
   </ModalRoot>
 );
@@ -36,6 +37,7 @@ export const NoteViewer: FC<{
   const [note, setNote] = useState(initial);
   const [revealed, setRevealed] = useState(!initial.spoiler);
   const [onScreen, setOnScreen] = useState(false);
+  const [onWheel, setOnWheel] = useState(() => isNoteOnWheel(initial.id));
 
   useEffect(() => {
     backend.overlayStatus().then((st) => setOnScreen(st.pin?.noteId === initial.id));
@@ -77,7 +79,7 @@ export const NoteViewer: FC<{
   };
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <h2 style={{ marginTop: 0, marginBottom: "4px" }}>
         {note.pinned && <FaThumbtack size={14} style={{ marginRight: "8px" }} />}
         {note.title}
@@ -197,6 +199,9 @@ export const NoteViewer: FC<{
         </DialogButton>
         <DialogButton onClick={act(onTogglePin)}>
           <FaThumbtack /> {note.pinned ? "Unpin" : "Pin"}
+        </DialogButton>
+        <DialogButton onClick={() => setOnWheel(toggleNoteOnWheel(appId, note.id, note.title))}>
+          <FaRegDotCircle /> {onWheel ? "Remove from radial" : "Add to radial"}
         </DialogButton>
         <DialogButton onClick={act(onHistory)}>
           <FaHistory /> History

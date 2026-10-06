@@ -378,7 +378,7 @@ class Plugin:
     async def steam_news(self, appid: str, count: int = 5):
         return await asyncio.to_thread(news.for_app, appid, count)
 
-    # the Desk's Deck Tomes and the Tome wheel
+    # the Desk's Deck Tomes and the radial menu
     async def stick_feed(self, on: bool):
         self.buttons.set_stick_feed(on)
 

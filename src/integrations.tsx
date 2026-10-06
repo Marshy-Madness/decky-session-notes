@@ -1,5 +1,6 @@
 import { cloneElement, isValidElement } from "react";
-import { openTomeWheel } from "./tomes/wheel";
+import { deskCombo, notesCombo, radialComboPressed, webCombo } from "./radial/go";
+import { RadialPage } from "./radial/RadialPage";
 import { addEventListener, removeEventListener, routerHook } from "@decky/api";
 import { afterPatch, ErrorBoundary, findModuleExport, Patch } from "@decky/ui";
 import { FaRegStickyNote } from "react-icons/fa";
@@ -8,8 +9,8 @@ import { BrowserPage } from "./components/BrowserPage";
 import { QuickAccessPanel } from "./components/QuickAccessPanel";
 import { getSettings } from "./state/notesStore";
 import { dictationBusy, dictationChordEnabled, stopAnywhereDictation, toggleAnywhereDictation } from "./dictation";
-import { NOTES_ROUTE, WEB_ROUTE, reportButtons, toggleNotesPage } from "./opening";
-import { lastPlaceAddress } from "./state/place";
+import { NOTES_ROUTE, WEB_ROUTE, reportButtons } from "./opening";
+import { lastPlaceAddress, RADIAL_ROUTE } from "./state/place";
 import { releaseTrackpads } from "./trackpads";
 import { Button, feedRecording, getCombo, isRecordingCombo, sortButtons } from "./combos";
 import { speechAllowed } from "./state/speech";
@@ -96,15 +97,17 @@ function findInputService(): InputService | null {
   }
 }
 
-const ACTIONS: ComboAction[] = ["open", "dictate", "voice", "tomes"];
+const ACTIONS: ComboAction[] = ["radial", "open", "desk", "web", "dictate", "voice"];
 
 function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
   const s = getSettings();
   const on: Record<ComboAction, boolean> = {
+    radial: true,
     open: true,
+    desk: true,
+    web: true,
     dictate: dictationChordEnabled(),
     voice: !!s.voiceCommands && speechAllowed(),
-    tomes: s.desk?.radial !== false,
   };
   return ACTIONS.flatMap((action) => {
     const buttons = on[action] ? getCombo(action) : null;
@@ -113,8 +116,10 @@ function enabledCombos(): { action: ComboAction; buttons: Button[] }[] {
 }
 
 function runCombo(action: ComboAction) {
-  if (action === "open") toggleNotesPage();
-  else if (action === "tomes") openTomeWheel(getCombo("tomes") ?? []);
+  if (action === "open") notesCombo();
+  else if (action === "radial") radialComboPressed(getCombo("radial") ?? []);
+  else if (action === "desk") deskCombo();
+  else if (action === "web") webCombo();
   else if (action === "dictate") {
     if (voiceBusy()) return;
     toggleAnywhereDictation();
@@ -350,6 +355,7 @@ export function startIntegrations(): () => void {
   // Not exact: the rest of the address is where you are (state/place.ts).
   routerHook.addRoute(NOTES_ROUTE, NotesPage);
   routerHook.addRoute(WEB_ROUTE, BrowserPage, { exact: true });
+  routerHook.addRoute(RADIAL_ROUTE, RadialPage, { exact: true });
   const stopChord = startChordWatch();
   const patches = [patchQamTabs()];
   setTabsPatched(!!patches[0]);
@@ -360,6 +366,7 @@ export function startIntegrations(): () => void {
     unpatchMenu?.();
     routerHook.removeRoute(NOTES_ROUTE);
     routerHook.removeRoute(WEB_ROUTE);
+    routerHook.removeRoute(RADIAL_ROUTE);
     releaseTrackpads();
   };
 }

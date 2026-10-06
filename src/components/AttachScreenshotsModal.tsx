@@ -61,7 +61,7 @@ export const AttachScreenshotsModal: FC<{ pending: PendingShots; closeModal?: ()
   const n = pending.paths.length;
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <h2 style={{ marginTop: 0 }}>
         {n === 1 ? "New screenshot" : `${n} new screenshots`}
         {game && <span style={{ opacity: 0.6, fontSize: "0.7em" }}> · {game.name}</span>}

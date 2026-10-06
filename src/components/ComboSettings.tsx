@@ -17,10 +17,12 @@ import { COMMANDS } from "../voice";
 import * as s from "./styles";
 
 const ACTION_NAMES: Record<ComboAction, string> = {
-  open: "Open notes",
+  radial: "Radial menu",
+  open: "Notes",
+  desk: "Desk",
+  web: "Web Browser",
   dictate: "Speech to text",
   voice: "Voice command",
-  tomes: "Tome wheel",
 };
 
 const IDLE_CANCEL_MS = 10_000;
@@ -57,7 +59,7 @@ const RecordComboModal: FC<{ action: ComboAction; closeModal?: () => void }> = (
   }, [preview]);
 
   return (
-    <ModalRoot onCancel={swallow} bAllowFullSize={false}>
+    <ModalRoot className="dom-modal" onCancel={swallow} bAllowFullSize={false}>
       <Focusable
         noFocusRing
         onOKButton={swallow}
@@ -68,7 +70,7 @@ const RecordComboModal: FC<{ action: ComboAction; closeModal?: () => void }> = (
         onGamepadDirection={swallow}
         style={{ textAlign: "center", padding: "8px 0" }}
       >
-        <h2 style={{ margin: "0 0 8px" }}>New {ACTION_NAMES[action].toLowerCase()} combo</h2>
+        <h2 style={{ margin: "0 0 8px" }}>New {ACTION_NAMES[action]} combo</h2>
         <div style={{ fontSize: "14px", opacity: 0.8 }}>
           Hold up to {MAX_COMBO} buttons together, then let go.
         </div>

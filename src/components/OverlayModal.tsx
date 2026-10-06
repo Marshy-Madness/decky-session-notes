@@ -211,7 +211,7 @@ export const OverlayModal: FC<{ settings: Settings; backdrop?: string; closeModa
   };
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <h2 style={{ margin: "0 0 8px", display: "flex", alignItems: "center", gap: "8px" }}>
         <FaThumbtack size={16} /> Pinned list on screen
       </h2>
@@ -302,7 +302,7 @@ export const OverlayModal: FC<{ settings: Settings; backdrop?: string; closeModa
                   <DialogButton
                     key={spot.label}
                     aria-label={spot.label}
-                    style={{ ...spotButton, ...(isAt(spot) ? { background: "#1a9fff", color: "#fff" } : {}) }}
+                    style={{ ...spotButton, ...(isAt(spot) ? s.tint("#1a9fff") : {}) }}
                     onClick={() => setPos(spotXY(spot, w, h))}
                   >
                     {spot.turn === null ? (

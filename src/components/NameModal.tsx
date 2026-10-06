@@ -17,7 +17,7 @@ export const NameModal: FC<{
     closeModal?.();
   };
   return (
-    <ModalRoot onCancel={closeModal} onOK={submit}>
+    <ModalRoot className="dom-modal" onCancel={closeModal} onOK={submit}>
       <h3 style={{ marginTop: 0 }}>{heading}</h3>
       <TextField label={label} value={name} onChange={(e) => setName(e.target.value)} focusOnMount />
       <Focusable style={{ display: "flex", gap: "8px", marginTop: "12px" }}>

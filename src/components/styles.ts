@@ -1,5 +1,12 @@
 import { CSSProperties } from "react";
 
+/**
+ * A coloured button. Our stylesheet (theme.ts) pins every button's colours with !important so themes can't
+ * make them unreadable, which means a plain inline background is ignored; this sets the variables it reads.
+ */
+export const tint = (bg: string, fg = "#fff"): CSSProperties =>
+  ({ background: bg, color: fg, "--dom-bg": bg, "--dom-fg": fg, "--dom-focus-bg": bg, "--dom-focus-fg": fg }) as CSSProperties;
+
 export const row: CSSProperties = {
   display: "flex",
   alignItems: "center",
@@ -67,8 +74,7 @@ export const smallButton: CSSProperties = {
 
 export const primaryButton: CSSProperties = {
   ...smallButton,
-  background: "#1a9fff",
-  color: "white",
+  ...tint("#1a9fff"),
   fontWeight: "bold",
 };
 
@@ -85,8 +91,7 @@ export const iconButton: CSSProperties = {
 
 export const primaryIconButton: CSSProperties = {
   ...iconButton,
-  background: "#1a9fff",
-  color: "white",
+  ...tint("#1a9fff"),
 };
 
 export const iconHint: CSSProperties = {

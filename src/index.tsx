@@ -11,6 +11,7 @@ import { emitDataChanged, getSettings, loadSettings } from "./state/notesStore";
 import { addPendingScreenshot, getPendingScreenshots } from "./state/pendingScreenshots";
 import { refreshSpeech } from "./state/speech";
 import { startScrolls } from "./scrolls/host";
+import { ensureTheme, removeTheme } from "./theme";
 
 /** When you take a screenshot in-game, offer to attach it to a note. */
 function startScreenshotWatch(): () => void {
@@ -47,6 +48,7 @@ function startScreenshotWatch(): () => void {
 
 export default definePlugin(() => {
   loadSettings();
+  ensureTheme();
   // First start after the rename: say the Session Notes data came across (once).
   backend.importNotice().then((n) => {
     if (n) toaster.toast({ title: "Desk of Madness", body: "Imported your Session Notes notes and settings. You can uninstall Session Notes now.", duration: 8000 });
@@ -77,6 +79,7 @@ export default definePlugin(() => {
       stopScreenshots();
       stopScrolls();
       stopIntegrations();
+      removeTheme();
       removeEventListener("data_changed", onRemoteChange);
     },
   };

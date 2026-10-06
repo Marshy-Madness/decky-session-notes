@@ -33,7 +33,7 @@ export const ScreenshotPicker: FC<{
   };
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <h2 style={{ marginTop: 0 }}>Attach screenshots</h2>
       {shots === null && <Spinner style={{ width: "32px" }} />}
       {shots?.length === 0 && (

@@ -227,7 +227,7 @@ export const NoteEditor: FC<{
   ];
 
   return (
-    <ModalRoot onCancel={confirmCancel} bAllowFullSize bDisableBackgroundDismiss>
+    <ModalRoot className="dom-modal" onCancel={confirmCancel} bAllowFullSize bDisableBackgroundDismiss>
       <h2 style={{ marginTop: 0 }}>{note ? "Edit note" : "New note"}</h2>
 
       <div style={{ display: "flex", gap: "8px", alignItems: "flex-end" }}>

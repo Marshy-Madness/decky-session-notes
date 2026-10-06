@@ -45,11 +45,14 @@ const OLD_CHORDS: Record<OpenChord, Button[]> = {
   off: [],
 };
 
+// Desk and Web Browser start off: they're for people who want a button straight to them.
 export const DEFAULT_COMBOS: Record<ComboAction, Button[]> = {
+  radial: ["R4", "R5"],
   open: ["L4", "R4"],
+  desk: [],
+  web: [],
   dictate: ["STEAM", "L5", "R5"],
   voice: ["STEAM", "L4", "R4"],
-  tomes: ["R4", "R5"],
 };
 
 /** The combo for an action, or null if it's off. Settings from before custom combos still count. */
@@ -57,6 +60,7 @@ export function getCombo(action: ComboAction): Button[] | null {
   const s = getSettings();
   let combo = s.combos?.[action] as Button[] | undefined;
   if (!combo && action === "open" && s.openChord) combo = OLD_CHORDS[s.openChord];
+  if (!combo && action === "radial") combo = (s.combos?.tomes as Button[] | undefined) ?? (s.desk?.radial === false ? [] : undefined);
   combo = combo ? sortButtons(combo) : DEFAULT_COMBOS[action];
   return combo.length ? combo : null;
 }

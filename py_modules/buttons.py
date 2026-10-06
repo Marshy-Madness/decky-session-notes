@@ -56,7 +56,7 @@ class Buttons:
         self.fds = {}
         self.state = None  # (lo, hi) of the buttons we care about
         self.error = None
-        # The right stick is only sent while the Tome wheel is open (it changes constantly).
+        # The right stick is only sent while the radial menu is open (it changes constantly).
         self.stick_on = False
         self.stick = (0, 0)
         self.stick_sent = 0.0

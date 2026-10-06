@@ -77,7 +77,7 @@ export const LinkPanel: FC<{ onLinked?: (user: WorkshopUser) => void }> = ({ onL
 };
 
 const LinkModal: FC<{ closeModal?: () => void; onLinked?: () => void }> = ({ closeModal, onLinked }) => (
-  <ModalRoot onCancel={closeModal}>
+  <ModalRoot className="dom-modal" onCancel={closeModal}>
     <h2 style={{ marginTop: 0 }}>Link the Madness Workshop</h2>
     <div style={{ fontSize: "13px", opacity: 0.8, marginBottom: "10px" }}>
       Browsing is open to everyone. To post, like, comment or copy notes, link your Steam account once.
@@ -118,8 +118,8 @@ export const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void
     setBusy(false);
   };
 
-  if (error) return <ModalRoot onCancel={closeModal}>⚠️ {error}</ModalRoot>;
-  if (!entry) return <ModalRoot onCancel={closeModal}><Spinner style={{ width: "32px" }} /></ModalRoot>;
+  if (error) return <ModalRoot className="dom-modal" onCancel={closeModal}>⚠️ {error}</ModalRoot>;
+  if (!entry) return <ModalRoot className="dom-modal" onCancel={closeModal}><Spinner style={{ width: "32px" }} /></ModalRoot>;
 
   const note: Note = {
     id: entry.id, folderId: null, title: entry.title, body: entry.body, tags: entry.tags, screenshots: entry.screenshots,
@@ -128,7 +128,7 @@ export const EntryModal: FC<{ id: string; appId: string; closeModal?: () => void
   };
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <ReadOnlyNote
         closeModal={closeModal}
         appId={appId}
@@ -227,7 +227,7 @@ const EditEntryModal: FC<{ entry: WorkshopEntry; onSaved: (e: WorkshopEntry) => 
   };
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <h2 style={{ marginTop: 0 }}>Edit post</h2>
       <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <Dropdown rgOptions={KINDS.map((k) => ({ label: `${k.icon} ${k.label}`, data: k.kind }))} selectedOption={kind} onChange={(o) => setKind(o.data)} />
@@ -271,7 +271,7 @@ export const PublishModal: FC<{ appId: string; note: Note; closeModal?: () => vo
 
   if (!settings.bookstoreUser) {
     return (
-      <ModalRoot onCancel={closeModal}>
+      <ModalRoot className="dom-modal" onCancel={closeModal}>
         <h2 style={{ marginTop: 0 }}>Publish to the Madness Workshop</h2>
         <div style={{ fontSize: "13px", opacity: 0.8, marginBottom: "10px" }}>Link your Steam account first so people know who posted it.</div>
         <LinkPanel />
@@ -304,7 +304,7 @@ export const PublishModal: FC<{ appId: string; note: Note; closeModal?: () => vo
   };
 
   return (
-    <ModalRoot onCancel={closeModal} bAllowFullSize>
+    <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
       <h2 style={{ marginTop: 0 }}>{note.bookstoreId ? "Update published version" : "Publish to the Madness Workshop"}</h2>
       <div style={{ fontSize: "13px", opacity: 0.75 }}>
         "{note.title}" with its screenshots, voice notes and checklist goes public as {settings.bookstoreUser.name}.
@@ -415,7 +415,7 @@ const MineModal: FC<{ closeModal?: () => void }> = ({ closeModal }) => {
     backend.bsMine().then(setMine).catch((e) => setError(errText(e)));
   }, []);
   return (
-    <ModalRoot onCancel={closeModal} closeModal={closeModal}>
+    <ModalRoot className="dom-modal" onCancel={closeModal} closeModal={closeModal}>
       <h2 style={{ margin: "0 0 6px" }}>🧰 My Workshop</h2>
       {error && <div>⚠️ {error}</div>}
       {!mine && !error && <Spinner style={{ width: "28px" }} />}
@@ -470,7 +470,7 @@ const PackModal: FC<{ id: string; closeModal?: () => void }> = ({ id, closeModal
     setBusy(false);
   };
   return (
-    <ModalRoot onCancel={closeModal} closeModal={closeModal}>
+    <ModalRoot className="dom-modal" onCancel={closeModal} closeModal={closeModal}>
       {error && <div>⚠️ {error}</div>}
       {!pack && !error && <Spinner style={{ width: "28px" }} />}
       {pack && (

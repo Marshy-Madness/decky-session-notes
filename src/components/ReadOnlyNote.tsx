@@ -16,7 +16,7 @@ const ImageModal: FC<{ appId: string; file: string; loader?: MediaLoader; closeM
   loader,
   closeModal,
 }) => (
-  <ModalRoot onCancel={closeModal} bAllowFullSize>
+  <ModalRoot className="dom-modal" onCancel={closeModal} bAllowFullSize>
     <MediaImage appId={appId} file={file} loader={loader} style={{ width: "100%", maxHeight: "75vh", objectFit: "contain" }} />
   </ModalRoot>
 );
