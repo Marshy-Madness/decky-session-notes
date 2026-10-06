@@ -1,9 +1,10 @@
 import { FC, useEffect, useState } from "react";
-import { Dropdown, Focusable, Spinner, TextField } from "@decky/ui";
+import { Dropdown, Focusable, TextField } from "@decky/ui";
 import { backend } from "../api/backend";
 import { updateSettings, useDataVersion, useSettings } from "../state/notesStore";
 import { GameSummary, SortMode } from "../types";
 import { SORT_LABELS, formatDate, formatDuration, sortGames } from "../utils/format";
+import { Loading, errorText } from "./Loading";
 import * as s from "./styles";
 
 const SORT_OPTIONS = (Object.keys(SORT_LABELS) as SortMode[]).map((k) => ({ label: SORT_LABELS[k], data: k }));
@@ -21,15 +22,18 @@ export function gameArt(appId: string): string | undefined {
 /** The "All" tab: every game that has notes or has been launched, sortable. */
 export const Library: FC<{ onOpen: (appId: string) => void; runningAppId?: string }> = ({ onOpen, runningAppId }) => {
   const [games, setGames] = useState<GameSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const version = useDataVersion();
   const sort = useSettings().sort ?? "edited";
 
-  useEffect(() => {
-    backend.listGames().then(setGames);
-  }, [version]);
+  const load = () => {
+    setError(null);
+    backend.listGames().then(setGames, (e) => setError(errorText(e)));
+  };
+  useEffect(load, [version]);
 
-  if (!games) return <Spinner style={{ width: "32px" }} />;
+  if (!games) return <Loading error={error} onRetry={load} what="your games" />;
 
   const q = search.trim().toLowerCase();
   const visible = sortGames(

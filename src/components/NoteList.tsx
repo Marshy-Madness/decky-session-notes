@@ -6,7 +6,6 @@ import {
   Focusable,
   Menu,
   MenuItem,
-  Spinner,
   TextField,
   showContextMenu,
   showModal,
@@ -20,6 +19,7 @@ import { SORT_LABELS, newId, sortNotes } from "../utils/format";
 import { KINDS, isGuide } from "../utils/kinds";
 import { SharedNoteViewer } from "./SharedNotes";
 import { ShareModal } from "./ShareModal";
+import { Loading } from "./Loading";
 import { PublishModal } from "./Workshop";
 import { NoteItem } from "./NoteItem";
 import { folderPath } from "./NoteEditor";
@@ -50,7 +50,7 @@ const SORT_OPTIONS = (Object.keys(SORT_LABELS) as SortMode[]).map((k) => ({ labe
 
 /** All folders and notes for one game (the game comes from NotesProvider). */
 export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: string }> = ({ live, onBack, backLabel = "All games" }) => {
-  const { appId, game } = useGame();
+  const { appId, game, error, refresh } = useGame();
   const settings = useSettings();
   const sort = settings.sort ?? "edited";
   const [folderId, setFolderState] = useState<string | null>(() => lastFolder(appId));
@@ -77,7 +77,7 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: str
     else if (note) openNote(note);
   }, [!!game]);
 
-  if (!game) return <Spinner style={{ width: "32px" }} />;
+  if (!game) return <Loading error={error} onRetry={refresh} what="this game's notes" />;
 
   const folders = game.folders;
   const searching = search.trim().length > 0 || activeTags.length > 0 || activeKinds.length > 0;

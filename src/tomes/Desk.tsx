@@ -1,5 +1,5 @@
 import { FC, ReactNode, useEffect, useState } from "react";
-import { DialogButton, Focusable, Menu, MenuItem, Spinner, showContextMenu, showModal } from "@decky/ui";
+import { DialogButton, Focusable, Menu, MenuItem, showContextMenu, showModal } from "@decky/ui";
 import { FaBullseye, FaCheck, FaExchangeAlt, FaPen, FaPlus, FaStickyNote } from "react-icons/fa";
 import { backend } from "../api/backend";
 import { useRunningGame } from "../hooks/useAppLifetime";
@@ -10,6 +10,7 @@ import { rememberFolder } from "../state/resume";
 import { Game, GameSummary } from "../types";
 import { NoteList } from "../components/NoteList";
 import { gameArt } from "../components/Library";
+import { Loading, errorText } from "../components/Loading";
 import { TomeFrame } from "./TomeFrame";
 import { TomePickerModal } from "./TomePicker";
 import { TomeWheelModal } from "./RadialPicker";
@@ -33,6 +34,7 @@ export const Desk: FC<{ fullScreen: boolean; goTab: GoTab }> = ({ fullScreen, go
   const running = useRunningGame();
   const version = useDataVersion();
   const [games, setGames] = useState<GameSummary[] | null>(null);
+  const [gamesError, setGamesError] = useState<string | null>(null);
   const [appId, setAppIdState] = useState<string | null>(() => {
     const p = getPlace();
     if (running && running.appId !== followed) {
@@ -56,9 +58,14 @@ export const Desk: FC<{ fullScreen: boolean; goTab: GoTab }> = ({ fullScreen, go
   };
 
   useEffect(() => setPlace({ appId, deskView: view }), []);
-  useEffect(() => {
-    backend.listGames().then(setGames);
-  }, [version]);
+  const loadGames = () => {
+    setGamesError(null);
+    backend.listGames().then(setGames, (e) => {
+      console.error("Desk of Madness: list_games failed", e);
+      setGamesError(errorText(e));
+    });
+  };
+  useEffect(loadGames, [version]);
 
   // A game starting takes over the Desk.
   useEffect(() => {
@@ -148,7 +155,7 @@ export const Desk: FC<{ fullScreen: boolean; goTab: GoTab }> = ({ fullScreen, go
     },
   };
 
-  if (!games) return <Spinner style={{ width: "32px" }} />;
+  if (!games) return <Loading error={gamesError} onRetry={loadGames} what="your games" />;
 
   return (
     <div>
@@ -170,8 +177,8 @@ export const Desk: FC<{ fullScreen: boolean; goTab: GoTab }> = ({ fullScreen, go
 };
 
 const GameDesk: FC<Omit<StreamProps, "game">> = (props) => {
-  const { game } = useGame();
-  if (!game) return <Spinner style={{ width: "32px" }} />;
+  const { game, error, refresh } = useGame();
+  if (!game) return <Loading error={error} onRetry={refresh} what="this game's notes" />;
   return <DeskStream {...props} game={game} />;
 };
 
