@@ -6,6 +6,8 @@ import { BackupStatus, BrowserMode, DictateTarget, ReaderCacheSettings, VoiceFal
 import { ComboRow, VoiceCommandList } from "./ComboSettings";
 import { refreshSpeech, useSpeechAllowed } from "../state/speech";
 import { LinkPanel } from "./Workshop";
+import { openScrolls } from "../scrolls/ScrollsModal";
+import { useScrolls } from "../scrolls/host";
 import { openOverlayModal } from "./OverlayModal";
 import { useSeenButtons } from "../opening";
 import { formatDateTime } from "../utils/format";
@@ -108,6 +110,7 @@ export const SettingsView: FC = () => {
       return `✅ Synced: sent ${r.pushed} game(s), received changes for ${r.pulled}`;
     });
 
+  const scrollCount = useScrolls().installed.length;
   return (
     <>
       <Heading>Opening Desk of Madness</Heading>
@@ -381,6 +384,17 @@ export const SettingsView: FC = () => {
           </ButtonItem>
         </div>
       </PanelSectionRow>
+      <Heading>Scrolls</Heading>
+      <PanelSectionRow>
+        <ButtonItem
+          layout="below"
+          description="Add-ons from the Madness Workshop: new Tomes, a News section on library pages, pinning Decky plugins and more. Turn each one on or off here."
+          onClick={() => openScrolls("installed")}
+        >
+          📜 Manage Scrolls ({scrollCount} installed)
+        </ButtonItem>
+      </PanelSectionRow>
+
       <Heading>Madness Workshop</Heading>
       <PanelSectionRow>
         <TextField

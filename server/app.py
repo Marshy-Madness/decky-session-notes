@@ -826,7 +826,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"user": accounts.public(user), "speech": speech_on(user),
                                    "announcement": accounts.setting("announcement", ""), "admin": accounts.is_admin(user),
                                    "deskDefaults": desk_defaults(), "workshopUrl": workshop_url(),
-                                   "allowedScrolls": [x.strip() for x in accounts.setting("allowedScrolls", "").split(",") if x.strip()]})
+                                   "allowedScrolls": [x.strip() for x in accounts.setting("allowedScrolls", "").split(",") if x.strip()],
+                                   "scrollQuotaMb": accounts.setting("scrollQuotaMb", 0)})
         if p[1:] == ["reader"]:  # GET /api/reader?url=…[&refresh=1]: a page as a clean reader view
             url = self.query().get("url", "")
             try:

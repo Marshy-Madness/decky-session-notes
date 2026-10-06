@@ -38,6 +38,11 @@ CREATE TABLE IF NOT EXISTS packs (
   status TEXT DEFAULT 'published', featured INTEGER DEFAULT 0, featured_at INTEGER, copies INTEGER DEFAULT 0,
   created_at INTEGER, updated_at INTEGER);
 CREATE INDEX IF NOT EXISTS packs_app ON packs(app_id);
+CREATE TABLE IF NOT EXISTS scrolls (
+  id TEXT PRIMARY KEY, name TEXT, icon TEXT, version TEXT, kind TEXT, summary TEXT, author TEXT NOT NULL,
+  status TEXT DEFAULT 'pending', data TEXT, signed INTEGER DEFAULT 0, size INTEGER DEFAULT 0, installs INTEGER DEFAULT 0,
+  pending_data TEXT, pending_at INTEGER, review_note TEXT, reviewed_by TEXT, reviewed_at INTEGER,
+  official INTEGER DEFAULT 0, created_at INTEGER, updated_at INTEGER);
 """
 
 # Columns added after the first release: (table, column, definition)

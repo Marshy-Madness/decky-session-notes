@@ -14,7 +14,9 @@ from workshop import Workshop
 from overlay import Overlay
 from buttons import Buttons
 import reader
+import news
 import screenshot
+import scrolls
 import system
 
 
@@ -345,6 +347,36 @@ class Plugin:
 
     async def bs_mine(self):
         return await asyncio.to_thread(self.workshop.mine)
+
+    # 📜 Scrolls: add-ons from the Workshop, checked (and code Scrolls' signatures verified) before they run
+    async def bs_scrolls(self, params: dict):
+        return await asyncio.to_thread(self.workshop.scrolls, params)
+
+    async def bs_scroll(self, scroll_id: str):
+        return await asyncio.to_thread(self.workshop.scroll, scroll_id)
+
+    async def scrolls_installed(self):
+        return await asyncio.to_thread(scrolls.installed)
+
+    async def scroll_install(self, scroll_id: str):
+        def run():
+            raw = self.workshop.download_scroll(scroll_id)
+            account = self.sync.account_info()
+            return scrolls.install(raw, account.get("allowedScrolls") or [], int(account.get("scrollQuotaMb") or 0))
+        return await asyncio.to_thread(run)
+
+    async def scroll_load(self, scroll_id: str):
+        return await asyncio.to_thread(scrolls.load, scroll_id)
+
+    async def scroll_remove(self, scroll_id: str):
+        await asyncio.to_thread(scrolls.remove, scroll_id)
+        settings = storage.get_settings()
+        if scroll_id in (settings.get("scrolls") or {}):
+            settings["scrolls"].pop(scroll_id)
+            storage.save_settings(settings)
+
+    async def steam_news(self, appid: str, count: int = 5):
+        return await asyncio.to_thread(news.for_app, appid, count)
 
     # the Desk's Deck Tomes and the Tome wheel
     async def stick_feed(self, on: bool):

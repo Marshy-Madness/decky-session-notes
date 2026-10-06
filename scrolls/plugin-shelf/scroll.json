@@ -1,0 +1,10 @@
+{
+  "name": "Plugin Shelf",
+  "icon": "🧩",
+  "version": "1.0.0",
+  "summary": "Pin Decky plugins to Steam's menu or their own Quick Access tab, and group Decky's list into folders.",
+  "description": "Pin any installed Decky plugin:\n• as its own Quick Access tab, next to Decky's, or\n• in the main Steam menu (it opens as a full-screen page).\n\nGroup Decky's plugin list into folders, so a long list stays short. A Plugin Shelf Tome on your Desk opens your pinned plugins and folders too.\n\nThis changes Decky's own menus, so a Decky update can break it. It starts turned off; turn it on in Scrolls. If it can't find Decky's parts, it turns itself off and says why.",
+  "author": "MarshyMadness",
+  "minDesk": "0.3.0-beta.4",
+  "permissions": ["quick-access", "main-menu", "decky-ui", "tomes"]
+}

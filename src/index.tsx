@@ -10,6 +10,7 @@ import { startIntegrations } from "./integrations";
 import { emitDataChanged, getSettings, loadSettings } from "./state/notesStore";
 import { addPendingScreenshot, getPendingScreenshots } from "./state/pendingScreenshots";
 import { refreshSpeech } from "./state/speech";
+import { startScrolls } from "./scrolls/host";
 
 /** When you take a screenshot in-game, offer to attach it to a note. */
 function startScreenshotWatch(): () => void {
@@ -58,6 +59,7 @@ export default definePlugin(() => {
   });
   const stopScreenshots = startScreenshotWatch();
   const stopIntegrations = startIntegrations();
+  const stopScrolls = startScrolls(); // after the integrations: Scrolls hook into them
   // The backend emits this after a sync pulls in edits made on the website.
   const onRemoteChange = () => {
     emitDataChanged();
@@ -73,6 +75,7 @@ export default definePlugin(() => {
     onDismount() {
       stopTracking();
       stopScreenshots();
+      stopScrolls();
       stopIntegrations();
       removeEventListener("data_changed", onRemoteChange);
     },

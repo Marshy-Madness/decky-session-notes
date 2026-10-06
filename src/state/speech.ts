@@ -13,6 +13,7 @@ export interface ServerInfo {
   deskDefaults?: DeskLayout | null;
   workshopUrl?: string;
   allowedScrolls?: string[];
+  scrollQuotaMb?: number;
 }
 let server: ServerInfo = {};
 export const getServerInfo = () => server;

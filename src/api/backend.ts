@@ -1,5 +1,5 @@
 import { call } from "@decky/api";
-import { DeskLayout, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings } from "../types";
+import { DeskLayout, InstalledScroll, SteamNewsItem, WorkshopScroll, WorkshopEntry, WorkshopGame, WorkshopPack, WorkshopSummary, WorkshopUser, ServerUser, Share, BackupStatus, Counter, DeletedNote, Folder, NoteVersion, LeftOff, Game, GameSummary, Note, Recording, Screenshot, Settings, SteamScreenshot, ReaderPage, ReaderCacheSettings } from "../types";
 
 export const backend = {
   importNotice: () => call<[], { from: string } | null>("import_notice"),
@@ -40,7 +40,7 @@ export const backend = {
   stopRecording: () => call<[], Recording | null>("stop_recording"),
 
   speechStatus: (refresh = false) =>
-    call<[boolean], { allowed: boolean; deskDefaults?: DeskLayout | null; workshopUrl?: string; allowedScrolls?: string[] }>("speech_status", refresh),
+    call<[boolean], { allowed: boolean; deskDefaults?: DeskLayout | null; workshopUrl?: string; allowedScrolls?: string[]; scrollQuotaMb?: number }>("speech_status", refresh),
   startDictation: () => call<[], boolean>("start_dictation"),
   /** Stops listening and returns the words ("" if nothing was heard). */
   stopDictation: (appId = "", game = "") => call<[string, string], string>("stop_dictation", appId, game),
@@ -88,6 +88,14 @@ export const backend = {
   bsPacks: (params: Record<string, string>) => call<[Record<string, string>], WorkshopPack[]>("bs_packs", params),
   bsPack: (id: string) => call<[string], WorkshopPack>("bs_pack", id),
   bsCopyPack: (id: string) => call<[string], { copied: number; skipped: number; title: string }>("bs_copy_pack", id),
+  bsScrolls: (params: Record<string, string> = {}) => call<[Record<string, string>], WorkshopScroll[]>("bs_scrolls", params),
+  bsScroll: (id: string) => call<[string], WorkshopScroll>("bs_scroll", id),
+  scrollsInstalled: () => call<[], InstalledScroll[]>("scrolls_installed"),
+  scrollInstall: (id: string) => call<[string], InstalledScroll>("scroll_install", id),
+  /** The whole checked Scroll, code included (code Scrolls only come back with a valid signature). */
+  scrollLoad: (id: string) => call<[string], InstalledScroll & { code?: string; signedBy: string }>("scroll_load", id),
+  scrollRemove: (id: string) => call<[string], void>("scroll_remove", id),
+  steamNews: (appId: string, count = 5) => call<[string, number], SteamNewsItem[]>("steam_news", appId, count),
   bsMine: () =>
     call<[], { posts: WorkshopSummary[]; liked: WorkshopSummary[]; packs: WorkshopPack[]; stats: { posts: number; likes: number; copies: number } }>("bs_mine"),
 

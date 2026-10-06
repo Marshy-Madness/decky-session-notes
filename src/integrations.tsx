@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, ReactElement } from "react";
+import { cloneElement, isValidElement } from "react";
 import { openTomeWheel } from "./tomes/wheel";
 import { addEventListener, removeEventListener, routerHook } from "@decky/api";
 import { afterPatch, ErrorBoundary, findModuleExport, Focusable, Patch } from "@decky/ui";
@@ -14,6 +14,7 @@ import { Button, feedRecording, getCombo, isRecordingCombo, sortButtons } from "
 import { speechAllowed } from "./state/speech";
 import { stopVoiceCommand, toggleVoiceCommand, voiceBusy } from "./voice";
 import { ComboAction } from "./types";
+import { MenuItem, MenuItemProps, menuHooks, setTabsPatched, tabHooks } from "./scrolls/hooks";
 
 // ---- button combos ----
 
@@ -231,26 +232,36 @@ function startChordWatch(): () => void {
 // ---- main Steam menu ----
 
 const MENU_KEY = "desk-of-madness";
-type MenuItem = ReactElement & { key: string | null };
 
 const hasSettings = (list: unknown[]) => list.some((e) => isValidElement(e) && e.key === "settings");
 
-/** Returns the menu's item list with our entry added, or null if it's not the main menu or already has it. */
+/** Returns the menu's item list with our entry (and the Scrolls' changes), or null if it's not the main menu or nothing changed. */
 function withNotesItem(items: unknown): MenuItem[] | null {
   if (!Array.isArray(items) || !hasSettings(items)) return null;
-  const list = items as MenuItem[];
-  if (list.some((e) => e.key === MENU_KEY)) return null;
+  let list = items as MenuItem[];
   const after = ["downloads", "media", "library"].map((k) => list.findIndex((e) => e.key === k)).find((i) => i >= 0);
   if (after === undefined) return null;
-  const item = cloneElement(list[after], {
-    key: MENU_KEY,
-    route: NOTES_ROUTE,
-    routeState: undefined,
-    active: "if-within-route",
-    label: "Desk of Madness",
-    icon: <FaRegStickyNote />,
-  } as any);
-  return [...list.slice(0, after + 1), item, ...list.slice(after + 1)];
+  const template = list[after];
+  const makeItem = (props: MenuItemProps) =>
+    cloneElement(template, { routeState: undefined, active: "if-within-route", ...props } as any) as MenuItem;
+  let changed = false;
+  if (getSettings().mainMenuEntry && !list.some((e) => e.key === MENU_KEY)) {
+    const item = makeItem({ key: MENU_KEY, route: NOTES_ROUTE, label: "Desk of Madness", icon: <FaRegStickyNote /> });
+    list = [...list.slice(0, after + 1), item, ...list.slice(after + 1)];
+    changed = true;
+  }
+  for (const hook of menuHooks) {
+    try {
+      const next = hook(list, makeItem);
+      if (next !== list) {
+        list = next;
+        changed = true;
+      }
+    } catch (e) {
+      console.warn("Desk of Madness: a Scroll's main-menu change failed", e);
+    }
+  }
+  return changed ? list : null;
 }
 
 /**
@@ -264,7 +275,7 @@ function patchMainMenu(): (() => void) | null {
   if (!Focusable || typeof react?.createElement !== "function") return null;
   const original = react.createElement;
   const patched = function (this: unknown, type: unknown, props: any, ...children: unknown[]) {
-    if (type === Focusable && props?.role === "menu" && getSettings().mainMenuEntry) {
+    if (type === Focusable && props?.role === "menu" && (getSettings().mainMenuEntry || menuHooks.size)) {
       try {
         // Children come either as extra arguments or in props.children, possibly one array deep.
         if (children.length) {
@@ -320,6 +331,13 @@ function patchQamTabs(): Patch | null {
     } else if (i >= 0) {
       tabs.splice(i, 1);
     }
+    for (const hook of tabHooks) {
+      try {
+        hook(tabs);
+      } catch (e) {
+        console.warn("Desk of Madness: a Scroll's Quick Access change failed", e);
+      }
+    }
     return ret;
   });
 }
@@ -331,6 +349,7 @@ export function startIntegrations(): () => void {
   routerHook.addRoute(WEB_ROUTE, BrowserPage, { exact: true });
   const stopChord = startChordWatch();
   const patches = [patchQamTabs()];
+  setTabsPatched(!!patches[0]);
   const unpatchMenu = patchMainMenu();
   return () => {
     stopChord();

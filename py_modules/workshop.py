@@ -234,3 +234,14 @@ class Workshop:
                 skipped += 1
         self.copied("packs", pack_id)
         return {"copied": done, "skipped": skipped, "title": pk.get("title")}
+
+    # 📜 Scrolls
+    def scrolls(self, params: dict) -> list:
+        return self._request("GET", "/api/scrolls?" + urllib.parse.urlencode({k: v for k, v in params.items() if v}))
+
+    def scroll(self, scroll_id: str) -> dict:
+        return self._request("GET", f"/api/scrolls/{urllib.parse.quote(scroll_id)}")
+
+    def download_scroll(self, scroll_id: str) -> dict:
+        """The whole Scroll (code included), as the Workshop published it. Checked by scrolls.install."""
+        return self._request("GET", f"/api/scrolls/{urllib.parse.quote(scroll_id)}/download?install=1", auth=False)

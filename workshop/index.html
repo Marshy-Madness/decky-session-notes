@@ -130,14 +130,14 @@ const signIn = (next = location.pathname + location.search) => `/auth/steam?next
 async function loadMe() {
   const r = await api("/api/me");
   me = r.user; admin = r.admin; ownerAdmin = r.ownerAdmin; siteInfo = r.site || {};
-  badges = { openReports: r.openReports || 0, pendingPosts: r.pendingPosts || 0 };
+  badges = { openReports: r.openReports || 0, pendingPosts: r.pendingPosts || 0, pendingScrolls: r.pendingScrolls || 0 };
   paintHeader();
 }
 
 function paintHeader() {
   $("#userBox").innerHTML = me ? `${who(me)} <button id="logout">Log out</button>` : `<a class="steam-btn" href="${signIn()}">Sign in with Steam</a>`;
   if (me) $("#logout").onclick = async () => { await api("/api/logout", { method: "POST" }); location.reload(); };
-  const n = (badges.openReports || 0) + (badges.pendingPosts || 0);
+  const n = (badges.openReports || 0) + (badges.pendingPosts || 0) + (badges.pendingScrolls || 0);
   $("#adminBtn").classList.toggle("hidden", !admin);
   $("#adminBtn").innerHTML = `🛡 Admin${n ? `<span class="badge">${n}</span>` : ""}`;
   $("#adminBtn").onclick = () => adminPage();
@@ -151,7 +151,7 @@ const canPost = () => me && (admin || !siteInfo.readOnly);
 /** Redraw whatever page is showing (after a change in a dialog). */
 const refreshView = () => {
   const q = new URLSearchParams(location.search);
-  return q.get("admin") ? adminPage() : view.appId ? renderGame() : q.get("packs") ? packsPage() : q.get("mine") ? minePage() : home();
+  return q.get("admin") ? adminPage() : view.appId ? renderGame() : q.get("packs") ? packsPage() : q.get("scrolls") ? scrollsPage() : q.get("mine") ? minePage() : home();
 };
 
 async function start() {
@@ -165,13 +165,16 @@ async function start() {
   if (params.get("packs")) return packsPage();
   if (params.get("mine")) return minePage();
   if (params.get("pack")) { home(); return openPack(params.get("pack")); }
+  if (params.get("scrolls")) return scrollsPage();
+  if (params.get("scroll")) { scrollsPage(); return openScroll(params.get("scroll")); }
   home();
 }
 
 // ---------- pages ----------
 const homeTabs = (active) => `<div class="toolbar tabs"><button data-tab="home" class="${active === "home" ? "primary" : ""}">🏠 Home</button>
-  <button data-tab="packs" class="${active === "packs" ? "primary" : ""}">📦 Note Packs</button>${me ? `<button data-tab="mine" class="${active === "mine" ? "primary" : ""}">🧰 My Workshop</button>` : ""}</div>`;
-function wireTabs() { $("#main").querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => ({ home, packs: packsPage, mine: minePage })[b.dataset.tab]())); }
+  <button data-tab="packs" class="${active === "packs" ? "primary" : ""}">📦 Note Packs</button>
+  <button data-tab="scrolls" class="${active === "scrolls" ? "primary" : ""}">📜 Scrolls</button>${me ? `<button data-tab="mine" class="${active === "mine" ? "primary" : ""}">🧰 My Workshop</button>` : ""}</div>`;
+function wireTabs() { $("#main").querySelectorAll("[data-tab]").forEach((b) => (b.onclick = () => ({ home, packs: packsPage, scrolls: scrollsPage, mine: minePage })[b.dataset.tab]())); }
 
 async function home(q = "") {
   view.appId = null;
@@ -253,6 +256,83 @@ async function editPack(pk, addId = null) {
     try {
       const saved = await api(pk ? `/api/packs/${pk.id}` : "/api/packs", { method: pk ? "PUT" : "POST", json });
       d.close(); openPack(saved.id);
+    } catch (err) { alert(err.message); }
+  };
+  d.showModal();
+}
+
+// ---------- 📜 Scrolls ----------
+const SCROLL_STATUS = { published: "✅ Published", pending: "⏳ Waiting for review", hidden: "🙈 Hidden", rejected: "✋ Not approved" };
+const kindChip = (sc) => sc.kind === "code" ? `<span class="chip">${sc.signed ? "🔏 Code, signed" : "🔏 Code"}</span>` : '<span class="chip">📄 Data only</span>';
+
+function scrollCard(sc) {
+  return `<div class="card" data-scroll="${esc(sc.id)}" style="cursor:pointer"><div class="text">
+    <h3>${esc(sc.icon)} ${esc(sc.name)} <small class="meta">${esc(sc.version)}</small>${sc.status !== "published" ? ` <span class="chip">${SCROLL_STATUS[sc.status] || esc(sc.status)}</span>` : ""}${sc.pendingVersion ? ` <span class="chip">⏳ ${esc(sc.pendingVersion)} waiting for review</span>` : ""}</h3>
+    <div class="first">${esc(sc.summary) || "&nbsp;"}</div>
+    ${sc.official ? '<span class="chip">⭐ Official</span>' : ""}${kindChip(sc)}<span class="chip">${who(sc.author)}</span><span class="chip">📥 ${sc.installs}</span>
+    ${sc.reviewNote ? `<div class="meta">Review note: ${esc(sc.reviewNote)}</div>` : ""}</div></div>`;
+}
+function wireScrolls() { $("#main").querySelectorAll("[data-scroll]").forEach((el) => (el.onclick = () => openScroll(el.dataset.scroll))); }
+
+async function scrollsPage() {
+  view.appId = null;
+  history.replaceState(null, "", "/?scrolls=1");
+  const [list, mine] = await Promise.all([api("/api/scrolls"), me ? api("/api/scrolls?mine=1") : []]);
+  const myOwn = mine.filter((x) => !x.official);
+  $("#main").innerHTML = `${homeTabs("scrolls")}<h2>📜 Scrolls</h2>
+    <p class="meta">Add-ons for Desk of Madness. Install them on your Deck from <b>Settings → Scrolls</b> or the <b>📜 Scrolls</b> button in the Workshop tab.
+      <b>Data Scrolls</b> (link lists, Note Packs, Desk layouts) can't run anything. <b>Code Scrolls</b> run inside Steam, so Desk only runs them once the Workshop's owner has reviewed and signed them.</p>
+    ${canPost() ? '<div class="toolbar"><button class="primary" id="newScroll">+ Submit a Scroll</button><a href="https://github.com/Marshy-Madness/desk-of-madness/blob/main/scrolls/README.md" target="_blank" rel="noopener"><button>How to make one</button></a></div>' : ""}
+    ${list.map(scrollCard).join("") || '<p class="meta">No Scrolls yet.</p>'}
+    ${myOwn.length ? `<h3>🧰 My Scrolls</h3>${myOwn.map(scrollCard).join("")}` : ""}`;
+  wireTabs(); wireScrolls();
+  if ($("#newScroll")) $("#newScroll").onclick = () => submitScroll();
+}
+
+async function openScroll(id) {
+  const sc = await api(`/api/scrolls/${encodeURIComponent(id)}`);
+  const dlg = $("#dlg");
+  const contents = sc.contents ? Object.entries(sc.contents).map(([k, v]) => `<span class="chip">${esc({ text: "📝 Text", links: "🔗 Links", packs: "📦 Note Packs", layout: "🗂 Desk layout" }[k] || k)}${typeof v === "number" ? ` · ${v}` : ""}</span>`).join("") : "";
+  dlg.innerHTML = `<div class="toolbar" style="margin-top:0"><h2 style="margin:0;flex:1">${esc(sc.icon)} ${esc(sc.name)}</h2><button id="close">Close</button></div>
+    <span class="chip">${esc(sc.version)}</span><span class="chip">by ${who(sc.author)}</span>${sc.official ? '<span class="chip">⭐ Official</span>' : ""}${kindChip(sc)}<span class="chip">${bytes(sc.size)}</span><span class="chip">📥 installed ${sc.installs}×</span>
+    ${sc.status !== "published" ? `<span class="chip">${SCROLL_STATUS[sc.status] || esc(sc.status)}</span>` : ""}
+    ${sc.minDesk ? `<div class="meta" style="margin-top:6px">Needs Desk of Madness ${esc(sc.minDesk)} or newer.</div>` : ""}
+    <p style="white-space:pre-wrap">${esc(sc.description || sc.summary)}</p>
+    ${contents ? `<h4>What's in it</h4>${contents}` : ""}
+    ${sc.permissions.length ? `<h4>What it can do</h4><ul>${sc.permissions.map((x) => `<li>${esc(x.text)}</li>`).join("")}</ul>` : ""}
+    ${sc.pendingVersion ? `<div class="box warnbox">⏳ Version ${esc(sc.pendingVersion)} is waiting for review.</div>` : ""}
+    ${sc.reviewNote ? `<div class="box warnbox">Review note: ${esc(sc.reviewNote)}</div>` : ""}
+    <div class="toolbar">${sc.isAuthor && !sc.official ? '<button id="scUpdate">⬆ Upload a new version</button><button id="scDel" class="danger">Delete</button>' : ""}
+      <span style="flex:1"></span>${sc.status === "published" ? `<a href="/api/scrolls/${encodeURIComponent(sc.id)}/download"><button>⬇ Download</button></a>` : ""}</div>
+    <p class="meta">To install it, open Desk of Madness on your Deck → Settings → 📜 Manage Scrolls → From the Workshop.</p>`;
+  $("#close", dlg).onclick = () => dlg.close();
+  if ($("#scUpdate", dlg)) $("#scUpdate", dlg).onclick = () => submitScroll();
+  if ($("#scDel", dlg)) $("#scDel", dlg).onclick = async () => {
+    if (!confirm("Delete this Scroll from the Workshop? Decks that have it keep their copy.")) return;
+    try { await api(`/api/scrolls/${encodeURIComponent(sc.id)}`, { method: "DELETE" }); dlg.close(); refreshView(); } catch (err) { alert(err.message); }
+  };
+  if (!dlg.open) dlg.showModal();
+}
+
+/** Upload a Scroll: its JSON file (see scrolls/README.md), or the JSON pasted in. */
+function submitScroll() {
+  const d = $("#dlg2");
+  d.innerHTML = `<h2 style="margin-top:0">📜 Submit a Scroll</h2>
+    <p class="meta">A Scroll is one JSON file (format, id, name, version, kind…, see <a href="https://github.com/Marshy-Madness/desk-of-madness/blob/main/scrolls/README.md" target="_blank" rel="noopener">How to make one</a>).
+      Data Scrolls go up right away${siteInfo.approvePosts ? " once an admin approves them" : ""}. Code Scrolls wait until the Workshop's owner has read the code and signs it. To update one, upload it again with a higher version.</p>
+    <label>Scroll file</label><input type="file" id="scFile" accept=".json,application/json">
+    <label>…or paste it</label><textarea id="scText" rows="8" style="width:100%;font-family:monospace" placeholder='{"format": 1, "id": "my-links", "name": "My links", "version": "1.0.0", "kind": "data", "data": {"links": [{"title": "…", "url": "https://…"}]}}'></textarea>
+    <div class="toolbar"><button class="primary" id="scSend">Submit</button><button id="scCancel">Cancel</button></div>`;
+  $("#scCancel", d).onclick = () => d.close();
+  $("#scFile", d).onchange = async (e) => { const f = e.target.files[0]; if (f) $("#scText", d).value = await f.text(); };
+  $("#scSend", d).onclick = async () => {
+    let json;
+    try { json = JSON.parse($("#scText", d).value); } catch { return alert("That isn't valid JSON."); }
+    try {
+      const sc = await api("/api/scrolls", { method: "POST", json });
+      d.close();
+      alert(sc.status === "published" && !sc.pendingVersion ? `Published ${sc.name} ${sc.version}.` : "Sent for review. You'll see it under My Scrolls until then.");
+      await scrollsPage();
     } catch (err) { alert(err.message); }
   };
   d.showModal();
@@ -540,7 +620,7 @@ function linkPage() {
 // ---------- admin ----------
 const ADMIN_PAGES = [
   ["Dashboard", [["overview", "📊", "Overview"], ["log", "🕘", "Mod log"]]],
-  ["Moderation", [["queue", "⏳", "Approval queue"], ["reports", "🚩", "Reports"]]],
+  ["Moderation", [["queue", "⏳", "Approval queue"], ["reports", "🚩", "Reports"], ["scrolls", "📜", "Scrolls"]]],
   ["Content", [["posts", "📚", "Posts"], ["packs", "📦", "Note Packs"], ["comments", "💬", "Comments"], ["games", "🎮", "Games"]]],
   ["People", [["users", "👥", "Users"]]],
   ["Site", [["general", "📣", "Announcement & mode"], ["rules", "📏", "Posting rules"], ["discovery", "⭐", "Featured & trending"]]],
@@ -554,7 +634,8 @@ const ACTIONS = { "entry.delete": "deleted post", "entry.hide": "hid post", "ent
   "user.ban": "banned", "user.unban": "unbanned", "user.admin": "made admin:", "user.unadmin": "removed admin from", "user.purge": "cleared out",
   "user.signout": "signed out", "report.resolved": "resolved a report on", "report.dismissed": "dismissed a report on", "game.rename": "renamed game",
   "game.move": "moved posts of game", settings: "changed settings:", "entry.feature": "featured", "entry.unfeature": "unfeatured",
-  "pack.feature": "featured pack", "pack.unfeature": "unfeatured pack", "pack.hidden": "hid pack", "pack.published": "published pack", "pack.pending": "sent back pack", "pack.delete": "deleted pack" };
+  "pack.feature": "featured pack", "pack.unfeature": "unfeatured pack", "pack.hidden": "hid pack", "pack.published": "published pack", "pack.pending": "sent back pack", "pack.delete": "deleted pack",
+  "scroll.approve": "approved Scroll", "scroll.reject": "turned down Scroll", "scroll.hide": "hid Scroll", "scroll.publish": "published Scroll", "scroll.delete": "deleted Scroll" };
 let adm = { page: "overview", q: "", status: "", flag: "", sort: "", filter: "", reportStatus: "open", selected: new Set() };
 
 async function adminPage(page) {
@@ -615,6 +696,22 @@ async function adminPage(page) {
         <div class="acts"><button data-pfeat="${esc(pk.id)}" data-on="${pk.featured ? "" : "1"}">${pk.featured ? "Unfeature" : "⭐ Feature"}</button>
           ${pk.status !== "published" ? `<button class="primary" data-pstat="published" data-id="${esc(pk.id)}">Publish</button>` : `<button data-pstat="hidden" data-id="${esc(pk.id)}">Hide</button>`}
           <button class="danger" data-pdel="${esc(pk.id)}">Delete</button></div></div>`).join("") || '<p class="meta">No packs yet.</p>'}`;
+  } else if (p === "scrolls") {
+    const r = await api("/api/admin/scrolls");
+    const codeOf = (doc) => doc?.kind === "code" ? `<details><summary>Show the code (${bytes((doc.code || "").length)})</summary><pre style="max-height:50vh;overflow:auto;white-space:pre-wrap;word-break:break-all;font-size:12px">${esc(doc.code)}</pre></details>`
+      : doc ? `<details><summary>Show what's in it</summary><pre style="max-height:40vh;overflow:auto;white-space:pre-wrap;font-size:12px">${esc(JSON.stringify(doc.data, null, 2))}</pre></details>` : "";
+    html = `<h2>Scrolls</h2>
+      <p class="meta">Uploads wait here. Approving a <b>code</b> Scroll signs it with the Workshop's key, and every Desk will then run it with full access to Steam, so read the code first. Only site owners (ADMIN_STEAM_IDS) can approve code; any admin can approve data Scrolls.</p>
+      ${r.signingKey ? "" : '<div class="box warnbox">⚠️ There is no signing key (data/scroll_signing.key), so code Scrolls can\'t be approved.</div>'}
+      ${!r.owner ? '<div class="box warnbox">You\'re an admin but not a site owner, so you can review data Scrolls only.</div>' : ""}
+      ${r.scrolls.map((sc) => `<div class="arow"><div class="text"><b>${esc(sc.icon)} ${esc(sc.name)}</b> <span class="chip">${esc(sc.version)}</span><span class="chip">${SCROLL_STATUS[sc.status] || esc(sc.status)}</span>${sc.official ? '<span class="chip">⭐ Official</span>' : ""}${kindChip(sc)}
+          ${sc.pending ? `<span class="chip redchip">⏳ ${esc(sc.pending.version)} (${esc(sc.pending.kind)}) waiting</span>` : ""}
+          <div class="meta">${esc(sc.id)} · ${who(sc.author)} · 📥 ${sc.installs} · ${bytes(sc.size)} · ${date(sc.updatedAt)}</div>
+          <div class="first">${esc(sc.summary)}</div>
+          ${sc.pending ? `<div class="meta">${sc.pending.permissions?.length ? "Asks for: " + sc.pending.permissions.map(esc).join(", ") : "No permissions"}</div>${codeOf(sc.pending)}` : ""}</div>
+        <div class="acts">${sc.pending ? `${sc.canApprove ? `<button class="primary" data-scr="approve" data-id="${esc(sc.id)}">✅ Approve${sc.pending.kind === "code" ? " & sign" : ""}</button>` : ""}<button data-scr="reject" data-id="${esc(sc.id)}">✋ Turn down</button>` : ""}
+          ${sc.status === "published" ? `<button data-scr="hide" data-id="${esc(sc.id)}">🙈 Hide</button>` : sc.status === "hidden" ? `<button data-scr="publish" data-id="${esc(sc.id)}">Publish</button>` : ""}
+          <button class="danger" data-scr="delete" data-id="${esc(sc.id)}">Delete</button></div></div>`).join("") || '<p class="meta">No Scrolls yet.</p>'}`;
   } else if (p === "discovery") {
     const st = await api("/api/admin/settings");
     html = `<h2>Featured & trending</h2>
@@ -666,7 +763,7 @@ async function adminPage(page) {
       <div class="toolbar"><button class="primary" id="sSaveRules">Save rules</button></div>`;
   }
   const nav = ADMIN_PAGES.map(([g, pages]) => `<div class="agroup">${g}</div>` + pages.map(([id, icon, label]) => {
-    const n = id === "queue" ? badges.pendingPosts : id === "reports" ? badges.openReports : 0;
+    const n = id === "queue" ? badges.pendingPosts : id === "reports" ? badges.openReports : id === "scrolls" ? badges.pendingScrolls : 0;
     return `<button data-go="${id}" class="${id === p ? "active" : ""}">${icon} ${label}${n ? `<span class="badge">${n}</span>` : ""}</button>`;
   }).join("")).join("");
   $("#main").innerHTML = `<div class="admin"><div class="aside"><div class="ahead">🛡 Admin</div>${nav}</div><div class="apage">${html}</div></div>`;
@@ -710,6 +807,14 @@ async function adminPage(page) {
   on("[data-pfeat]", (b) => (b.onclick = () => act(() => aPost(`packs/${enc(b.dataset.pfeat)}`, { featured: !!b.dataset.on }))));
   on("[data-pstat]", (b) => (b.onclick = () => act(() => aPost(`packs/${enc(b.dataset.id)}`, { status: b.dataset.pstat }))));
   on("[data-pdel]", (b) => (b.onclick = () => confirm("Delete this pack? The posts in it stay.") && act(() => aPost(`packs/${enc(b.dataset.pdel)}`, { action: "delete" }))));
+  on("[data-scr]", (b) => (b.onclick = () => {
+    const action = b.dataset.scr;
+    if (action === "approve" && !confirm("Approve it? Code Scrolls get signed and every Desk will run them.")) return;
+    if (action === "delete" && !confirm("Delete this Scroll from the Workshop? Decks that have it keep their copy.")) return;
+    const note = action === "reject" ? prompt("Why? (the maker sees this)") : "";
+    if (note === null) return;
+    act(() => aPost(`scrolls/${enc(b.dataset.id)}`, { action, note }));
+  }));
   if ($("#sSaveDisc", m)) $("#sSaveDisc", m).onclick = () => act(async () => {
     await aPost("settings", { featuredLimit: +$("#sFeat", m).value || 8, trendingDays: +$("#sTrend", m).value || 7, trendingCopies: $("#sTrendCopies", m).checked, packsEnabled: $("#sPacks", m).checked });
     await loadMe();
@@ -719,7 +824,7 @@ async function adminPage(page) {
 
 async function refreshBadge() {
   const r = await api("/api/me");
-  badges = { openReports: r.openReports || 0, pendingPosts: r.pendingPosts || 0 };
+  badges = { openReports: r.openReports || 0, pendingPosts: r.pendingPosts || 0, pendingScrolls: r.pendingScrolls || 0 };
   siteInfo = r.site || {};
   paintHeader();
 }

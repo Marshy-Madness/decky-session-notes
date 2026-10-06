@@ -1,6 +1,6 @@
 # Desk of Madness: plan
 
-Status: **approved** (2026-10-04). Phase 1 shipped 2026-10-05 as 0.3.0-beta.1 (overlay bug deferred). Phase 2 shipped 2026-10-05 as 0.3.0-beta.2. Phase 3 shipped 2026-10-05 as 0.3.0-beta.3 (Workshop password login not added: it stays Steam-only). Next: Phase 4.
+Status: **approved** (2026-10-04). Phase 1 shipped 2026-10-05 as 0.3.0-beta.1 (overlay bug deferred). Phase 2 shipped 2026-10-05 as 0.3.0-beta.2. Phase 3 shipped 2026-10-05 as 0.3.0-beta.3 (Workshop password login not added: it stays Steam-only). Phase 4 shipped 2026-10-05 as 0.3.0-beta.4 (Scroll format and Ed25519 signing, Workshop listing and review queue, Plugin Shelf and Game News; gg.deals and Smart Launcher Scrolls still to come).
 
 ## 1. Names and terms
 

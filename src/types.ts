@@ -222,6 +222,66 @@ export interface Settings {
   readerTextSize?: number;
   /** The Desk: which Tomes show, in what order, and Tome options. */
   desk?: DeskSettings;
+  /** Installed Scrolls: on or off, and each Scroll's own settings. */
+  scrolls?: Record<string, ScrollState>;
+}
+
+/** One installed Scroll's switch and settings on this Deck. */
+export interface ScrollState {
+  enabled?: boolean;
+  /** Turned itself off (hooks missing, an error): why. Cleared when you turn it on again. */
+  offReason?: string;
+  settings?: Record<string, unknown>;
+}
+
+export type ScrollKind = "code" | "data";
+
+/** What a data Scroll holds (nothing in it can run). */
+export interface ScrollData {
+  text?: string;
+  links?: { title: string; url: string; note?: string }[];
+  packs?: string[];
+  layout?: DeskLayout;
+}
+
+/** An installed Scroll as the backend lists it (no code). */
+export interface InstalledScroll {
+  id: string;
+  name: string;
+  icon?: string;
+  version?: string;
+  kind?: ScrollKind;
+  summary?: string;
+  description?: string;
+  author?: string;
+  minDesk?: string;
+  permissions?: string[];
+  data?: ScrollData;
+  size: number;
+  signed?: boolean;
+  /** Didn't pass the checks on this Deck (changed on disk, or a format this Desk doesn't know). */
+  broken?: string;
+}
+
+/** A Scroll as the Workshop lists it. */
+export interface WorkshopScroll {
+  id: string;
+  name: string;
+  icon: string;
+  version: string;
+  kind: ScrollKind;
+  summary: string;
+  description?: string;
+  author: WorkshopUser;
+  status: string;
+  signed: boolean;
+  official: boolean;
+  size: number;
+  installs: number;
+  minDesk: string;
+  permissions: { id: string; text: string }[];
+  contents?: Record<string, number | boolean>;
+  updatedAt: number;
 }
 
 /** One arrangement of the Desk's Tomes. Tomes not in `order` (new ones) go at the end. */
@@ -365,4 +425,18 @@ export interface BackupStatus {
   lastError: string | null;
   running: boolean;
   pending: boolean;
+}
+
+/** A Steam news post for a game (py_modules/news.py). */
+export interface SteamNewsItem {
+  id: string;
+  title: string;
+  url: string;
+  author: string;
+  feed: string;
+  /** ms */
+  date: number;
+  summary: string;
+  image: string;
+  official: boolean;
 }

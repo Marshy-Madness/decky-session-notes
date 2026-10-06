@@ -36,6 +36,18 @@ shows give that game its own layout (Settings → Desk turns that off). The **To
 game) is a radial menu: aim with the right stick or D-pad, L1/R1 change the ring, let go or press A to jump to a Tome.
 The website has the Desk too (🗂 Desk / 📝 Notes in a game).
 
+### Scrolls
+Add-ons from the Madness Workshop: Settings → **📜 Manage Scrolls** (or 📜 Scrolls in the Workshop tab) installs,
+updates, turns on and off, and removes them, and opens each one's ⚙ Settings. **Data Scrolls** (links, text, Note Packs,
+a Desk layout) become a Tome. **Code Scrolls** only install and run when the Workshop's owner has signed them. The first two:
+- **🧩 Plugin Shelf:** pin any Decky plugin as its own Quick Access tab or in the Steam menu, and group Decky's plugin
+  list into folders. It changes Decky's own menus, so it starts off and turns itself off if a Decky update moves them.
+- **📰 Game News:** a News section under Play/Install on each game's library page (Steam news and patch notes, plus new
+  Workshop books; tap one to read it in the reader view; hide it per game), and a Game News Tome.
+
+Your Desk server's admin can limit which Scrolls may be installed and how much space they use. Making one:
+[`scrolls/README.md`](scrolls/README.md).
+
 ### Layout
 - **Desk** tab: the Tomes above. 📝 opens the game's full notes list.
 - **All** tab: every game you've played or written notes for.
@@ -189,6 +201,10 @@ A separate public container (`workshop/`) where players publish notes for everyo
 - **Sign in with Steam** to post. On the Deck: gear tab → Workshop → **Link your Steam account**. It shows a code
   to enter at `<workshop>/link` on your phone.
 - Admins (`ADMIN_STEAM_IDS`) can delete any post or comment and ban users.
+- **📜 Scrolls:** add-ons for Desk (see [Scrolls](#scrolls)). Anyone signed in can submit one; code Scrolls wait in
+  🛡 Admin → Scrolls until a site owner reads the code and approves it, which signs it with `data/scroll_signing.key`
+  (created by you; keep a backup). The official Scrolls ship in the image (`workshop/scrolls/`, built with
+  `node scrolls/build.mjs`) and are published and signed when the Workshop starts.
 
 ```yaml
 services:

@@ -13,6 +13,7 @@ import json
 import os
 import re
 import secrets
+import sys
 import threading
 import time
 import urllib.parse
@@ -22,6 +23,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import db
 import steam
+
+try:
+    import scrollfmt  # copied next to app.py in the image
+except ImportError:  # running from the repo
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "py_modules"))
+    import scrollfmt
 
 DATA = db.DATA
 MEDIA = os.path.join(DATA, "media")
@@ -35,6 +42,10 @@ KINDS = {"note", "guide", "tip", "walkthrough", "boss", "build", "collectibles",
 POLICIES = {"owner", "select", "anyone"}
 MEDIA_EXT = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "gif": "image/gif",
              "wav": "audio/wav", "webm": "audio/webm", "ogg": "audio/ogg", "m4a": "audio/mp4", "mp3": "audio/mpeg"}
+# 📜 Scrolls: code Scrolls are signed with this key when the owner approves them; the Desk only runs signed code.
+SIGNING_KEY = os.environ.get("SCROLL_SIGNING_KEY") or os.path.join(DATA, "scroll_signing.key")
+BUNDLED_SCROLLS = os.path.join(HERE, "scrolls")  # the official Scrolls, built from the repo's scrolls/
+OFFICIAL = "official"
 SAFE_FILE = re.compile(r"^[a-f0-9-]{36}(\.thumb)?\.[a-z0-9]{2,4}$")
 write_times: dict = {}
 lock = threading.Lock()
@@ -104,6 +115,8 @@ def delete_entry(entry_id: str):
 
 
 def public_user(steam_id: str) -> dict:
+    if steam_id == OFFICIAL:
+        return {"steamId": OFFICIAL, "name": "Madness Workshop", "avatar": ""}
     row = db.conn().execute("SELECT steam_id, name, avatar FROM users WHERE steam_id=?", (steam_id,)).fetchone()
     return {"steamId": steam_id, "name": row["name"] if row else steam_id, "avatar": row["avatar"] if row else ""}
 
@@ -179,6 +192,93 @@ def trending(app_id: str = "", limit: int = 20) -> list:
         e["recentLikes"], e["recentCopies"] = r["recent_likes"], r["recent_copies"]
         out.append(e)
     return out
+
+
+# ---------- 📜 Scrolls ----------
+
+def signing_secret():
+    try:
+        with open(SIGNING_KEY) as f:
+            return bytes.fromhex(f.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
+def scroll_doc(row, pending=False):
+    raw = row["pending_data"] if pending else row["data"]
+    return json.loads(raw) if raw else None
+
+
+def scroll_out(row, viewer=None, detail=False) -> dict:
+    """A Scroll for lists and its page: what it is and does, never its code."""
+    doc = scroll_doc(row) or scroll_doc(row, True) or {}
+    pending = scroll_doc(row, True)
+    mine = bool(viewer) and (viewer == row["author"] or is_admin(viewer))
+    out = {"id": row["id"], "name": row["name"], "icon": row["icon"] or "📜", "version": row["version"], "kind": row["kind"],
+           "summary": row["summary"] or "", "author": public_user(row["author"]), "status": row["status"], "signed": bool(row["signed"]),
+           "official": bool(row["official"]), "size": row["size"] or 0, "installs": row["installs"] or 0, "minDesk": doc.get("minDesk", ""),
+           "permissions": [{"id": x, "text": scrollfmt.PERMISSIONS.get(x, x)} for x in doc.get("permissions", [])],
+           "createdAt": row["created_at"], "updatedAt": row["updated_at"], "isAuthor": viewer == row["author"]}
+    if mine:
+        out.update({"pendingVersion": pending["version"] if pending else None, "pendingAt": row["pending_at"],
+                    "reviewNote": row["review_note"] or ""})
+    if detail:
+        out["description"] = doc.get("description", "")
+        if doc.get("kind") == "data":
+            out["contents"] = {k: len(v) if isinstance(v, list) else bool(v) for k, v in (doc.get("data") or {}).items()}
+    return out
+
+
+def publish_scroll(scroll: dict, row_exists: bool, author: str, reviewer: str = "", official: bool = False):
+    """Makes `scroll` the published version: signed when it has code (or comes from the repo)."""
+    c = db.conn()
+    secret = signing_secret()
+    if scroll["kind"] == "code" or official:
+        if not secret:
+            raise RuntimeError("The Workshop has no Scroll signing key (data/scroll_signing.key), so it can't sign Scrolls.")
+        scroll = scrollfmt.sign(scroll, secret)
+    else:
+        scroll = {k: v for k, v in scroll.items() if k != "signature"}
+    raw = scrollfmt.dump(scroll).decode()
+    now = now_ms()
+    vals = {"name": scroll["name"], "icon": scroll["icon"], "version": scroll["version"], "kind": scroll["kind"], "summary": scroll["summary"],
+            "status": "published", "data": raw, "signed": 1 if scroll.get("signature") else 0, "size": len(raw.encode()), "pending_data": None,
+            "pending_at": None, "updated_at": now, "official": 1 if official else 0}
+    if reviewer:
+        vals.update({"reviewed_by": reviewer, "reviewed_at": now, "review_note": ""})
+    if row_exists:
+        c.execute(f"UPDATE scrolls SET {', '.join(f'{k}=?' for k in vals)} WHERE id=?", list(vals.values()) + [scroll["id"]])
+    else:
+        vals.update({"id": scroll["id"], "author": author, "created_at": now})
+        c.execute(f"INSERT INTO scrolls ({', '.join(vals)}) VALUES ({','.join('?' * len(vals))})", list(vals.values()))
+
+
+def import_bundled_scrolls():
+    """Publishes the official Scrolls that ship with the Workshop (built from the repo, so the owner wrote them)."""
+    if not os.path.isdir(BUNDLED_SCROLLS):
+        return
+    c = db.conn()
+    for name in sorted(os.listdir(BUNDLED_SCROLLS)):
+        if not name.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(BUNDLED_SCROLLS, name), "rb") as f:
+                scroll = scrollfmt.validate(json.load(f))
+            scroll.pop("signature", None)
+            row = c.execute("SELECT * FROM scrolls WHERE id=?", (scroll["id"],)).fetchone()
+            if row and not row["official"]:
+                print(f"Bundled Scroll {scroll['id']}: that id belongs to someone's Scroll, skipped", flush=True)
+                continue
+            current = scroll_doc(row) if row else None
+            if current and {k: v for k, v in current.items() if k != "signature"} == scroll:
+                continue
+            publish_scroll(scroll, bool(row), OFFICIAL, official=True)
+            if row and row["status"] == "hidden":  # an admin hid it: keep it hidden
+                c.execute("UPDATE scrolls SET status='hidden' WHERE id=?", (scroll["id"],))
+            c.commit()
+            print(f"Published bundled Scroll {scroll['id']} {scroll['version']}", flush=True)
+        except (OSError, ValueError, RuntimeError) as e:
+            print(f"Bundled Scroll {name} skipped: {e}", flush=True)
 
 
 def full(e: dict, viewer) -> dict:
@@ -354,6 +454,7 @@ class Handler(BaseHTTPRequestHandler):
             if out["admin"]:
                 out["openReports"] = c.execute("SELECT COUNT(*) FROM reports WHERE status='open'").fetchone()[0]
                 out["pendingPosts"] = c.execute("SELECT COUNT(*) FROM entries WHERE status='pending'").fetchone()[0]
+                out["pendingScrolls"] = c.execute("SELECT COUNT(*) FROM scrolls WHERE pending_data IS NOT NULL").fetchone()[0]
             return self.send(200, out)
         if len(p) >= 3 and p[1] == "admin":
             return self.admin_get(viewer, p[2:]) if is_admin(viewer) else self.err(403, "Admins only")
@@ -403,6 +504,38 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, {"posts": posts, "liked": [summary(db.row_to_entry(r)) for r in liked],
                                    "packs": [pack_out(r, viewer) for r in packs],
                                    "stats": {"posts": len(posts), "likes": sum(x["likes"] for x in posts), "copies": sum(x["copies"] for x in posts)}})
+        if p[1:] == ["scrolls"]:
+            q = self.query()
+            where, args = ["status='published'"], []
+            if q.get("mine") and viewer:
+                where, args = ["author=?"], [viewer]
+            if q.get("kind") in scrollfmt.KINDS:
+                where.append("kind=?"); args.append(q["kind"])
+            if q.get("q"):
+                where.append("(name LIKE ? OR summary LIKE ? OR id LIKE ?)"); args += [f"%{q['q']}%"] * 3
+            rows = c.execute(f"SELECT * FROM scrolls WHERE {' AND '.join(where)} ORDER BY official DESC, installs DESC, updated_at DESC LIMIT 200",
+                             args).fetchall()
+            return self.send(200, [scroll_out(r, viewer) for r in rows])
+        if p[1:] == ["scroll-key"]:
+            secret = signing_secret()
+            if not secret:
+                return self.send(200, None)
+            public = scrollfmt.ed25519.public_key(secret)
+            return self.send(200, {"key": scrollfmt.key_id(public), "public": public.hex()})
+        if len(p) in (3, 4) and p[1] == "scrolls":
+            row = c.execute("SELECT * FROM scrolls WHERE id=?", (p[2],)).fetchone()
+            mine = row and viewer and (row["author"] == viewer or is_admin(viewer))
+            if not row or (row["status"] != "published" and not mine):
+                return self.err(404, "No such Scroll")
+            if len(p) == 3:
+                return self.send(200, scroll_out(row, viewer, detail=True))
+            if p[3] == "download":  # the whole published Scroll, as the Desk installs it
+                if row["status"] != "published" or not row["data"]:
+                    return self.err(404, "This Scroll isn't published")
+                if self.query().get("install"):
+                    c.execute("UPDATE scrolls SET installs=installs+1 WHERE id=?", (row["id"],)); c.commit()
+                return self.send(200, row["data"].encode(), headers={"Content-Disposition": f'attachment; filename="{row["id"]}.json"'})
+            return self.err(404, "not found")
         if p[1:] == ["games"]:
             q = self.query().get("q", "").strip().lower()
             rows = c.execute("SELECT app_id, MAX(game_name) AS name, COUNT(*) AS n, MAX(updated_at) AS u FROM entries "
@@ -623,6 +756,42 @@ class Handler(BaseHTTPRequestHandler):
                        json.dumps(editors), 1 if data.get("allowCopy", True) else 0, now, now, viewer, status))
             c.commit()
             return self.send(200, full(get_entry(eid), viewer))
+        if p == ["api", "scrolls"]:
+            if not admin and setting("readOnly"):
+                return self.err(403, "The Madness Workshop is read-only for now. Try again later.")
+            scroll = scrollfmt.validate(json.loads(self.body(scrollfmt.MAX_BYTES + 65536) or b"{}"))
+            scroll.pop("signature", None)  # trust comes from review here, never from the upload
+            owner = viewer in ADMINS
+            row = c.execute("SELECT * FROM scrolls WHERE id=?", (scroll["id"],)).fetchone()
+            if row and (row["official"] or row["author"] != viewer) and not owner:
+                return self.err(403, "That Scroll id is taken. Pick another “id”.")
+            if row and row["data"] and not scrollfmt.newer(scroll["version"], row["version"]):
+                return self.err(400, f"Raise the version: {row['version']} is already published.")
+            if not admin:
+                bad = blocked_word(scroll["name"], scroll["summary"], scroll["description"])
+                if bad:
+                    return self.err(400, f"Your Scroll has a blocked word in it (“{bad}”).")
+            # The owner's own Scrolls go straight out (signed). Code from anyone else waits for the owner;
+            # data Scrolls wait only when new posts are checked first.
+            if owner or (scroll["kind"] == "data" and not (setting("approvePosts") and not admin)):
+                try:
+                    publish_scroll(scroll, bool(row), viewer, reviewer=viewer if owner else "")
+                except RuntimeError as e:
+                    return self.err(500, str(e))
+            else:
+                raw = scrollfmt.dump(scroll).decode()
+                if row:
+                    c.execute("UPDATE scrolls SET pending_data=?, pending_at=?, review_note='', updated_at=?" +
+                              ("" if row["data"] else ", name=?, icon=?, version=?, kind=?, summary=?, size=?, status='pending'") + " WHERE id=?",
+                              [raw, now_ms(), now_ms()] + ([] if row["data"] else [scroll["name"], scroll["icon"], scroll["version"],
+                                                                                   scroll["kind"], scroll["summary"], len(raw.encode())]) + [row["id"]])
+                else:
+                    c.execute("INSERT INTO scrolls (id, name, icon, version, kind, summary, author, status, size, pending_data, pending_at, "
+                              "created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                              (scroll["id"], scroll["name"], scroll["icon"], scroll["version"], scroll["kind"], scroll["summary"], viewer,
+                               "pending", len(raw.encode()), raw, now_ms(), now_ms(), now_ms()))
+            c.commit()
+            return self.send(200, scroll_out(c.execute("SELECT * FROM scrolls WHERE id=?", (scroll["id"],)).fetchone(), viewer, True))
         if p == ["api", "packs"]:
             if not admin and (setting("readOnly") or not setting("packsEnabled")):
                 return self.err(403, "Note Packs are closed for now.")
@@ -769,6 +938,16 @@ class Handler(BaseHTTPRequestHandler):
         if rest == ["packs"]:
             rows = c.execute("SELECT * FROM packs ORDER BY featured DESC, updated_at DESC LIMIT 200").fetchall()
             return self.send(200, [pack_out(r, viewer) for r in rows])
+        if rest == ["scrolls"]:
+            rows = c.execute("SELECT * FROM scrolls ORDER BY (pending_data IS NOT NULL) DESC, updated_at DESC LIMIT 300").fetchall()
+            out = []
+            for r in rows:
+                item = scroll_out(r, viewer, detail=True)
+                pending = scroll_doc(r, True)
+                item["pending"] = pending  # the whole upload, code included, for review
+                item["canApprove"] = bool(pending) and (pending["kind"] == "data" or viewer in ADMINS)
+                out.append(item)
+            return self.send(200, {"scrolls": out, "owner": viewer in ADMINS, "signingKey": bool(signing_secret())})
         if rest == ["log"]:
             rows = c.execute("SELECT * FROM modlog ORDER BY at DESC LIMIT 300").fetchall()
             return self.send(200, [{"at": r["at"], "actor": public_user(r["actor"]), "action": r["action"], "target": r["target"],
@@ -931,6 +1110,38 @@ class Handler(BaseHTTPRequestHandler):
                 modlog(viewer, "pack.delete", row["id"], row["title"])
             c.commit()
             return self.send(200, {"ok": True})
+        if len(rest) == 2 and rest[0] == "scrolls":
+            row = c.execute("SELECT * FROM scrolls WHERE id=?", (rest[1],)).fetchone()
+            if not row:
+                return self.err(404, "No such Scroll")
+            action, note = data.get("action"), str(data.get("note", "")).strip()[:500]
+            pending = scroll_doc(row, True)
+            if action == "approve":
+                if not pending:
+                    return self.err(400, "Nothing is waiting for review")
+                if pending["kind"] == "code" and viewer not in ADMINS:
+                    return self.err(403, "Only the site owner (ADMIN_STEAM_IDS) can approve Scrolls with code, because approving signs them.")
+                try:
+                    publish_scroll(scrollfmt.validate(pending), True, row["author"], reviewer=viewer)
+                except (RuntimeError, ValueError) as e:
+                    return self.err(500, str(e))
+                modlog(viewer, "scroll.approve", row["id"], f"{pending['version']} ({pending['kind']})")
+            elif action == "reject":
+                c.execute("UPDATE scrolls SET pending_data=NULL, pending_at=NULL, review_note=?, reviewed_by=?, reviewed_at=?" +
+                          ("" if row["data"] else ", status='rejected'") + " WHERE id=?", (note, viewer, now_ms(), row["id"]))
+                modlog(viewer, "scroll.reject", row["id"], note)
+            elif action in ("hide", "publish"):
+                if action == "publish" and not row["data"]:
+                    return self.err(400, "This Scroll was never approved; approve it instead")
+                c.execute("UPDATE scrolls SET status=? WHERE id=?", ("hidden" if action == "hide" else "published", row["id"]))
+                modlog(viewer, f"scroll.{action}", row["id"], row["name"])
+            elif action == "delete":
+                c.execute("DELETE FROM scrolls WHERE id=?", (row["id"],))
+                modlog(viewer, "scroll.delete", row["id"], row["name"] + (" (official: it comes back when the Workshop restarts)" if row["official"] else ""))
+            else:
+                return self.err(400, "Unknown action")
+            c.commit()
+            return self.send(200, {"ok": True})
         if len(rest) == 2 and rest[0] == "ban":  # older builds
             return self.admin_post(viewer, ["users", rest[1]], {"banned": True})
         return self.err(404, "not found")
@@ -1013,6 +1224,15 @@ class Handler(BaseHTTPRequestHandler):
                 modlog(viewer, "pack.delete", row["id"], row["title"])
             c.commit()
             return self.send(200, {"ok": True})
+        if len(p) == 3 and p[:2] == ["api", "scrolls"]:
+            row = c.execute("SELECT * FROM scrolls WHERE id=?", (p[2],)).fetchone()
+            if not row or row["official"] or not (row["author"] == viewer or is_admin(viewer)):
+                return self.err(403, "Only the Scroll's maker can delete it")
+            c.execute("DELETE FROM scrolls WHERE id=?", (row["id"],))
+            if viewer != row["author"]:
+                modlog(viewer, "scroll.delete", row["id"], row["name"])
+            c.commit()
+            return self.send(200, {"ok": True})
         if len(p) == 3 and p[:2] == ["api", "comments"]:
             row = c.execute("SELECT * FROM comments WHERE id=?", (p[2],)).fetchone()
             e = get_entry(row["entry_id"]) if row else None
@@ -1034,6 +1254,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     db.init()
+    import_bundled_scrolls()
     port = int(os.environ.get("PORT", "8431"))
     print(f"Madness Workshop on :{port}, data in {DATA}", flush=True)
     ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()

@@ -13,6 +13,8 @@ import { NameModal } from "./NameModal";
 import { ReadOnlyNote } from "./ReadOnlyNote";
 import * as s from "./styles";
 import { errText } from "../utils/errors";
+import { openScrolls } from "../scrolls/ScrollsModal";
+import { setEntryOpener } from "../scrolls/hooks";
 
 const mediaCache = new Map<string, Promise<string | null>>();
 export const workshopMedia: MediaLoader = (file) => {
@@ -497,6 +499,8 @@ const PackModal: FC<{ id: string; closeModal?: () => void }> = ({ id, closeModal
   );
 };
 
+setEntryOpener((id, appId) => showModal(<EntryModal id={id} appId={appId} />));
+
 const SORTS = [
   { label: "Most liked", data: "top" },
   { label: "🔥 Trending", data: "trending" },
@@ -582,6 +586,9 @@ export const WorkshopView: FC = () => {
             }
           >
             <FaSearch /> Search games
+          </DialogButton>
+          <DialogButton style={s.smallButton} onClick={() => openScrolls("workshop")}>
+            📜 Scrolls
           </DialogButton>
           {linked && (
             <DialogButton style={s.smallButton} onClick={() => showModal(<MineModal />)}>

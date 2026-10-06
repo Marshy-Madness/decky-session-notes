@@ -1,0 +1,10 @@
+{
+  "name": "Game News",
+  "icon": "📰",
+  "version": "1.0.0",
+  "summary": "A News section on each game's library page, and a News Tome on your Desk.",
+  "description": "Shows a game's latest Steam news and patch notes right on its library page, under Play/Install, plus new Madness Workshop books for that game. Tap a post to read it in Desk's reader view (no ads).\n\nYou can hide the section for any game from the section itself, and turn the library section or the Workshop books off in the Scroll's ⚙ Settings. The News Tome shows the same for the game on your Desk.",
+  "author": "MarshyMadness",
+  "minDesk": "0.3.0-beta.4",
+  "permissions": ["library-page", "tomes", "network"]
+}

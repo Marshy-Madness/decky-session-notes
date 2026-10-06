@@ -181,7 +181,7 @@ class Sync:
             account = self._request("GET", "/api/account") or {}
             state["speech"] = bool(account.get("speech"))
             # What the server's admins set for everyone: the starting Desk, the Workshop address, allowed Scrolls.
-            state["account"] = {k: account.get(k) for k in ("deskDefaults", "workshopUrl", "allowedScrolls")}
+            state["account"] = {k: account.get(k) for k in ("deskDefaults", "workshopUrl", "allowedScrolls", "scrollQuotaMb")}
         except RuntimeError as e:
             if "404" not in str(e):  # older server: no speech
                 raise
