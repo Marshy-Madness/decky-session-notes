@@ -13,7 +13,7 @@ import scrollfmt
 TRUSTED_KEYS = {
     "6ca2c0363ac66824": "d82cb630e47b7186c37bce585077bcb2ad4548ebddf0f93572fe9a9576f4d193",
 }
-DIR = os.path.join(decky.DECKY_PLUGIN_DATA_DIR, "scrolls")
+DIR = os.path.join(decky.DECKY_PLUGIN_RUNTIME_DIR, "scrolls")
 
 
 def _path(scroll_id: str) -> str:
