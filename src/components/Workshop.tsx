@@ -15,6 +15,7 @@ import * as s from "./styles";
 import { errText } from "../utils/errors";
 import { openScrolls } from "../scrolls/ScrollsModal";
 import { setEntryOpener } from "../scrolls/hooks";
+import { typeInto } from "../utils/keyboard";
 
 const mediaCache = new Map<string, Promise<string | null>>();
 export const workshopMedia: MediaLoader = (file) => {
@@ -231,11 +232,12 @@ const EditEntryModal: FC<{ entry: WorkshopEntry; onSaved: (e: WorkshopEntry) => 
       <h2 style={{ marginTop: 0 }}>Edit post</h2>
       <TextField label="Title" value={title} onChange={(e) => setTitle(e.target.value)} />
       <Dropdown rgOptions={KINDS.map((k) => ({ label: `${k.icon} ${k.label}`, data: k.kind }))} selectedOption={kind} onChange={(o) => setKind(o.data)} />
-      <Focusable onActivate={() => bodyRef.current?.focus()} style={{ marginTop: "8px" }}>
+      <Focusable onActivate={() => typeInto(bodyRef.current)} onOKActionDescription="Type" style={{ marginTop: "8px" }}>
         <textarea
           ref={bodyRef}
           value={body}
           onChange={(e) => setBody(e.target.value)}
+          onClick={() => typeInto(bodyRef.current)}
           rows={8}
           style={{ width: "100%", boxSizing: "border-box", background: "rgba(0,0,0,0.35)", color: "white", border: "1px solid rgba(255,255,255,0.15)", borderRadius: "4px", padding: "8px", fontFamily: "inherit" }}
         />

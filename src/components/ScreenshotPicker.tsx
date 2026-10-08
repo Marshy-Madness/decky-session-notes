@@ -1,4 +1,5 @@
 import { FC, useEffect, useState } from "react";
+import { toaster } from "@decky/api";
 import { ModalRoot, DialogButton, Focusable, Spinner } from "@decky/ui";
 import { FaCheckCircle } from "react-icons/fa";
 import { backend } from "../api/backend";
@@ -26,10 +27,15 @@ export const ScreenshotPicker: FC<{
   const attach = async () => {
     setBusy(true);
     const attached: Screenshot[] = [];
-    for (const path of selected) attached.push(await backend.attachScreenshot(appId, path));
-    if (getSettings().removeFromSteam) await removeFromSteam(appId, selected).catch(() => 0);
-    onAttach(attached);
-    closeModal?.();
+    try {
+      for (const path of selected) attached.push(await backend.attachScreenshot(appId, path));
+    } catch (e) {
+      toaster.toast({ title: "Desk of Madness", body: `Couldn't attach a screenshot: ${(e as Error)?.message ?? e}` });
+    }
+    if (attached.length && getSettings().removeFromSteam) await removeFromSteam(appId, selected.slice(0, attached.length)).catch(() => 0);
+    if (attached.length) onAttach(attached);
+    if (attached.length === selected.length) closeModal?.();
+    else setBusy(false);
   };
 
   return (

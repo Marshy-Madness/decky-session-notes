@@ -10,6 +10,7 @@ import { useSessionTimer } from "../hooks/useSessionTimer";
 import { MediaImage } from "./MediaImage";
 import { EditorDraft, saveDraft } from "../state/resume";
 import { AudioButton } from "./AudioButton";
+import { typeInto } from "../utils/keyboard";
 import { Transcripts } from "./Transcripts";
 import { insertWords, useSpeechAllowed } from "../state/speech";
 import { ScreenshotPicker } from "./ScreenshotPicker";
@@ -267,7 +268,7 @@ export const NoteEditor: FC<{
         )}
       </Focusable>
       <Focusable
-        onActivate={() => bodyRef.current?.focus()}
+        onActivate={() => typeInto(bodyRef.current)}
         onOKActionDescription="Type"
         style={{ borderRadius: "4px" }}
       >
@@ -275,6 +276,7 @@ export const NoteEditor: FC<{
           ref={bodyRef}
           value={body}
           onChange={(e) => setBody(e.target.value)}
+          onClick={() => typeInto(bodyRef.current)}
           rows={7}
           placeholder="What happened, what to remember, where you left off…"
           style={{

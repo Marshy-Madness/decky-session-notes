@@ -1,4 +1,5 @@
 import { FC, useEffect, useState } from "react";
+import { toaster } from "@decky/api";
 import { ModalRoot, DialogButton, Focusable, Spinner, showModal } from "@decky/ui";
 import { FaPlus } from "react-icons/fa";
 import { backend } from "../api/backend";
@@ -24,17 +25,24 @@ export const AttachScreenshotsModal: FC<{ pending: PendingShots; closeModal?: ()
     );
   }, [pending.appId]);
 
-  const attachAll = async (): Promise<Screenshot[]> => {
+  const attachAll = async (): Promise<Screenshot[] | null> => {
     setBusy(true);
-    const out: Screenshot[] = [];
-    for (const path of pending.paths) out.push(await backend.attachScreenshot(pending.appId, path));
-    if (getSettings().removeFromSteam) await removeFromSteam(pending.appId, pending.paths).catch(() => 0);
-    clearPendingScreenshots();
-    return out;
+    try {
+      const out: Screenshot[] = [];
+      for (const path of pending.paths) out.push(await backend.attachScreenshot(pending.appId, path));
+      if (getSettings().removeFromSteam) await removeFromSteam(pending.appId, pending.paths).catch(() => 0);
+      clearPendingScreenshots();
+      return out;
+    } catch (e) {
+      toaster.toast({ title: "Desk of Madness", body: `Couldn't attach the screenshot: ${(e as Error)?.message ?? e}` });
+      setBusy(false);
+      return null;
+    }
   };
 
   const newNote = async () => {
     const shots = await attachAll();
+    if (!shots) return;
     closeModal?.();
     showModal(
       <NoteEditor
@@ -53,6 +61,7 @@ export const AttachScreenshotsModal: FC<{ pending: PendingShots; closeModal?: ()
     const note = game?.notes.find((n) => n.id === noteId);
     if (!note) return;
     const shots = await attachAll();
+    if (!shots) return;
     await backend.saveNote(pending.appId, { ...note, screenshots: [...note.screenshots, ...shots] });
     emitDataChanged();
     closeModal?.();
