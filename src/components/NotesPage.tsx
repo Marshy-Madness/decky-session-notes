@@ -30,8 +30,8 @@ export const NotesPage: FC = () => {
 
   return (
     <div className="dom-root" style={{ marginTop: `${header}px`, height: `calc(100% - ${header}px)`, overflowY: "scroll", boxSizing: "border-box" }}>
-      <div style={{ maxWidth: "960px", margin: "0 auto", padding: `16px 24px ${footer + 40}px` }}>
-        <div style={{ fontSize: "22px", fontWeight: "bold", marginBottom: "12px" }}>Desk of Madness</div>
+      <div style={{ maxWidth: "1180px", margin: "0 auto", padding: `10px 24px ${footer + 40}px` }}>
+        <div style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "8px", opacity: 0.85 }}>Desk of Madness</div>
         <NotesBrowser fullScreen />
       </div>
     </div>

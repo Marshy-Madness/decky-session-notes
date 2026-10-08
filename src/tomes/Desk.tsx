@@ -110,7 +110,7 @@ export const Desk: FC<{ fullScreen: boolean; goTab: GoTab }> = ({ fullScreen, go
   if (view === "notes" && appId) {
     return (
       <NotesProvider key={appId} appId={appId}>
-        <NoteList live={live} onBack={() => setView("desk")} backLabel="Desk" />
+        <NoteList live={live} onBack={() => setView("desk")} backLabel="Desk" fullScreen={fullScreen} />
       </NotesProvider>
     );
   }

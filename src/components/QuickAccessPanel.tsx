@@ -80,7 +80,7 @@ export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false 
     <>
       <Focusable
         flow-children="row"
-        style={{ display: "flex", flexWrap: "nowrap", alignItems: "stretch", gap: "6px", marginBottom: "14px", width: "100%" }}
+        style={{ display: "flex", flexWrap: "nowrap", alignItems: "stretch", gap: "6px", marginBottom: "10px", width: "100%" }}
       >
         <TabButton active={tab === "desk"} onClick={() => setTab("desk")}>
           {fullScreen ? <><FaBookOpen /> Desk</> : "Desk"}
@@ -106,7 +106,7 @@ export const NotesBrowser: FC<{ fullScreen?: boolean }> = ({ fullScreen = false 
       {tab === "all" &&
         (openGame ? (
           <NotesProvider key={openGame} appId={openGame}>
-            <NoteList live={openGame === running?.appId} onBack={() => setOpenGame(null)} />
+            <NoteList live={openGame === running?.appId} onBack={() => setOpenGame(null)} fullScreen={fullScreen} />
           </NotesProvider>
         ) : (
           <Library onOpen={setOpenGame} runningAppId={running?.appId} />

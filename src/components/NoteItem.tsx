@@ -22,7 +22,7 @@ export const NoteItem: FC<{
 
   return (
     <Focusable
-      style={s.row}
+      style={{ ...s.row, padding: "8px 12px" }}
       onActivate={onOpen}
       onClick={onOpen}
       onOptionsButton={onOptions}
@@ -35,7 +35,7 @@ export const NoteItem: FC<{
           {note.title || "Untitled"}
         </div>
         <div style={s.subline}>{note.spoiler ? "Spoiler · open to reveal" : firstLine(note.body) || <i style={{ opacity: 0.7 }}>No text yet</i>}</div>
-        <div style={s.chipRow}>
+        <div style={{ ...s.chipRow, marginTop: "4px" }}>
           {from && <span style={{ ...s.chip, background: "#1f5c45" }}>👥 {from}</span>}
           {note.kind && note.kind !== "note" && (
             <span style={s.chip}>

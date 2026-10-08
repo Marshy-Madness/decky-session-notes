@@ -1,8 +1,7 @@
-import { FC, useEffect, useState } from "react";
+import { CSSProperties, FC, useEffect, useState } from "react";
 import {
   ConfirmModal,
   DialogButton,
-  Dropdown,
   Focusable,
   Menu,
   MenuItem,
@@ -10,7 +9,7 @@ import {
   showContextMenu,
   showModal,
 } from "@decky/ui";
-import { FaBook, FaUserFriends, FaArrowLeft, FaTrashRestore, FaCamera, FaFolder, FaFolderPlus, FaPlus, FaSkull } from "react-icons/fa";
+import { FaBook, FaUserFriends, FaArrowLeft, FaTrashRestore, FaCamera, FaFolder, FaFolderPlus, FaPlus, FaSkull, FaSortAmountDown, FaCheck } from "react-icons/fa";
 import { backend } from "../api/backend";
 import { useGame } from "../state/NotesProvider";
 import { emitDataChanged, updateSettings, useSettings } from "../state/notesStore";
@@ -39,17 +38,30 @@ import * as s from "./styles";
 const GUIDES = "__guides";
 const SHARED = "__shared";
 
-// Icon-only so the row fits the narrow Quick Access menu; the label shows beside them when one is focused.
+// Icon-only in the narrow Quick Access menu (the label shows beside them when one is focused); labelled on
+// the full-screen page, where there's room.
 const ADD_ACTIONS = [
-  { id: "note", label: "New note", icon: <FaPlus /> },
-  { id: "folder", label: "New folder", icon: <FaFolderPlus /> },
-  { id: "counter", label: "Add counter", icon: <FaSkull /> },
+  { id: "note", label: "New note", short: "New note", icon: <FaPlus /> },
+  { id: "folder", label: "New folder", short: "Folder", icon: <FaFolderPlus /> },
+  { id: "counter", label: "Add counter", short: "Counter", icon: <FaSkull /> },
 ] as const;
 
-const SORT_OPTIONS = (Object.keys(SORT_LABELS) as SortMode[]).map((k) => ({ label: SORT_LABELS[k], data: k }));
+const SORT_MODES = Object.keys(SORT_LABELS) as SortMode[];
+
+// On the full-screen page notes and folders sit in as many columns as fit; the Quick Access menu keeps one.
+const gridStyle = (fullScreen: boolean): CSSProperties => ({
+  display: "grid",
+  gridTemplateColumns: fullScreen ? "repeat(auto-fill, minmax(min(100%, 300px), 1fr))" : "minmax(0, 1fr)",
+  columnGap: "8px",
+});
 
 /** All folders and notes for one game (the game comes from NotesProvider). */
-export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: string }> = ({ live, onBack, backLabel = "All games" }) => {
+export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: string; fullScreen?: boolean }> = ({
+  live,
+  onBack,
+  backLabel = "All games",
+  fullScreen = false,
+}) => {
   const { appId, game, error, refresh } = useGame();
   const settings = useSettings();
   const sort = settings.sort ?? "edited";
@@ -212,17 +224,21 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: str
 
   const currentFolder = folders.find((f) => f.id === folderId);
 
+  const pickSort = () =>
+    showContextMenu(
+      <Menu label="Sort notes by">
+        {SORT_MODES.map((m) => (
+          <MenuItem key={m} onSelected={() => updateSettings({ sort: m })}>
+            <span style={{ display: "inline-block", width: "20px" }}>{m === sort && <FaCheck size={11} />}</span>
+            {SORT_LABELS[m]}
+          </MenuItem>
+        ))}
+      </Menu>
+    );
+
   return (
     <div>
-      {onBack && (
-        <Focusable style={s.toolbar}>
-          <DialogButton style={s.smallButton} onClick={onBack}>
-            <FaArrowLeft /> {backLabel}
-          </DialogButton>
-        </Focusable>
-      )}
-
-      <StatsView game={game} live={live} />
+      <StatsView game={game} live={live} onBack={onBack} backLabel={backLabel} fullScreen={fullScreen} />
       <LeftOffCard game={game} />
       <Counters game={game} />
 
@@ -238,40 +254,42 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: str
         </Focusable>
       )}
 
-      <Focusable flow-children="row" style={{ ...s.toolbar, flexWrap: "nowrap", marginTop: "4px" }}>
+      {/* Add buttons, search and sort share one row; in the Quick Access menu search wraps onto its own line. */}
+      <Focusable flow-children="row" style={{ ...s.toolbar, gap: "6px 6px" }}>
         {ADD_ACTIONS.map((a) => (
           <DialogButton
             key={a.label}
-            style={a.id === "note" ? s.primaryIconButton : s.iconButton}
+            style={
+              fullScreen
+                ? { ...(a.id === "note" ? s.primaryButton : s.smallButton), height: "40px", padding: "0 14px" }
+                : a.id === "note"
+                  ? s.primaryIconButton
+                  : s.iconButton
+            }
             onClick={a.id === "note" ? () => openEditor(null) : a.id === "folder" ? newFolder : () => addCounter(appId)}
             onGamepadFocus={() => setAddHint(a.label)}
             onMouseEnter={() => setAddHint(a.label)}
             {...({ title: a.label, "aria-label": a.label } as any)}
           >
-            {a.icon}
+            {a.icon} {fullScreen && a.short}
           </DialogButton>
         ))}
-        <div style={s.iconHint}>{addHint}</div>
-      </Focusable>
-
-      <Focusable flow-children="row" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginBottom: "6px" }}>
-        <div style={{ flex: "1 1 240px", minWidth: 0 }}>
+        {!fullScreen && <div style={s.iconHint}>{addHint}</div>}
+        <div style={{ flex: "1 1 200px", minWidth: 0 }}>
           <TextField
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             bShowClearAction
-            {...({ placeholder: "🔍  Search titles, text and transcripts" } as any)}
+            {...({ placeholder: "🔍  Search notes" } as any)}
           />
         </div>
-        <div style={{ flex: "0 0 auto", minWidth: "190px" }}>
-          <Dropdown
-            rgOptions={SORT_OPTIONS}
-            selectedOption={sort}
-            onChange={(o) => updateSettings({ sort: o.data })}
-            menuLabel="Sort by"
-            renderButtonValue={(el) => <span>Sort: {el}</span>}
-          />
-        </div>
+        <DialogButton
+          style={fullScreen ? { ...s.smallButton, height: "40px" } : s.iconButton}
+          onClick={pickSort}
+          {...({ title: `Sort: ${SORT_LABELS[sort]}`, "aria-label": `Sort: ${SORT_LABELS[sort]}` } as any)}
+        >
+          <FaSortAmountDown /> {fullScreen && SORT_LABELS[sort]}
+        </DialogButton>
       </Focusable>
       {presentKinds.length > 0 && (
         <Focusable flow-children="row" style={{ ...s.toolbar, flexWrap: "wrap" }}>
@@ -292,11 +310,7 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: str
       )}
       <TagFilterBar allTags={allTags} activeTags={activeTags} onChange={setActiveTags} />
 
-      {searching ? (
-        <div style={s.sectionLabel}>{notes.length === 1 ? "1 match" : `${notes.length} matches`}</div>
-      ) : (
-        !currentFolder && !inGuides && !inShared && <div style={s.sectionLabel}>Notes & folders</div>
-      )}
+      {searching && <div style={s.sectionLabel}>{notes.length === 1 ? "1 match" : `${notes.length} matches`}</div>}
 
       {(inGuides || inShared) && !searching && (
         <Focusable style={s.toolbar}>
@@ -307,6 +321,18 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: str
         </Focusable>
       )}
 
+      {currentFolder && !searching && (
+        <Focusable style={s.toolbar}>
+          <DialogButton style={s.smallButton} onClick={() => setFolderId(currentFolder.parentId)}>
+            <FaArrowLeft /> Back
+          </DialogButton>
+          <div style={{ ...s.title, opacity: 0.85 }}>
+            <FaFolder size={12} /> {folderPath(folders, folderId)}
+          </div>
+        </Focusable>
+      )}
+
+      <Focusable flow-children="grid" style={gridStyle(fullScreen)}>
       {folderId === null && !searching && guideCount > 0 && (
         <Focusable style={s.row} onActivate={() => setFolderId(GUIDES)} onClick={() => setFolderId(GUIDES)}>
           <FaBook size={18} style={{ opacity: 0.8, color: "#1a9fff" }} />
@@ -324,17 +350,6 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: str
             <div style={s.subline}>
               {shared.length} from {Array.from(new Set(shared.map((x) => x.fromName))).join(", ")}
             </div>
-          </div>
-        </Focusable>
-      )}
-
-      {currentFolder && !searching && (
-        <Focusable style={s.toolbar}>
-          <DialogButton style={s.smallButton} onClick={() => setFolderId(currentFolder.parentId)}>
-            <FaArrowLeft /> Back
-          </DialogButton>
-          <div style={{ ...s.title, opacity: 0.85 }}>
-            <FaFolder size={12} /> {folderPath(folders, folderId)}
           </div>
         </Focusable>
       )}
@@ -375,6 +390,8 @@ export const NoteList: FC<{ live?: boolean; onBack?: () => void; backLabel?: str
             onOptions={() => showModal(<SharedNoteViewer appId={appId} shared={sh} />)}
           />
         ))}
+
+      </Focusable>
 
       {subFolders.length === 0 && notes.length === 0 && !(inShared && shared.length) && (
         <div style={{ opacity: 0.7, padding: "12px 0" }}>
