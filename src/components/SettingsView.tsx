@@ -290,7 +290,7 @@ export const SettingsView: FC = () => {
           <PanelSectionRow>
             <TextField
               label="Server address"
-              description="e.g. https://steamnotes.example.com"
+              description="e.g. https://deskofmadness.example.com"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
             />

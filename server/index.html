@@ -709,7 +709,7 @@ function editNote(original, draft = {}) {
   const toggleRecording = async () => {
     if (recorder) { recorder.stop(); return; }
     if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
-      alert("Recording needs the secure (https) address, e.g. https://steamnotes.marshymadness.com. You can still upload an audio file.");
+      alert("Recording needs the secure (https) address, e.g. https://deskofmadness.marshymadness.com. You can still upload an audio file.");
       return;
     }
     let stream;
