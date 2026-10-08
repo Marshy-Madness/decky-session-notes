@@ -1,6 +1,6 @@
 {
   "name": "desk-of-madness",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Desk of Madness: a game-aware desk for notes, checklists, counters and guides on Steam Deck",
   "type": "module",
   "scripts": {
